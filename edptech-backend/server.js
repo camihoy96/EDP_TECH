@@ -397,30 +397,54 @@ app.get('/api/auth/verify', async (req, res) => {
 // ============================================
 // AUTH VERIFICATION ENDPOINTS
 // ============================================
-// Verify admin/technician user from users table
+// Verify admin/technician user from users table - UPDATED to allow ALL users from users table
 app.get('/api/auth/verify-admin', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ valid: false, error: 'No token provided' });
+        if (!authHeader) {
+            return res.status(401).json({ valid: false, error: 'No token provided' });
+        }
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // Check if user exists in users table
+        console.log('🔐 verify-admin - Decoded token:', decoded);
+        console.log('🔐 userTable from token:', decoded.userTable);
+        
+        let user = null;
+        let userTable = '';
+        
+        // Check which table the user is from (from token or default to 'users')
+        userTable = decoded.userTable || 'users';
+        
+        // Query the correct table
         const [rows] = await pool.query(
-            'SELECT id, username, fullname, role, is_verified, locked_until, department, branch_id, avatar_color, photo_url FROM users WHERE id = ?',
+            `SELECT id, username, fullname, role, department, branch_id, 
+                    avatar_color, photo_url, is_verified, locked_until,
+                    registration_key, created_at
+             FROM ${userTable} 
+             WHERE id = ?`,
             [decoded.id]
         );
         
         if (rows.length === 0) {
-            return res.status(403).json({ valid: false, error: 'User not found in users table' });
+            console.log('❌ User not found in', userTable, 'table');
+            return res.status(403).json({ 
+                valid: false, 
+                error: 'User not found' 
+            });
         }
         
-        const user = rows[0];
+        user = rows[0];
+        console.log('✅ User found in', userTable, 'table:', user.username);
+        console.log('✅ User role:', user.role);
         
         // Check if user is verified
         if (!user.is_verified) {
-            return res.status(403).json({ valid: false, error: 'Account not verified' });
+            return res.status(403).json({ 
+                valid: false, 
+                error: 'Account not verified' 
+            });
         }
         
         // Check if user is locked out
@@ -432,15 +456,33 @@ app.get('/api/auth/verify-admin', async (req, res) => {
             });
         }
         
-        // Check if user has admin or technician role
-        if (user.role !== 'admin' && user.role !== 'Technician') {
+        // ✅ FIX: Allow ANY user from the 'users' table (not just admin/Technician)
+        let isAuthorized = false;
+        
+        if (userTable === 'users') {
+            // ✅ ALL users from 'users' table are allowed
+            isAuthorized = true;
+            console.log('✅ User from users table - access granted');
+        } else if (userTable === 'new_user') {
+            // ❌ Users from 'new_user' table - only allow if they have admin role
+            if (user.role === 'admin') {
+                isAuthorized = true;
+                console.log('✅ Admin user from new_user table - access granted');
+            } else {
+                console.log('❌ Non-admin user from new_user table - denied');
+            }
+        } else {
+            console.log('❌ Unknown user table:', userTable);
+        }
+        
+        if (!isAuthorized) {
             return res.status(403).json({ 
                 valid: false, 
-                error: 'Insufficient privileges. Admin or Technician access required.' 
+                error: 'Access denied. EDP/IT staff only.' 
             });
         }
         
-        // Return valid with user info (exclude password)
+        // Return valid with user info (include user_table)
         res.json({ 
             valid: true, 
             user: {
@@ -448,33 +490,48 @@ app.get('/api/auth/verify-admin', async (req, res) => {
                 username: user.username,
                 fullname: user.fullname,
                 role: user.role,
-                department: user.department,
+                department: user.department || '',
                 branch_id: user.branch_id,
-                avatar_color: user.avatar_color,
-                photo_url: user.photo_url
+                avatar_color: user.avatar_color || '#4f6ef7',
+                photo_url: user.photo_url || '',
+                user_table: userTable,  // ✅ CRITICAL: Include this!
+                registration_key: user.registration_key || '',
+                is_verified: user.is_verified,
+                created_at: user.created_at
             }
         });
+        
     } catch (error) {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
         }
-        console.error('verify-admin error:', error);
+        console.error('❌ verify-admin error:', error);
         res.status(500).json({ valid: false, error: 'Server error during verification' });
     }
 });
 
-// Validate admin token (lighter check for periodic validation)
+// Validate admin token (lighter check for periodic validation) - UPDATED
 app.get('/api/auth/validate-admin-token', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ valid: false, error: 'No token provided' });
+        if (!authHeader) {
+            return res.status(401).json({ valid: false, error: 'No token provided' });
+        }
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // Quick check if user still exists and has proper role
+        console.log('🔐 validate-admin-token - Decoded:', decoded);
+        
+        // Check which table the user is from
+        const userTable = decoded.userTable || 'users';
+        console.log('🔐 userTable from token:', userTable);
+        
+        // Query the correct table
         const [rows] = await pool.query(
-            'SELECT id, role, is_verified, locked_until FROM users WHERE id = ?',
+            `SELECT id, role, is_verified, locked_until, registration_key
+             FROM ${userTable} 
+             WHERE id = ?`,
             [decoded.id]
         );
         
@@ -492,16 +549,37 @@ app.get('/api/auth/validate-admin-token', async (req, res) => {
             return res.status(403).json({ valid: false, error: 'Account locked' });
         }
         
-        if (user.role !== 'admin' && user.role !== 'Technician') {
-            return res.status(403).json({ valid: false, error: 'Insufficient privileges' });
+        // ✅ FIX: Allow ALL users from 'users' table
+        let isAuthorized = false;
+        
+        if (userTable === 'users') {
+            // ✅ ALL users from 'users' table are authorized
+            isAuthorized = true;
+            console.log('✅ User from users table - validated');
+        } else if (userTable === 'new_user') {
+            // ❌ Users from 'new_user' table - only allow if they have admin role
+            if (user.role === 'admin') {
+                isAuthorized = true;
+                console.log('✅ Admin user from new_user table - validated');
+            } else {
+                console.log('❌ Non-admin user from new_user table - denied');
+            }
+        }
+        
+        if (!isAuthorized) {
+            return res.status(403).json({ 
+                valid: false, 
+                error: 'Access denied. EDP/IT staff only.' 
+            });
         }
         
         res.json({ valid: true });
+        
     } catch (error) {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return res.status(401).json({ valid: false, error: 'Invalid or expired token' });
         }
-        console.error('validate-admin-token error:', error);
+        console.error('❌ validate-admin-token error:', error);
         res.status(500).json({ valid: false, error: 'Server error during validation' });
     }
 });
