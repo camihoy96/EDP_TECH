@@ -1,0 +1,28 @@
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+import { LoginComponent } from './components/login/login.component';
+import { DashboardComponent } from './components/dashboard/dashboard.component';
+import { TicketListComponent } from './components/tickets/ticket-list/ticket-list.component';
+import { TicketFormComponent } from './components/tickets/ticket-form/ticket-form.component';
+import { AuthGuard } from './guards/auth.guard';
+
+const routes: Routes = [
+  { path: 'login', component: LoginComponent },
+  {
+    path: '',
+    component: DashboardComponent,
+    canActivate: [AuthGuard],
+    children: [
+      { path: 'dashboard', component: TicketListComponent },
+      { path: 'tickets', component: TicketListComponent },
+      { path: 'tickets/new', component: TicketFormComponent },
+      { path: '', redirectTo: '/dashboard', pathMatch: 'full' }
+    ]
+  }
+];
+
+@NgModule({
+  imports: [RouterModule.forRoot(routes)],
+  exports: [RouterModule]
+})
+export class AppRoutingModule { }

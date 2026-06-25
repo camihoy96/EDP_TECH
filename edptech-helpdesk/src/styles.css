@@ -1,0 +1,133 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #0a0b0e;
+  color: #e8eaf0;
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+}
+/* Desktop App Global Styles */
+* {
+  user-select: none; /* Prevents text selection like desktop apps */
+}
+
+/* For inputs, allow text selection */
+input, textarea, [contenteditable] {
+  user-select: text;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Focus outlines for accessibility */
+:focus-visible {
+  outline: 2px solid #4f8ef7;
+  outline-offset: 2px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.content-area > * {
+  animation: fadeIn 0.2s ease-out;
+}
+
+/* Notification Alert Banner */
+.notification-alert {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  min-width: 300px;
+  max-width: 400px;
+  background: white;
+  border-left: 4px solid;
+  box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+  z-index: 10000;
+  animation: slideIn 0.3s ease;
+  cursor: pointer;
+}
+
+.notification-alert.info { border-left-color: #0066cc; }
+.notification-alert.success { border-left-color: #008800; }
+.notification-alert.warning { border-left-color: #ff6600; }
+.notification-alert.error { border-left-color: #cc0000; }
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.notification-icon {
+  font-size: 20px;
+}
+
+.notification-text {
+  flex: 1;
+}
+
+.notification-text strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+
+.notification-text span {
+  font-size: 11px;
+  color: #666;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #999;
+  padding: 0 4px;
+}
+
+.notification-close:hover {
+  color: #cc0000;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #111318; }
+::-webkit-scrollbar-thumb { background: #343848; border-radius: 3px; }
+

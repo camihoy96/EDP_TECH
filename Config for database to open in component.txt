@@ -1,0 +1,25 @@
+At
+D:\xampp\apache\conf\extra\httpd-xampp.conf.
+
+Change this: 
+<Directory "D:/xampp/phpMyAdmin">
+        AllowOverride AuthConfig
+        Require local
+        ErrorDocument 403 /error/XAMPP_FORBIDDEN.html.var
+    </Directory>  
+into: 
+
+<Directory "D:/xampp/phpMyAdmin">
+    AllowOverride AuthConfig
+    Require local
+    ErrorDocument 403 /error/XAMPP_FORBIDDEN.html.var
+    Header always unset X-Frame-Options
+</Directory>
+
+then add this: 
+
+$cfg['AllowThirdPartyFraming'] = true;
+
+at the end of the file. in here:
+
+D:\xampp\phpMyAdmin\config.inc.php
