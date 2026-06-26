@@ -1065,63 +1065,93 @@ app.get('/api/tickets/my', async (req, res) => {
         const branchId = parseInt(req.query.branchId) || null;
         const userRole = req.query.role || 'user';
         const userDepartmentId = parseInt(req.query.departmentId) || null;
+        const includeAssignedUsers = req.query.includeAssignedUsers === 'true'; // ✅ NEW
         
         console.log('═══════════════════════════════════════');
         console.log('📋 /api/tickets/my REQUEST:');
         console.log('   userId:', userId, 'branchId:', branchId, 'role:', userRole, 'deptId:', userDepartmentId);
+        console.log('   userTable:', userTable);
+        console.log('   includeAssignedUsers:', includeAssignedUsers);
         
         if (!userId) {
             return res.status(400).json({ error: 'User ID is required' });
         }
         
-      let query = `
-    SELECT t.*, 
-           t.created_by_name,
-           COALESCE(u.department, nu.department, '') as creator_department,
-           cb.name as creator_branch_name,
-           cb.company_name as creator_company_name,
-           d.name as department_name,
-           d.branch_id as dept_branch_id,
-           b.name as branch_name,
-           b.company_name as company_name,
-           a.fullname as agent_name
-    FROM tickets t
-    LEFT JOIN departments d ON t.department_id = d.id
-    LEFT JOIN branches b ON d.branch_id = b.id
-    LEFT JOIN users a ON t.assigned_to = a.id
-    LEFT JOIN users u ON t.created_by = u.id
-    LEFT JOIN new_user nu ON t.created_by = nu.id
-    LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
-    WHERE 1=1
-`;
+        let query = `
+            SELECT t.*, 
+                   t.created_by_name,
+                   COALESCE(u.department, nu.department, '') as creator_department,
+                   cb.name as creator_branch_name,
+                   cb.company_name as creator_company_name,
+                   d.name as department_name,
+                   d.branch_id as dept_branch_id,
+                   b.name as branch_name,
+                   b.company_name as company_name,
+                   a.fullname as agent_name
+        `;
+        
+        // ✅ Only include assigned_users details if requested
+        if (includeAssignedUsers) {
+            query += `,
+                   (
+                       SELECT JSON_ARRAYAGG(
+                           JSON_OBJECT(
+                               'id', assigned_user.id,
+                               'fullname', assigned_user.fullname,
+                               'username', assigned_user.username,
+                               'avatar_color', assigned_user.avatar_color,
+                               'photo_url', assigned_user.photo_url
+                           )
+                       )
+                       FROM (
+                           SELECT 
+                               JSON_EXTRACT(t.assigned_users, CONCAT('$[', numbers.n, '].id')) as id,
+                               JSON_EXTRACT(t.assigned_users, CONCAT('$[', numbers.n, '].fullname')) as fullname,
+                               JSON_EXTRACT(t.assigned_users, CONCAT('$[', numbers.n, '].username')) as username,
+                               JSON_EXTRACT(t.assigned_users, CONCAT('$[', numbers.n, '].avatar_color')) as avatar_color,
+                               JSON_EXTRACT(t.assigned_users, CONCAT('$[', numbers.n, '].photo_url')) as photo_url
+                           FROM (
+                               SELECT 0 as n UNION SELECT 1 UNION SELECT 2 UNION SELECT 3 
+                               UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 
+                               UNION SELECT 8 UNION SELECT 9 UNION SELECT 10
+                           ) numbers
+                       ) assigned_user
+                   ) as assigned_users_with_details
+            `;
+        }
+        
+        query += `
+            FROM tickets t
+            LEFT JOIN departments d ON t.department_id = d.id
+            LEFT JOIN branches b ON d.branch_id = b.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN new_user nu ON t.created_by = nu.id
+            LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
+            WHERE 1=1
+        `;
         
         const values = [];
         
-        // ═══ EDP/IT STAFF ROLES (checked FIRST) ═══
-        if (userRole === 'main_edp_it') {
-            // Main branch EDP/IT: see tickets SENT TO main branch EDP/IT departments
-            console.log('📌 MAIN EDP/IT - tickets sent to main branch EDP/IT (branch 1 or 5)');
-            query += ` AND t.department_id IN (
-                SELECT id FROM departments 
-                WHERE branch_id IN (1, 5)
-                AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
-            )`;
-        }
-        else if (userRole === 'edp_it') {
-            // Branch EDP/IT: see tickets SENT TO their branch's EDP/IT department
-            console.log('📌 BRANCH EDP/IT - tickets sent to branch', branchId, 'EDP/IT');
-            query += ` AND t.department_id IN (
-                SELECT id FROM departments 
-                WHERE branch_id = ?
-                AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
-            )`;
-            values.push(branchId);
-        }
-        else if (userRole === 'admin') {
-            console.log('📌 ADMIN - all tickets');
-        }
-        else {
-            // Regular users/clients: see only their own tickets
+        // ✅ FIX: Check userTable instead of userRole
+        if (userTable === 'users') {
+            console.log('📌 EDP/IT STAFF - tickets sent to EDP/IT departments');
+            
+            if (branchId === 1 || branchId === 5) {
+                query += ` AND t.department_id IN (
+                    SELECT id FROM departments 
+                    WHERE branch_id IN (1, 5)
+                    AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
+                )`;
+            } else {
+                query += ` AND t.department_id IN (
+                    SELECT id FROM departments 
+                    WHERE branch_id = ?
+                    AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
+                )`;
+                values.push(branchId);
+            }
+        } else {
             console.log('📌 CLIENT - own tickets only');
             query += ' AND t.created_by = ?';
             values.push(userId);
@@ -1134,24 +1164,293 @@ app.get('/api/tickets/my', async (req, res) => {
         
         const [tickets] = await pool.query(query, values);
         
-        console.log(`✅ Found ${tickets.length} tickets`);
-        tickets.forEach(t => {
-            console.log(`   #${t.ticket_number} | dept: ${t.department_name}(${t.department_id}) | branch: ${t.branch_name} | by: ${t.created_by_name}`);
-        });
-        console.log('═══════════════════════════════════════');
+        // ✅ FIXED: Parse assigned_users with while-loop for double-stringified JSON
+const parsedTickets = tickets.map(ticket => {
+    let assignedUsers = [];
+    
+    if (ticket.assigned_users) {
+        try {
+            let raw = ticket.assigned_users;
+            
+            // Handle double-stringified JSON
+            let attempts = 0;
+            while (typeof raw === 'string' && attempts < 3) {
+                try {
+                    raw = JSON.parse(raw);
+                    attempts++;
+                } catch (e) {
+                    break;
+                }
+            }
+            
+            if (Array.isArray(raw)) {
+                assignedUsers = raw.filter(u => u !== null).map(u => {
+                    if (typeof u === 'object' && u.id) {
+                        return { id: u.id, fullname: u.fullname || null };
+                    }
+                    const uid = typeof u === 'object' ? u.id : u;
+                    return { id: uid, fullname: null };
+                });
+            }
+        } catch (e) {
+            assignedUsers = [];
+        }
+    }
+    
+    // Fallback to assigned_to if no assigned_users
+    if (assignedUsers.length === 0 && ticket.assigned_to) {
+        assignedUsers = [{
+            id: ticket.assigned_to,
+            fullname: ticket.agent_name || null
+        }];
+    }
+    
+    return {
+        ...ticket,
+        assigned_users: assignedUsers
+    };
+});
         
-        const parsedTickets = tickets.map(ticket => ({
-            ...ticket,
-            assigned_users: ticket.assigned_users ? 
-                (typeof ticket.assigned_users === 'string' ? 
-                    JSON.parse(ticket.assigned_users) : ticket.assigned_users) 
-                : []
-        }));
+        console.log(`✅ Found ${parsedTickets.length} tickets`);
+        res.json(parsedTickets);
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// ============ CLIENT TICKET ROUTES ============
+app.get('/api/client/test', (req, res) => {
+    console.log('✅ Test endpoint reached!');
+    res.json({ message: 'Backend is working!', query: req.query });
+});
+/**
+ * GET /api/client/tickets
+ * Client-specific ticket endpoint
+ */
+
+app.get('/api/client/tickets', async (req, res) => {
+    try {
+        const userId = parseInt(req.query.userId);
+        const userTable = req.query.userTable || 'new_user';
+        const branchId = parseInt(req.query.branchId) || null;
+        const departmentId = parseInt(req.query.departmentId) || null;
+        
+        console.log('═══════════════════════════════════════');
+        console.log('📋 /api/client/tickets REQUEST:');
+        console.log('   userId:', userId);
+        console.log('   branchId:', branchId);
+        console.log('   departmentId:', departmentId);
+        
+        if (!userId) {
+            return res.status(400).json({ error: 'User ID is required' });
+        }
+        
+        // Get user info
+        let userDeptId = departmentId;
+        let userBranchId = branchId;
+        let isEDPIT = false;
+        
+        let [userInfo] = await pool.query(
+            'SELECT id, department_id, branch_id, department, role FROM users WHERE id = ?',
+            [userId]
+        );
+        
+        if (userInfo.length === 0) {
+            [userInfo] = await pool.query(
+                'SELECT id, department_id, branch_id, department, role FROM new_user WHERE id = ?',
+                [userId]
+            );
+        }
+        
+        if (userInfo.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const user = userInfo[0];
+        userDeptId = userDeptId || user.department_id;
+        userBranchId = userBranchId || user.branch_id;
+        
+        // Check if EDP/IT
+        if (userDeptId) {
+            const [deptCheck] = await pool.query(
+                'SELECT id, name, branch_id FROM departments WHERE id = ?',
+                [userDeptId]
+            );
+            if (deptCheck.length > 0) {
+                const nameLower = (deptCheck[0].name || '').toLowerCase();
+                isEDPIT = nameLower === 'edp/it' || nameLower === 'edp' || nameLower === 'it' ||
+                          nameLower.includes('edp') || nameLower.includes('it');
+            }
+        }
+        
+        // ✅ SIMPLE QUERY - no complex JSON subquery
+       let query = `
+    SELECT t.*, 
+           t.created_by_name,
+           COALESCE(u.department, nu.department, '') as creator_department,
+           cb.name as creator_branch_name,
+           d.name as department_name,
+           b.name as branch_name,
+           b.company_name as company_name,
+           COALESCE(a.fullname, na.fullname) as agent_name
+    FROM tickets t
+    LEFT JOIN departments d ON t.department_id = d.id
+    LEFT JOIN branches b ON d.branch_id = b.id
+    LEFT JOIN users a ON t.assigned_to = a.id
+    LEFT JOIN new_user na ON t.assigned_to = na.id
+    LEFT JOIN users u ON t.created_by = u.id
+    LEFT JOIN new_user nu ON t.created_by = nu.id
+    LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
+    WHERE 1=1
+`;
+        
+        const values = [];
+        
+        if (isEDPIT && userDeptId && userBranchId) {
+            query += ' AND t.department_id = ?';
+            values.push(userDeptId);
+            query += ' AND ((u.branch_id = ? OR nu.branch_id = ?) OR d.branch_id = ?)';
+            values.push(userBranchId, userBranchId, userBranchId);
+        } else {
+            query += ' AND t.created_by = ?';
+            values.push(userId);
+        }
+        
+        query += ' ORDER BY t.created_at DESC';
+        
+        const [tickets] = await pool.query(query, values);
+        
+        console.log('📊 Found ' + tickets.length + ' tickets');
+        
+        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
+const parsedTickets = tickets.map(ticket => {
+    let assignedUsers = [];
+    
+    if (ticket.assigned_users) {
+        try {
+            let raw = ticket.assigned_users;
+            
+            // Handle double-stringified JSON by parsing until we get an array
+            let attempts = 0;
+            while (typeof raw === 'string' && attempts < 3) {
+                try {
+                    raw = JSON.parse(raw);
+                    attempts++;
+                } catch (e) {
+                    break;
+                }
+            }
+            
+            if (Array.isArray(raw)) {
+                assignedUsers = raw.filter(u => u !== null).map(u => {
+                    if (typeof u === 'object' && u.id) {
+                        return {
+                            id: u.id,
+                            fullname: u.fullname || ticket.agent_name || null
+                        };
+                    }
+                    const uid = typeof u === 'object' ? u.id : u;
+                    return { id: uid, fullname: ticket.agent_name || null };
+                });
+            }
+        } catch (e) {
+            assignedUsers = [];
+        }
+    }
+    
+    // Fallback to assigned_to if no assigned_users
+    if (assignedUsers.length === 0 && ticket.assigned_to) {
+        assignedUsers = [{
+            id: ticket.assigned_to,
+            fullname: ticket.agent_name || null
+        }];
+    }
+    
+    return { ...ticket, assigned_users: assignedUsers };
+});
         
         res.json(parsedTickets);
         
     } catch (error) {
         console.error('❌ Error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+/**
+ * GET /api/client/tickets/:id
+ * Get a single ticket for client view
+ */
+app.get('/api/client/tickets/:id', async (req, res) => {
+    try {
+        const [tickets] = await pool.query(`
+            SELECT t.*, 
+                   COALESCE(u.fullname, nu.fullname, 'Unknown') as creator_name,
+                   COALESCE(u.department, nu.department) as creator_department,
+                   d.name as department_name,
+                   b.name as branch_name,
+                   b.company_name as company_name,
+                   COALESCE(a.fullname, na.fullname) as agent_name
+            FROM tickets t
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN new_user nu ON t.created_by = nu.id
+            LEFT JOIN departments d ON t.department_id = d.id
+            LEFT JOIN branches b ON d.branch_id = b.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN new_user na ON t.assigned_to = na.id
+            WHERE t.id = ?
+        `, [req.params.id]);
+        
+        if (tickets.length === 0) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+        
+        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
+        let assignedUsers = [];
+        if (tickets[0].assigned_users) {
+            try {
+                let raw = tickets[0].assigned_users;
+                
+                // Handle double-stringified JSON
+                let attempts = 0;
+                while (typeof raw === 'string' && attempts < 3) {
+                    try {
+                        raw = JSON.parse(raw);
+                        attempts++;
+                    } catch (e) {
+                        break;
+                    }
+                }
+                
+                if (Array.isArray(raw)) {
+                    assignedUsers = raw.filter(u => u !== null).map(u => {
+                        if (typeof u === 'object' && u.id) {
+                            return { id: u.id, fullname: u.fullname || null };
+                        }
+                        const uid = typeof u === 'object' ? u.id : u;
+                        return { id: uid, fullname: null };
+                    });
+                }
+            } catch (e) {
+                assignedUsers = [];
+            }
+        }
+        
+        if (assignedUsers.length === 0 && tickets[0].assigned_to) {
+            assignedUsers = [{
+                id: tickets[0].assigned_to,
+                fullname: tickets[0].agent_name || null
+            }];
+        }
+        
+        const ticket = {
+            ...tickets[0],
+            assigned_users: assignedUsers
+        };
+        
+        res.json(ticket);
+    } catch (error) {
+        console.error('Error fetching client ticket:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -1390,7 +1689,7 @@ app.post('/api/tickets', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
+// ============ ADMIN TICKET UPDATE ROUTE ============
 app.put('/api/tickets/:id', async (req, res) => {
     try {
         const { title, description, priority, location, department_id, branch_id, status, assigned_to, assigned_users } = req.body;
@@ -1405,7 +1704,6 @@ app.put('/api/tickets/:id', async (req, res) => {
             updates.push('department_id = ?'); 
             values.push(department_id);
             
-            // Also update branch_id based on department
             const [deptInfo] = await pool.query('SELECT branch_id FROM departments WHERE id = ?', [department_id]);
             if (deptInfo.length > 0) {
                 updates.push('branch_id = ?');
@@ -1439,7 +1737,7 @@ app.put('/api/tickets/:id', async (req, res) => {
         
         await pool.query(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`, values);
         
-        // Return updated ticket with branch info
+        // ✅ FIXED: Return updated ticket with BOTH users AND new_user joins for agent_name
         const [updatedTicket] = await pool.query(`
             SELECT t.*, 
                    COALESCE(u.fullname, nu.fullname) as creator_name,
@@ -1447,23 +1745,61 @@ app.put('/api/tickets/:id', async (req, res) => {
                    d.name as department_name,
                    b.name as branch_name,
                    b.company_name as company_name,
-                   a.fullname as agent_name
+                   COALESCE(a.fullname, na.fullname) as agent_name
             FROM tickets t
             LEFT JOIN users u ON t.created_by = u.id
             LEFT JOIN new_user nu ON t.created_by = nu.id
             LEFT JOIN departments d ON t.department_id = d.id
             LEFT JOIN branches b ON t.branch_id = b.id
             LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN new_user na ON t.assigned_to = na.id
             WHERE t.id = ?
         `, [req.params.id]);
         
-        // Parse assigned_users JSON
+        if (updatedTicket.length === 0) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+        
+        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
+        let assignedUsers = [];
+        if (updatedTicket[0].assigned_users) {
+            try {
+                let raw = updatedTicket[0].assigned_users;
+                
+                let attempts = 0;
+                while (typeof raw === 'string' && attempts < 3) {
+                    try {
+                        raw = JSON.parse(raw);
+                        attempts++;
+                    } catch (e) {
+                        break;
+                    }
+                }
+                
+                if (Array.isArray(raw)) {
+                    assignedUsers = raw.filter(u => u !== null).map(u => {
+                        if (typeof u === 'object' && u.id) {
+                            return { id: u.id, fullname: u.fullname || null };
+                        }
+                        const uid = typeof u === 'object' ? u.id : u;
+                        return { id: uid, fullname: null };
+                    });
+                }
+            } catch (e) {
+                assignedUsers = [];
+            }
+        }
+        
+        if (assignedUsers.length === 0 && updatedTicket[0].assigned_to) {
+            assignedUsers = [{
+                id: updatedTicket[0].assigned_to,
+                fullname: updatedTicket[0].agent_name || null
+            }];
+        }
+        
         const ticket = {
             ...updatedTicket[0],
-            assigned_users: updatedTicket[0].assigned_users ? 
-                (typeof updatedTicket[0].assigned_users === 'string' ? 
-                    JSON.parse(updatedTicket[0].assigned_users) : updatedTicket[0].assigned_users) 
-                : []
+            assigned_users: assignedUsers
         };
         
         res.json(ticket);
@@ -1473,7 +1809,145 @@ app.put('/api/tickets/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
+// ============ CLIENT TICKET UPDATE ROUTE ============
+app.put('/api/client/tickets/:id', async (req, res) => {
+    try {
+        const { title, description, priority, location, department_id, status, assigned_to, assigned_users } = req.body;
+        const updates = [];
+        const values = [];
+        
+        if (title !== undefined) { updates.push('title = ?'); values.push(title); }
+        if (description !== undefined) { updates.push('description = ?'); values.push(description); }
+        if (priority !== undefined) { updates.push('priority = ?'); values.push(priority); }
+        if (location !== undefined) { updates.push('location = ?'); values.push(location); }
+        if (department_id !== undefined) { 
+            updates.push('department_id = ?'); 
+            values.push(department_id);
+            const [deptInfo] = await pool.query('SELECT branch_id FROM departments WHERE id = ?', [department_id]);
+            if (deptInfo.length > 0) {
+                updates.push('branch_id = ?');
+                values.push(deptInfo[0].branch_id);
+            }
+        }
+        if (status !== undefined) {
+            updates.push('status = ?');
+            values.push(status);
+            if (status === 'resolved') {
+                updates.push('resolved_at = NOW()');
+            }
+        }
+        if (assigned_to !== undefined) {
+            updates.push('assigned_to = ?');
+            values.push(assigned_to);
+        }
+        // ✅ FIXED: Don't double-stringify assigned_users
+        if (assigned_users !== undefined) {
+            updates.push('assigned_users = ?');
+            if (typeof assigned_users === 'string') {
+                console.log('📝 [CLIENT] assigned_users is already a string:', assigned_users.substring(0, 200));
+                values.push(assigned_users);
+            } else {
+                const stringified = JSON.stringify(assigned_users);
+                console.log('📝 [CLIENT] assigned_users is object, stringified:', stringified.substring(0, 200));
+                values.push(stringified);
+            }
+        }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No updates provided' });
+        }
+        
+        values.push(req.params.id);
+        
+        console.log('📝 [CLIENT] Updating ticket:', req.params.id, updates);
+        
+        await pool.query(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`, values);
+        
+        // ✅ DEBUG: Check what was actually saved in the database
+        const [checkSaved] = await pool.query('SELECT assigned_users FROM tickets WHERE id = ?', [req.params.id]);
+        console.log('📝 [CLIENT] Saved assigned_users in DB:', JSON.stringify(checkSaved[0]?.assigned_users).substring(0, 300));
+        
+        // ✅ CLIENT-SPECIFIC: Return updated ticket with BOTH users AND new_user joins for agent_name
+        const [updatedTicket] = await pool.query(`
+            SELECT t.*, 
+                   COALESCE(u.fullname, nu.fullname) as creator_name,
+                   t.created_by_name,
+                   d.name as department_name,
+                   b.name as branch_name,
+                   b.company_name as company_name,
+                   COALESCE(a.fullname, na.fullname) as agent_name
+            FROM tickets t
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN new_user nu ON t.created_by = nu.id
+            LEFT JOIN departments d ON t.department_id = d.id
+            LEFT JOIN branches b ON t.branch_id = b.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN new_user na ON t.assigned_to = na.id
+            WHERE t.id = ?
+        `, [req.params.id]);
+        
+        if (updatedTicket.length === 0) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+        
+        // ✅ FIXED: Parse assigned_users JSON - handle double-stringified JSON
+        let assignedUsers = [];
+        if (updatedTicket[0].assigned_users) {
+            try {
+                let raw = updatedTicket[0].assigned_users;
+                console.log('📝 [CLIENT] Raw assigned_users from DB:', typeof raw, JSON.stringify(raw).substring(0, 200));
+                
+                // Handle double-stringified JSON by parsing until we get an array
+                let attempts = 0;
+                while (typeof raw === 'string' && attempts < 3) {
+                    try {
+                        raw = JSON.parse(raw);
+                        attempts++;
+                        console.log('📝 [CLIENT] Parse attempt', attempts, 'result type:', typeof raw, Array.isArray(raw) ? 'array[' + raw.length + ']' : 'not array');
+                    } catch (e) {
+                        console.log('📝 [CLIENT] Parse failed at attempt', attempts, e.message);
+                        break;
+                    }
+                }
+                
+                if (Array.isArray(raw)) {
+                    assignedUsers = raw.filter(u => u !== null).map(u => {
+                        if (typeof u === 'object' && u.id) {
+                            return { id: u.id, fullname: u.fullname || null };
+                        }
+                        const uid = typeof u === 'object' ? u.id : u;
+                        return { id: uid, fullname: null };
+                    });
+                    console.log('📝 [CLIENT] Parsed assignedUsers:', JSON.stringify(assignedUsers));
+                } else {
+                    console.log('📝 [CLIENT] Final raw is not an array:', typeof raw, raw);
+                }
+            } catch (e) {
+                console.error('Error parsing assigned_users for ticket', updatedTicket[0].id, e);
+                assignedUsers = [];
+            }
+        }
+        
+        if (assignedUsers.length === 0 && updatedTicket[0].assigned_to) {
+            assignedUsers = [{
+                id: updatedTicket[0].assigned_to,
+                fullname: updatedTicket[0].agent_name || null
+            }];
+        }
+        
+        const ticket = {
+            ...updatedTicket[0],
+            assigned_users: assignedUsers
+        };
+        
+        console.log('✅ [CLIENT] Ticket updated, final assigned_users:', JSON.stringify(assignedUsers));
+        res.json(ticket);
+        
+    } catch (error) {
+        console.error('❌ [CLIENT] Error updating ticket:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 app.delete('/api/tickets/:id', async (req, res) => {
     try {
         console.log('🗑️ DELETE request for ticket ID:', req.params.id);

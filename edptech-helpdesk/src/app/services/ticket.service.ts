@@ -56,6 +56,7 @@ export class TicketService {
   private statsSubject = new BehaviorSubject<TicketStats | null>(null);
   public stats$ = this.statsSubject.asObservable();
   private pollingInterval: any;
+  private pollingEnabled = true;
   private previousTickets: Ticket[] = [];
   private lastCheckTime = new Date();
   private ticketUpdateSubject = new Subject<Ticket>();
@@ -68,6 +69,28 @@ export class TicketService {
   ) {
     this.loadInitialData();
   }
+pausePolling(): void {
+  this.pollingEnabled = false;
+  console.log('⏸️ Polling paused');
+}
+
+resumePolling(): void {
+  this.pollingEnabled = true;
+  console.log('▶️ Polling resumed');
+}
+
+private startPolling(): void {
+  if (this.pollingInterval) {
+    clearInterval(this.pollingInterval);
+  }
+  this.pollingInterval = setInterval(() => {
+    if (this.pollingEnabled) {
+      this.fetchTickets(); 
+    } else {
+      console.log('⏸️ Polling skipped (paused)');
+    }
+  }, 30000);
+}
 
  private loadInitialData(): void {
   const cachedTickets = this.cacheService.get('tickets');
@@ -77,15 +100,6 @@ export class TicketService {
   }
   this.fetchTickets();
   this.startPolling();  // ✅ Start polling
-}
-
-private startPolling(): void {
-  if (this.pollingInterval) {
-    clearInterval(this.pollingInterval);
-  }
-  this.pollingInterval = setInterval(() => {
-    this.fetchTickets(); 
-  }, 30000); // 30 seconds instead of 60
 }
 
  private checkForNewTickets(): void {
@@ -202,10 +216,7 @@ private hasTicketDataChanged(newTickets: Ticket[]): boolean {
  fetchTickets(): void {
   const currentUser: any = this.authService.getCurrentUser();
   
-  console.log('🔍 fetchTickets - Raw currentUser:', JSON.stringify(currentUser, null, 2));
-  
   if (!currentUser) {
-    console.warn('⚠️ No current user found, fetching all tickets');
     this.fetchAllTickets();
     return;
   }
@@ -214,16 +225,6 @@ private hasTicketDataChanged(newTickets: Ticket[]): boolean {
   const userRole = this.determineUserRole(currentUser);
   const departmentId = currentUser.department_id || '';
   
-  console.log('👤 User details for ticket fetch:', { 
-    id: currentUser.id,
-    name: currentUser.fullname,
-    branch_id: currentUser.branch_id,
-    department: currentUser.department_name || currentUser.department,
-    department_id: currentUser.department_id,
-    role: userRole,
-    userTable: currentUser.user_table
-  });
-  
   const params: any = {
     userId: currentUser.id,
     userTable: currentUser.user_table || 'users',
@@ -231,26 +232,48 @@ private hasTicketDataChanged(newTickets: Ticket[]): boolean {
     departmentId: departmentId
   };
   
-  // Add branchId if it exists
   if (currentUser.branch_id) {
     params.branchId = currentUser.branch_id;
   }
   
   console.log('📤 Sending params to /api/tickets/my:', params);
   
+  // ✅ Get current tickets to preserve assigned_users
+  const currentTickets = this.ticketsSubject.value;
+  
   this.http.get<Ticket[]>(`${this.apiUrl}/tickets/my`, { params }).subscribe({
     next: (tickets) => {
-      console.log(`📥 Received ${tickets.length} tickets from backend:`, tickets);
-      this.ticketsSubject.next(tickets);
-      this.cacheService.set('tickets', tickets);
-      this.calculateStats(tickets);
+      // ✅ Preserve assigned_users from existing tickets
+      const updatedTickets = tickets.map(t => {
+        const existing = currentTickets.find(ct => ct.id === t.id);
+        if (existing && existing.assigned_users && existing.assigned_users.length > 0) {
+          // ✅ Keep the existing assigned_users if the new one is empty
+          if (!t.assigned_users || t.assigned_users.length === 0) {
+            return { ...t, assigned_users: existing.assigned_users };
+          }
+        }
+        // Parse assigned_users if it's a string
+        if (typeof t.assigned_users === 'string') {
+          try {
+            t.assigned_users = JSON.parse(t.assigned_users);
+          } catch (e) {
+            t.assigned_users = [];
+          }
+        }
+        return t;
+      });
+      
+      console.log(`📥 Received ${updatedTickets.length} tickets from backend`);
+      this.ticketsSubject.next(updatedTickets);
+      this.cacheService.set('tickets', updatedTickets);
+      this.calculateStats(updatedTickets);
     },
     error: (error) => {
-  console.error('❌ Error fetching tickets:', error);
-  if (this.ticketsSubject.value.length === 0) {
-    this.fetchAllTickets();
-  }
-}
+      console.error('❌ Error fetching tickets:', error);
+      if (this.ticketsSubject.value.length === 0) {
+        this.fetchAllTickets();
+      }
+    }
   });
 }
 // Client-side comment methods
@@ -270,25 +293,36 @@ getClientComments(ticketId: number): Observable<any[]> {
 deleteClientComment(commentId: number): Observable<any> {
   return this.http.delete(`${this.apiUrl}/client/tickets/comments/${commentId}`);
 }
-// In ticket.service.ts
 private determineUserRole(user: any): string {
   if (!user) return 'user';
   
   const deptName = (user.department || user.department_name || '').toLowerCase().trim();
   const branchId = user.branch_id;
+  const userTable = user.user_table || '';
   
-  // EDP/IT check
-  const isEDPIT = deptName === 'edp' || deptName === 'it' || 
-                  deptName === 'edp/it' || deptName === 'it/edp' ||
-                  deptName.startsWith('edp') || deptName.includes('it');
+  console.log('🔍 determineUserRole - Input:', { 
+    role: user.role, 
+    department: deptName, 
+    branchId: branchId,
+    userTable: userTable
+  });
   
-  if (user.role === 'admin') return 'admin';
-  
-  if (isEDPIT) {
-    if (branchId === 1 || branchId === 5) return 'main_edp_it';
+  // ✅ FIX: Check if user is from 'users' table (EDP/IT staff)
+  if (userTable === 'users') {
+    // ALL users from 'users' table are EDP/IT staff
+    console.log('👤 User from users table - EDP/IT staff');
+    
+    // Check if user is from main branch (1 or 5)
+    if (branchId === 1 || branchId === 5) {
+      console.log('📌 Main branch EDP/IT');
+      return 'main_edp_it';
+    }
+    console.log('📌 Branch EDP/IT');
     return 'edp_it';
   }
   
+  // Users from 'new_user' table are clients
+  console.log('👤 User from new_user table - Client');
   return 'user';
 }
 private isEDPITDepartment(deptName: string): boolean {
@@ -365,20 +399,40 @@ public newTicket$ = this.newTicketSubject.asObservable();
     );
 }
   // In ticket.service.ts
+// In ticket.service.ts
 updateTicket(id: number, data: any): Observable<Ticket> {
   console.log('Updating ticket:', id, data);
+  
+  // ✅ Ensure assigned_users is preserved in the payload
+  if (data.assigned_users && Array.isArray(data.assigned_users)) {
+    data.assigned_users = JSON.stringify(data.assigned_users);
+  }
   
   return this.http.put<Ticket>(`${this.apiUrl}/tickets/${id}`, data)
     .pipe(
       tap(updatedTicket => {
         console.log('Ticket updated successfully:', updatedTicket);
+        
+        // ✅ Parse assigned_users if it's a string
+        if (typeof updatedTicket.assigned_users === 'string') {
+          try {
+            updatedTicket.assigned_users = JSON.parse(updatedTicket.assigned_users);
+          } catch (e) {
+            updatedTicket.assigned_users = [];
+          }
+        }
+        
         const current = this.ticketsSubject.value;
         const index = current.findIndex(t => t.id === id);
         if (index !== -1) {
-          current[index] = updatedTicket;
+          // ✅ Preserve the assigned_users from the update
+          current[index] = {
+            ...updatedTicket,
+            assigned_users: data.assigned_users || updatedTicket.assigned_users || []
+          };
           this.ticketsSubject.next([...current]);
         }
-        this.ticketUpdateSubject.next(updatedTicket); // ✅ ALWAYS emit
+        this.ticketUpdateSubject.next(updatedTicket);
         this.cacheService.remove(`ticket_${id}`);
         this.cacheService.remove('tickets');
         this.calculateStats(current);

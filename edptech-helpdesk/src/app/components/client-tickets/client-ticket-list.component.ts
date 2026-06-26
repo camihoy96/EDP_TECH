@@ -2,7 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { TicketService, Ticket } from '../../services/ticket.service';
+import { ClientTicketService, Ticket } from '../../services/client-ticket.service';
 import { AuthService } from '../../services/auth.service';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../../../environments/environment';
@@ -86,7 +86,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
               <th>Ticket Code</th>
               <th>Title</th>
               <th>Priority</th>
-              <th>Send To</th>
+              <th>Recipient</th>
               <th>Status</th>
               <th>Assigned To</th>
               <th>Created</th>
@@ -512,7 +512,7 @@ successTicketTitle: string = '';
 successAssignedNames: string = '';
 
   constructor(
-    private ticketService: TicketService,
+    private ticketService: ClientTicketService,
     private authService: AuthService,
     private router: Router,
     private http: HttpClient,
@@ -522,17 +522,14 @@ successAssignedNames: string = '';
 ngOnInit() {
   this.authService.currentUser$.subscribe((user: any) => {
     this.currentUser = user;
+    console.log('👤 Current user set:', user?.fullname, '| dept:', user?.department, '| branch:', user?.branch_id);
+    
+    // DIRECT FETCH - bypass the service
+    if (user) {
+      this.fetchTicketsDirectly(user);
+    }
   });
 
-  // ✅ Subscribe to full ticket list updates
-  this.ticketService.tickets$.subscribe(tickets => {
-    console.log(`📋 List received ${tickets?.length || 0} tickets`);
-    this.tickets = tickets || [];
-    this.myTickets = [...this.tickets];
-    this.applyFilters();
-  });
-
-  // ✅ Subscribe to individual ticket updates
   this.ticketService.ticketUpdate$.subscribe((updatedTicket: Ticket) => {
     if (updatedTicket) {
       const index = this.tickets.findIndex(t => t.id === updatedTicket.id);
@@ -543,22 +540,61 @@ ngOnInit() {
     }
   });
 
-  // ✅ Subscribe to NEW tickets - force refresh the list
   this.newTicketSub = this.ticketService.newTicket$.subscribe((newTicket: Ticket) => {
     if (newTicket) {
-      console.log('🆕 New ticket received, refreshing list...');
-      // Force a full refresh from backend to get the properly filtered list
-      this.refreshTickets();
+      console.log('🆕 New client ticket received, refreshing list...');
+      this.fetchTicketsDirectly(this.currentUser);
     }
   });
 
-  // Initial fetch
-  this.ticketService.fetchTickets();
-
   // Poll every 30 seconds
   this.pollingInterval = setInterval(() => {
-    this.ticketService.fetchTickets();
+    if (this.currentUser) {
+      this.fetchTicketsDirectly(this.currentUser);
+    }
   }, 30000);
+}
+fetchTicketsDirectly(user: any) {
+  const params: any = {
+    userId: user.id,
+    userTable: user.user_table || 'new_user',
+    includeAssignedUsers: 'true'  // Remove userFullname - not needed by backend
+  };
+  
+  if (user.branch_id) {
+    params.branchId = user.branch_id;
+  }
+  
+  if (user.department_id) {
+    params.departmentId = user.department_id;
+  }
+  
+  console.log('🔥 DIRECT FETCH URL:', `${this.apiUrl}/api/client/tickets?` + new URLSearchParams(params).toString());
+  
+  this.http.get<any[]>(`${this.apiUrl}/api/client/tickets`, { params })
+    .subscribe({
+      next: (tickets) => {
+        console.log('🔥 DIRECT FETCH RESULT:', tickets.length, 'tickets');
+        
+        // 🔍 DEBUG: Log the first ticket's assigned_users
+        if (tickets.length > 0) {
+          const firstAssigned = tickets.find(t => t.assigned_to);
+          if (firstAssigned) {
+            console.log('🔍 First assigned ticket:', firstAssigned.ticket_number);
+            console.log('🔍 assigned_users:', JSON.stringify(firstAssigned.assigned_users));
+            console.log('🔍 agent_name:', firstAssigned.agent_name);
+            console.log('🔍 assigned_to:', firstAssigned.assigned_to);
+          }
+        }
+        
+        this.tickets = tickets || [];
+        this.myTickets = [...this.tickets];
+        this.applyFilters();
+      },
+      error: (err) => {
+        console.error('🔥 DIRECT FETCH ERROR:', err);
+      }
+    });
 }
 
 ngOnDestroy() {
@@ -691,43 +727,6 @@ assignTicket(ticket: Ticket) {
   this.showAssignModal = true;
   this.loadAvailableAgents();
 }
-/**
- * Get assigned names for display, replacing current user's name with "You"
- */
-getAssignedNamesDisplay(ticket: Ticket): string {
-  if (!ticket) return '—';
-  
-  // First check assigned_users array
-  const assignedUsers = (ticket as any).assigned_users;
-  if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
-    const names = assignedUsers.map((u: any) => {
-      if (typeof u === 'object' && u.fullname) {
-        return u.id === this.currentUser?.id ? 'You' : u.fullname;
-      }
-      if (typeof u === 'number') {
-        if (u === this.currentUser?.id) return 'You';
-        if (this.agentNameCache.has(u)) return this.agentNameCache.get(u);
-        return `Agent #${u}`;
-      }
-      return 'Unknown';
-    });
-    return names.join(', ');
-  }
-  
-  // Fallback to assigned_to and agent_name
-  if (ticket.assigned_to) {
-    if (ticket.assigned_to === this.currentUser?.id) return 'You';
-    if (ticket.agent_name) return ticket.agent_name;
-    if (this.agentNameCache.has(ticket.assigned_to)) {
-      return this.agentNameCache.get(ticket.assigned_to) || `Agent #${ticket.assigned_to}`;
-    }
-    // Fetch the name if not in cache
-    this.fetchAgentName(ticket.assigned_to);
-    return `Agent #${ticket.assigned_to}`;
-  }
-  
-  return '—';
-}
 loadAvailableAgents() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}` };
@@ -774,9 +773,7 @@ toggleAgent(agent: any) {
 isAgentSelected(agent: any): boolean {
   return agent && agent.id ? this.selectedAgentIds.includes(agent.id) : false;
 }
-refreshTickets() {
-  this.ticketService.fetchTickets();
-}
+
 confirmAssign() {
   if (this.selectedAgentIds.length === 0 || !this.assignTicketData) return;
   
@@ -787,7 +784,7 @@ confirmAssign() {
       return { id: id, fullname: this.currentUser?.fullname };
     }
     const agent = this.availableAgents.find(a => a.id === id);
-    const name = agent?.fullname || `Agent #${id}`;
+    const name = agent?.fullname || `${id}`;
     assignedNames.push(name);
     return { id: id, fullname: name };
   });
@@ -799,41 +796,53 @@ confirmAssign() {
     version: (this.assignTicketData as any).version
   };
   
+  // ✅ Optimistic update - update the ticket in the local array immediately
+  const ticketId = this.assignTicketData.id;
+  const idx = this.tickets.findIndex(t => t.id === ticketId);
+  if (idx !== -1) {
+    this.tickets[idx] = {
+      ...this.tickets[idx],
+      assigned_to: this.selectedAgentIds[0],
+      assigned_users: assignedUsersData,
+      status: updateData.status,
+      agent_name: assignedNames.join(', ')
+    };
+    this.myTickets = [...this.tickets];
+    this.applyFilters();
+  }
+  
   const adminName = this.currentUser?.fullname || 'Administrator';
   
   this.ticketService.updateTicket(this.assignTicketData.id, updateData).subscribe({
     next: (updatedTicket) => {
-      const index = this.tickets.findIndex(t => t.id === updatedTicket.id);
-      if (index !== -1) { 
-        this.tickets[index] = updatedTicket; 
+      // Parse the response
+      if (typeof updatedTicket.assigned_users === 'string') {
+        try {
+          updatedTicket.assigned_users = JSON.parse(updatedTicket.assigned_users);
+        } catch (e) {
+          updatedTicket.assigned_users = [];
+        }
       }
+      
       this.closeAssignModal();
-      this.successTicketNumber = updatedTicket.ticket_number;
-      this.successTicketTitle = updatedTicket.title;
+      this.successTicketNumber = updatedTicket.ticket_number || this.assignTicketData.ticket_number;
+      this.successTicketTitle = updatedTicket.title || this.assignTicketData.title;
       this.successAssignedNames = assignedNames.join(', ');
       this.showAssignSuccess = true;
       
-      // ✅ Notify the TICKET CREATOR (only once!)
-      this.clientNotificationService.handleTicketAssigned(
-  updatedTicket,
-  adminName,
-  updatedTicket.created_by,
-  assignedNames.join(', ')  
-); 
-      // ✅ Notify the ASSIGNED AGENTS
-      this.clientNotificationService.handleTicketAssignedToAgent(
-        updatedTicket,
-        adminName,
-        this.selectedAgentIds
-      );
-      
-      this.refreshTickets();
+      // Refresh in background
+      if (this.currentUser) {
+        this.fetchTicketsDirectly(this.currentUser);
+      }
     },
     error: (err) => { 
       console.error('Assign error:', err);
+      // Revert optimistic update on error
+      if (this.currentUser) {
+        this.fetchTicketsDirectly(this.currentUser);
+      }
       if (err.status === 409) {
         alert('⚠️ This ticket was modified by another user. Refreshing...');
-        this.refreshTickets();
         this.closeAssignModal();
       } else {
         alert('Error assigning ticket: ' + (err.error?.message || err.message));
@@ -893,7 +902,7 @@ filterMyTickets() {
           if (u === this.currentUser?.id) return 'You';
           if (this.agentNameCache.has(u)) return this.agentNameCache.get(u);
           this.fetchAgentName(u);
-          return `Agent #${u}`;
+          return `${u}`;
         }
         return 'Unknown';
       });
@@ -901,20 +910,106 @@ filterMyTickets() {
     }
     if (ticket.assigned_to) {
       if (ticket.assigned_to === this.currentUser?.id) return 'You';
-      return ticket.agent_name || `Agent #${ticket.assigned_to}`;
+      return ticket.agent_name || `${ticket.assigned_to}`;
     }
     return '—';
   }
 
-  private fetchAgentName(userId: number) {
-    if (this.agentNameCache.has(userId)) return;
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const headers = { 'Authorization': `Bearer ${token}` };
-    this.http.get<any>(`${environment.apiUrl}/api/users/${userId}`, { headers }).subscribe({
-      next: (user) => { if (user?.fullname) this.agentNameCache.set(userId, user.fullname); },
-      error: () => { this.agentNameCache.set(userId, `Agent #${userId}`); }
+  /**
+ * Get assigned names for display, replacing current user's name with "You"
+ */
+getAssignedNamesDisplay(ticket: Ticket): string {
+  if (!ticket) return '—';
+  
+  // ✅ FIRST: Check assigned_users array (supports multiple users)
+  const assignedUsers = (ticket as any).assigned_users;
+  if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+    const names = assignedUsers.map((u: any) => {
+      if (typeof u === 'object' && u.fullname && u.fullname !== 'null') {
+        return u.id === this.currentUser?.id ? 'You' : u.fullname;
+      }
+      if (typeof u === 'number' || (typeof u === 'object' && u.id)) {
+        const uid = typeof u === 'number' ? u : u.id;
+        if (uid === this.currentUser?.id) return 'You';
+        const cachedName = this.agentNameCache.get(uid);
+        if (cachedName) return cachedName;
+        this.fetchAgentName(uid);
+        return 'User #' + uid;
+      }
+      return 'Unknown';
     });
+    return names.join(', ');
   }
+  
+  // ✅ SECOND: Fallback to agent_name (single user from JOIN)
+  if (ticket.agent_name && ticket.agent_name !== 'null' && ticket.agent_name !== 'undefined') {
+    return ticket.assigned_to === this.currentUser?.id ? 'You' : ticket.agent_name;
+  }
+  
+  // ✅ THIRD: Fallback to assigned_to
+  if (ticket.assigned_to) {
+    if (ticket.assigned_to === this.currentUser?.id) return 'You';
+    const cachedName = this.agentNameCache.get(ticket.assigned_to);
+    if (cachedName) return cachedName;
+    this.fetchAgentName(ticket.assigned_to);
+    return 'User #' + ticket.assigned_to;
+  }
+  
+  return '—';
+}
+private fetchAgentName(userId: number) {
+  if (!userId) return;
+  if (this.agentNameCache.has(userId)) return;
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  // Try both API endpoints
+  this.http.get<any>(`${environment.apiUrl}/api/users/${userId}`, { headers }).subscribe({
+    next: (user) => { 
+      if (user?.fullname) {
+        this.agentNameCache.set(userId, user.fullname);
+        // Trigger change detection by updating the tickets reference
+        this.myTickets = [...this.tickets];
+        this.applyFilters();
+      } else {
+        // Try new_user table
+        this.http.get<any>(`${environment.apiUrl}/api/new-users/${userId}`, { headers }).subscribe({
+          next: (newUser) => {
+            if (newUser?.fullname) {
+              this.agentNameCache.set(userId, newUser.fullname);
+            } else {
+              this.agentNameCache.set(userId, `User #${userId}`);
+            }
+            // Trigger UI update
+            this.myTickets = [...this.tickets];
+            this.applyFilters();
+          },
+          error: () => {
+            this.agentNameCache.set(userId, `User #${userId}`);
+          }
+        });
+      }
+    },
+    error: () => {
+      // Try new_user table as fallback
+      this.http.get<any>(`${environment.apiUrl}/api/new-users/${userId}`, { headers }).subscribe({
+        next: (newUser) => {
+          if (newUser?.fullname) {
+            this.agentNameCache.set(userId, newUser.fullname);
+          } else {
+            this.agentNameCache.set(userId, `User #${userId}`);
+          }
+          this.myTickets = [...this.tickets];
+          this.applyFilters();
+        },
+        error: () => {
+          this.agentNameCache.set(userId, `User #${userId}`);
+        }
+      });
+    }
+  });
+}
 
   viewTicket(id: number) { this.router.navigate(['/client/tickets', id]); }
   editTicket(id: number) { this.router.navigate(['/client/tickets', id, 'edit']); }
@@ -931,8 +1026,7 @@ confirmDelete() {
         this.applyFilters();
         this.showDeleteConfirm = false;
         this.ticketToDelete = null;
-        // ✅ Force refresh
-        this.refreshTickets();
+        this.ticketService.fetchTickets();
       },
       error: (error) => { 
         console.error('Delete error:', error); 

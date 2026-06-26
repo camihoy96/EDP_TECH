@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TicketService, Ticket } from '../../services/ticket.service';
+import { ClientTicketService } from '../../services/client-ticket.service';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AuthService } from '../../services/auth.service';
 import { HttpClient } from '@angular/common/http';
@@ -589,6 +590,7 @@ private ticketUpdateSub: any;
     private route: ActivatedRoute,
     private router: Router,
     private ticketService: TicketService,
+    private clientTicketService: ClientTicketService,
     private sanitizer: DomSanitizer,
     private authService: AuthService,
     private http: HttpClient,
@@ -1034,24 +1036,29 @@ showSuccessModal(message: string) {
 closeSuccessModal() {
   this.showUpdateSuccess = false;
 }
-  getAssignedNames(ticket: any): string {
+ getAssignedNames(ticket: any): string {
   if (!ticket) return '—';
   
   const currentUserId = this.currentUser?.id;
   
+  // ✅ FIRST: Check assigned_users array
   const assignedUsers = ticket.assigned_users;
   if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
     const names = assignedUsers.map((u: any) => {
-      const id = typeof u === 'object' ? u.id : u;
-      const name = typeof u === 'object' ? u.fullname : `Agent #${u}`;
-      return id === currentUserId ? 'You' : name;
+      if (typeof u === 'object' && u.id) {
+        const name = u.fullname && u.fullname !== 'null' ? u.fullname : ('User #' + u.id);
+        return u.id === currentUserId ? 'You' : name;
+      }
+      const uid = typeof u === 'object' ? u.id : u;
+      return uid === currentUserId ? 'You' : ('User #' + uid);
     });
     return names.join(', ');
   }
   
+  // ✅ SECOND: Fallback to assigned_to + agent_name
   if (ticket.assigned_to) {
     if (ticket.assigned_to === currentUserId) return 'You';
-    return ticket.agent_name || `Agent #${ticket.assigned_to}`;
+    return ticket.agent_name || ('User #' + ticket.assigned_to);
   }
   
   return '—';
@@ -1075,9 +1082,9 @@ closeSuccessModal() {
       error: () => { this.attachments = []; }
     });
   }
-
-  loadTicket(id: number): void {
-    this.ticketService.getTicket(id).subscribe({
+loadTicket(id: number): void {
+    // ✅ Use client endpoint for proper assigned_users parsing
+    this.clientTicketService.getTicket(id).subscribe({
       next: (ticket) => {
         this.ticket = ticket;
         if (ticket.description) {
@@ -1089,7 +1096,7 @@ closeSuccessModal() {
       },
       error: (err) => console.error('Error loading ticket:', err)
     });
-  }
+}
 
 loadComments(ticketId: number): void {
   this.ticketService.getClientComments(ticketId).subscribe({  // ✅ Use client endpoint

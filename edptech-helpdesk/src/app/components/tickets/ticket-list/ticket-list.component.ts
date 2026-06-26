@@ -9,6 +9,7 @@ import { ActivatedRoute } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { NotificationService } from '../../../services/notification.service';
 import { ClientNotificationService } from '../../../services/client-notification.service';
+
 @Component({
   selector: 'app-ticket-list',
   standalone: true,
@@ -115,7 +116,7 @@ import { ClientNotificationService } from '../../../services/client-notification
    <thead>
   <tr>
     <th>Ticket Code</th>
-    <th>Origin</th>
+    <th>Origin Department</th>
     <th>Title</th>
     <th>Priority</th>
     <th>Status</th>
@@ -126,11 +127,13 @@ import { ClientNotificationService } from '../../../services/client-notification
 </thead>
     <tbody>
      <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket.id)">
-  <td class="ticket-num">{{ ticket.ticket_number }}</td>
+  <td class="ticket-cell">
+    <div class="ticket-code">{{ ticket.ticket_number }}</div>
+    <div class="ticket-creator">from: {{ ticket.created_by_name || 'Unknown' }}</div>
+</td>
    <!-- Origin Column -->
   <td class="origin-cell">
     <div class="origin-info">
-      <span class="origin-name">{{ ticket.created_by_name || 'Unknown' }}</span>
       <span class="origin-dept" *ngIf="$any(ticket).creator_department">
         {{ $any(ticket).creator_department }}
       </span>
@@ -438,10 +441,13 @@ import { ClientNotificationService } from '../../../services/client-notification
     .retro-table { width: 100%; border-collapse: collapse; font-size: 10px; background: #fff; }
     .retro-table th { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 10px; border-bottom: 1px solid #808080; border-right: 1px solid #ccc; }
     .retro-table th:last-child { border-right: none; }
-    .retro-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #ddd; vertical-align: top; color: #000; }
+    .retro-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #ddd; vertical-align: middle; color: #000; }
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0ff; }
-    .ticket-num { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
+    /* Ticket Code & Creator */
+    .ticket-cell { text-align: center; }
+    .ticket-code { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
+    .ticket-creator { font-size: 9px; color: #555; margin-top: 2px; align-items: center;  gap: 2px;}
     .ticket-title { font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
     .ticket-meta { font-size: 9px; color: #666; margin-top: 1px; }
     .date-cell { font-family: monospace; font-size: 12px; white-space: nowrap; color: #666; }
@@ -567,34 +573,29 @@ import { ClientNotificationService } from '../../../services/client-notification
     ::-webkit-scrollbar-thumb { background: #a0a0a0; border: 2px solid #d4d0c8; border-radius: 6px; }
     ::-webkit-scrollbar-thumb:hover { background: #808080; }
     /* Origin Column */
-.origin-cell { max-width: 130px; }
-.origin-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  align-items: center;
-}
-.origin-name {
-  font-weight: 600;
-  font-size: 10px;
-  color: #000;
-}
-.origin-dept {
-  font-size: 9px;
-  color: #555;
-  background: #f5f5f5;
-  padding: 1px 4px;
-  border-radius: 2px;
-}
-.origin-branch {
-  font-size: 8px;
-  color: #0a3a8c;
-  background: #f0f4ff;
-  padding: 1px 5px;
-  border-radius: 3px;
-  border: 1px solid #b8c8e8;
-  white-space: nowrap;
-}
+    .origin-cell { max-width: 130px; }
+    .origin-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      align-items: center;
+    }
+    .origin-dept {
+      font-size: 9px;
+      color: #555;
+      background: #f5f5f5;
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+    .origin-branch {
+      font-size: 8px;
+      color: #0a3a8c;
+      background: #f0f4ff;
+      padding: 1px 5px;
+      border-radius: 3px;
+      border: 1px solid #b8c8e8;
+      white-space: nowrap;
+    }
   `]
 })
 export class TicketListComponent implements OnInit {
@@ -611,8 +612,8 @@ export class TicketListComponent implements OnInit {
   filters = { priority: '' };
   viewMode: string = 'list';
   successTicketNumber: string = '';
-successTicketTitle: string = '';
-successAssignedNames: string = '';
+  successTicketTitle: string = '';
+  successAssignedNames: string = '';
   showAssignModal = false;
   assignTicketData: any = null;
   availableAgents: any[] = [];
@@ -623,7 +624,7 @@ successAssignedNames: string = '';
   resolveTicketData: Ticket | null = null;
   showDeleteListModal = false;
   deleteListData: Ticket | null = null;
-
+private updateTimeout: any;
   constructor(
     private ticketService: TicketService,
     private router: Router,
@@ -631,7 +632,7 @@ successAssignedNames: string = '';
     private authService: AuthService,
     private http: HttpClient,
     private notificationService: NotificationService,  
-  private clientNotificationService: ClientNotificationService
+    private clientNotificationService: ClientNotificationService
   ) {}
 
   ngOnInit() {
@@ -661,6 +662,12 @@ successAssignedNames: string = '';
   }
 
   applyFilters() {
+  // ✅ Debounce filter updates to prevent flickering
+  if (this.updateTimeout) {
+    clearTimeout(this.updateTimeout);
+  }
+  
+  this.updateTimeout = setTimeout(() => {
     let filtered = [...this.tickets];
     if (this.activeTab !== 'all') filtered = filtered.filter(t => t.status === this.activeTab);
     if (this.filters.priority) filtered = filtered.filter(t => t.priority === this.filters.priority);
@@ -678,8 +685,8 @@ successAssignedNames: string = '';
     this.totalPages = Math.ceil(filtered.length / this.pageSize);
     this.currentPage = 1;
     this.updatePaginatedTickets();
-  }
-
+  }, 100);
+}
   applySearch() { this.currentPage = 1; this.applyFilters(); }
 
   kanbanStatuses = [
@@ -691,131 +698,166 @@ successAssignedNames: string = '';
   ];
 
   setView(mode: string) { this.viewMode = mode; localStorage.setItem('viewMode', mode); }
-private agentNameCache: Map<number, string> = new Map();
- getAssignedNames(ticket: Ticket): string {
-    if (!ticket) return '—';
-    
-    const assignedUsers = (ticket as any).assigned_users;
-    if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
-        const names = assignedUsers.map((user: any) => {
-            // Handle object format: { id, fullname }
-            if (typeof user === 'object' && user.fullname) {
-                if (user.id === this.currentUser?.id) return 'You';
-                return user.fullname;
-            }
-            // Handle plain number format (legacy)
-            if (typeof user === 'number') {
-                if (user === this.currentUser?.id) return 'You';
-                
-                if (this.agentNameCache.has(user)) {
-                    return this.agentNameCache.get(user);
-                }
-                
-                const agent = this.availableAgents?.find(a => a.id === user);
-                if (agent?.fullname) {
-                    this.agentNameCache.set(user, agent.fullname);
-                    return agent.fullname;
-                }
-                
-                if (user === ticket.assigned_to && ticket.agent_name) {
-                    this.agentNameCache.set(user, ticket.agent_name);
-                    return ticket.agent_name;
-                }
-                
-                this.fetchAgentName(user);
-                return `Agent #${user}`;
-            }
-            return 'Unknown';
-        });
-        return names.join(', ');
-    }
-    
-    if (ticket.assigned_to) {
-        if (ticket.assigned_to === this.currentUser?.id) return 'You';
-        return ticket.agent_name || `Agent #${ticket.assigned_to}`;
-    }
-    
-    return '—';
-}
-private fetchAgentName(userId: number) {
-    if (this.agentNameCache.has(userId)) return;
-    
-    const headers = this.getHeaders();
-    
-    this.http.get<any>(`${environment.apiUrl}/api/users/${userId}`, { headers }).subscribe({
-        next: (user) => {
-            if (user?.fullname) {
-                this.agentNameCache.set(userId, user.fullname);
-            }
-        },
-        error: () => {
-            this.http.get<any>(`${environment.apiUrl}/api/new-users/${userId}`, { headers }).subscribe({
-                next: (user) => {
-                    if (user?.fullname) {
-                        this.agentNameCache.set(userId, user.fullname);
-                    }
-                },
-                error: () => {
-                    this.agentNameCache.set(userId, `Agent #${userId}`);
-                }
-            });
+  
+  private agentNameCache: Map<number, string> = new Map();
+  
+  getAssignedNames(ticket: Ticket): string {
+  if (!ticket) return '—';
+  
+  const assignedUsers = (ticket as any).assigned_users;
+  if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+    const names = assignedUsers.map((user: any) => {
+      if (typeof user === 'object' && user.fullname) {
+        if (user.id === this.currentUser?.id) return 'You';
+        return user.fullname;
+      }
+      if (typeof user === 'number') {
+        if (user === this.currentUser?.id) return 'You';
+        if (this.agentNameCache.has(user)) {
+          return this.agentNameCache.get(user);
         }
+        // Check if this user is in availableAgents
+        const agent = this.availableAgents?.find(a => a.id === user);
+        if (agent?.fullname) {
+          this.agentNameCache.set(user, agent.fullname);
+          return agent.fullname;
+        }
+        // Only fetch if user is not in availableAgents (should be rare)
+        if (!this.availableAgents?.some(a => a.id === user)) {
+          this.fetchAgentName(user);
+        }
+        return `Agent #${user}`;
+      }
+      return 'Unknown';
     });
+    return names.join(', ');
+  }
+  
+  if (ticket.assigned_to) {
+    if (ticket.assigned_to === this.currentUser?.id) return 'You';
+    // Check if this user is in availableAgents
+    const agent = this.availableAgents?.find(a => a.id === ticket.assigned_to);
+    if (agent?.fullname) return agent.fullname;
+    return ticket.agent_name || `Agent #${ticket.assigned_to}`;
+  }
+  
+  return '—';
 }
-  getTicketsByStatus(status: string): Ticket[] { return this.filteredTickets.filter(t => t.status === status); }
+  private fetchAgentName(userId: number) {
+    if (this.agentNameCache.has(userId)) return;
+    const headers = this.getHeaders();
+    this.http.get<any>(`${environment.apiUrl}/api/users/${userId}`, { headers }).subscribe({
+      next: (user) => {
+        if (user?.fullname) {
+          this.agentNameCache.set(userId, user.fullname);
+        }
+      },
+      error: () => {
+        this.http.get<any>(`${environment.apiUrl}/api/new-users/${userId}`, { headers }).subscribe({
+          next: (user) => {
+            if (user?.fullname) {
+              this.agentNameCache.set(userId, user.fullname);
+            }
+          },
+          error: () => {
+            this.agentNameCache.set(userId, `Agent #${userId}`);
+          }
+        });
+      }
+    });
+  }
+
+  getTicketsByStatus(status: string): Ticket[] { 
+    return this.filteredTickets.filter(t => t.status === status); 
+  }
+  
   updatePaginatedTickets() {
     const start = (this.currentPage - 1) * this.pageSize;
     const end = start + this.pageSize;
     this.paginatedTickets = this.filteredTickets.slice(start, end);
   }
 
-  goToPage(page: number) { if (page < 1 || page > this.totalPages) return; this.currentPage = page; this.updatePaginatedTickets(); }
+  goToPage(page: number) { 
+    if (page < 1 || page > this.totalPages) return; 
+    this.currentPage = page; 
+    this.updatePaginatedTickets(); 
+  }
+  
   nextPage() { this.goToPage(this.currentPage + 1); }
   prevPage() { this.goToPage(this.currentPage - 1); }
 
   clearFilters() {
-    this.activeTab = 'all'; this.filters = { priority: '' }; this.searchTerm = '';
-    this.applyFilters(); this.router.navigate(['/tickets']);
+    this.activeTab = 'all'; 
+    this.filters = { priority: '' }; 
+    this.searchTerm = '';
+    this.applyFilters(); 
+    this.router.navigate(['/tickets']);
   }
 
-  isEDPUser(): boolean { return this.currentUser?.user_table === 'users'; }
-  isAdmin(): boolean { return this.currentUser?.role === 'admin'; }
+  isEDPUser(): boolean { 
+    return this.currentUser?.user_table === 'users'; 
+  }
+  
+  isAdmin(): boolean { 
+    return this.currentUser?.role === 'admin'; 
+  }
+  
+  // ✅ Head/Manager has same privileges as Admin
+  isHeadManager(): boolean { 
+    return this.currentUser?.role === 'Head/Manager'; 
+  }
+  
+  // ✅ Combined check: Admin OR Head/Manager
+  isAdminOrHeadManager(): boolean {
+    return this.isAdmin() || this.isHeadManager();
+  }
 
   canEditTicket(ticket: Ticket): boolean {
     if (ticket.status === 'resolved' || ticket.status === 'closed') return false;
     if (!this.isEDPUser()) return false;
-    if (this.isAdmin()) return true;
+    // ✅ Admin OR Head/Manager can edit any ticket
+    if (this.isAdminOrHeadManager()) return true;
     return ticket.created_by === this.currentUser?.id;
   }
 
- canAssignTicket(ticket: Ticket): boolean {
-  // ❌ Cannot assign/reassign resolved, closed, in_progress, or pending tickets
-  if (['resolved', 'closed', 'in_progress', 'pending'].includes(ticket.status)) {
-    return false;
+  canAssignTicket(ticket: Ticket): boolean {
+    // ❌ Cannot assign/reassign resolved, closed, in_progress, or pending tickets
+    if (['resolved', 'closed', 'in_progress', 'pending'].includes(ticket.status)) {
+      return false;
+    }
+    
+    // ✅ Admin OR Head/Manager can reassign if status is 'new' or 'assigned'
+    if (ticket.assigned_to) {
+      return this.isAdminOrHeadManager() && ['new', 'assigned'].includes(ticket.status);
+    }
+    
+    // ✅ Any EDP user can assign if unassigned
+    return this.isEDPUser();
   }
-  
-  // ✅ Admin can reassign only if status is 'new' or 'assigned'
-  if (ticket.assigned_to) {
-    return this.isAdmin() && ['new', 'assigned'].includes(ticket.status);
-  }
-  
-  // ✅ Any EDP user can assign if unassigned
-  return this.isEDPUser();
-}
+
   canResolveTicket(ticket: Ticket): boolean {
     if (ticket.status === 'resolved' || ticket.status === 'closed') return false;
     if (ticket.status === 'new') return false;
-    if (this.isAdmin()) return true;
+    // ✅ Admin OR Head/Manager can resolve any ticket
+    if (this.isAdminOrHeadManager()) return true;
     return ticket.assigned_to === this.currentUser?.id && ['assigned', 'in_progress', 'pending'].includes(ticket.status);
   }
 
- assignTicket(ticket: Ticket) {
+  canDeleteFromList(ticket: Ticket): boolean {
+    // ✅ Admin OR Head/Manager can delete any ticket regardless of status
+    if (this.isAdminOrHeadManager()) return true;
+    
+    // Non-admin: Only creator can delete if ticket is new and unassigned
+    return ticket.created_by === this.currentUser?.id && 
+           ticket.status === 'new' && 
+           !ticket.assigned_to;
+  }
+
+  assignTicket(ticket: Ticket) {
     this.assignTicketData = ticket;
     
-    // Pre-select all currently assigned users
     const assignedUsers = (ticket as any).assigned_users;
     if (assignedUsers && Array.isArray(assignedUsers) && assignedUsers.length > 0) {
-        // Extract IDs from objects or use plain numbers
         this.selectedAgentIds = assignedUsers.map((u: any) => {
             return typeof u === 'object' ? u.id : u;
         });
@@ -827,7 +869,8 @@ private fetchAgentName(userId: number) {
     
     this.showAssignModal = true;
     this.loadAvailableAgents();
-}
+  }
+
   toggleAgent(agent: any) {
     if (!agent || !agent.id) return;
     const index = this.selectedAgentIds.indexOf(agent.id);
@@ -835,101 +878,191 @@ private fetchAgentName(userId: number) {
     else this.selectedAgentIds.splice(index, 1);
   }
 
-  isAgentSelected(agent: any): boolean { return agent && agent.id ? this.selectedAgentIds.includes(agent.id) : false; }
+  isAgentSelected(agent: any): boolean { 
+    return agent && agent.id ? this.selectedAgentIds.includes(agent.id) : false; 
+  }
 
   private getHeaders(): any {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     return { 'Authorization': `Bearer ${token}` };
   }
 
-  loadAvailableAgents() {
-    const currentUserId = this.authService.getCurrentUser()?.id;
-    const headers = this.getHeaders();
-    this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
-      next: (users) => {
-        this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
-          next: (newUsers) => { this.availableAgents = [...users, ...newUsers].filter(u => u.id !== currentUserId); },
-          error: () => { this.availableAgents = users.filter(u => u.id !== currentUserId); }
-        });
-      },
-      error: () => { this.availableAgents = []; }
-    });
-  }
-confirmAssign() {
-    if (this.selectedAgentIds.length === 0 || !this.assignTicketData) return;
-    
-    this.selectedAgentNames = [];
-    
-    const assignedUsersData = this.selectedAgentIds.map(id => {
-        if (id === this.currentUser?.id) {
-            this.selectedAgentNames.push(this.currentUser?.fullname);
-            return { id: id, fullname: this.currentUser?.fullname };
-        }
-        const agent = this.availableAgents.find(a => a.id === id);
-        const name = agent?.fullname || `Agent #${id}`;
-        this.selectedAgentNames.push(name);
-        return { id: id, fullname: name };
-    });
-    
-    const updateData: any = {
-        assigned_to: this.selectedAgentIds[0],
-        assigned_users: assignedUsersData,
-        status: this.assignTicketData.status === 'new' ? 'assigned' : this.assignTicketData.status
-    };
-    
-    const allAssignedNames = [...this.selectedAgentNames];
-    
-    // ✅ Check session
-    const adminName = this.currentUser?.fullname;
-    if (!adminName) {
-        alert('User session expired. Please refresh.');
-        return;
-    }
-    
-    this.ticketService.updateTicket(this.assignTicketData.id, updateData).subscribe({
-        next: (updatedTicket) => {
-            const index = this.tickets.findIndex(t => t.id === updatedTicket.id);
-            if (index !== -1) { 
-                this.tickets[index] = updatedTicket; 
-                this.applyFilters(); 
-            }
-            
-            // ✅ Notify other admin users
-            this.notificationService.handleTicketAssigned(
-                updatedTicket,
-                adminName,
-                allAssignedNames.join(', '),
-                this.selectedAgentIds[0]
-            );
-            
-            // ✅ Notify the ticket creator (client)
-            this.clientNotificationService.handleTicketAssigned(
-                updatedTicket,
-                adminName,
-                updatedTicket.created_by
-            );
-            
-            this.closeAssignModal(); 
-            this.successTicketNumber = updatedTicket.ticket_number;
-this.successTicketTitle = updatedTicket.title;
-this.successAssignedNames = this.selectedAgentNames.join(', ');
+ // Add this helper method at the top of your methods section
+private isEDPITDepartment(department: string): boolean {
+  if (!department) return false;
+  const dept = department.toLowerCase().trim();
+  return dept === 'edp' || dept === 'it' || 
+         dept === 'edp/it' || dept === 'it/edp' ||
+         dept.includes('edp') || dept.includes('it');
+}
 
-this.closeAssignModal(); 
-this.showAssignSuccess = true;
+loadAvailableAgents() {
+  const currentUserId = this.authService.getCurrentUser()?.id;
+  const currentUserBranch = this.currentUser?.branch_id;
+  const headers = this.getHeaders();
+  
+  console.log('🔍 Loading available agents (EDP/IT only from same branch)...');
+  console.log('📍 Current user branch:', currentUserBranch);
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+    next: (users) => {
+      // ✅ Filter: Only users from EDP/IT department AND same branch
+      const edpITUsers = users.filter(u => {
+        const isEDPIT = this.isEDPITDepartment(u.department);
+        const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
+        return isEDPIT && isSameBranch && u.id !== currentUserId;
+      });
+      
+      console.log(`📋 Found ${edpITUsers.length} EDP/IT agents from same branch`);
+      
+      // Also check new_user table
+      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
+        next: (newUsers) => {
+          const edpITNewUsers = newUsers.filter(u => {
+            const isEDPIT = this.isEDPITDepartment(u.department);
+            const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
+            return isEDPIT && isSameBranch && u.id !== currentUserId;
+          });
+          
+          this.availableAgents = [...edpITUsers, ...edpITNewUsers];
+          console.log(`✅ Total EDP/IT agents (same branch): ${this.availableAgents.length}`);
         },
-        error: (err) => { 
-            console.error('Assign error:', err);
-            alert('Error assigning ticket: ' + (err.error?.message || err.message)); 
+        error: () => {
+          this.availableAgents = edpITUsers;
+          console.log(`✅ EDP/IT agents (without new_users): ${this.availableAgents.length}`);
         }
-    });
+      });
+    },
+    error: (err) => {
+      console.error('❌ Error loading agents:', err);
+      this.loadAgentsFromTickets();
+    }
+  });
 }
-closeAssignSuccess() { 
-  this.showAssignSuccess = false;
-  this.assignTicketData = null;
-  this.selectedAgentIds = []; 
+
+// Fallback method: load agents from tickets
+private loadAgentsFromTickets() {
+  const assignedUserIds = new Set<number>();
+  this.tickets.forEach(t => {
+    if (t.assigned_to) {
+      assignedUserIds.add(t.assigned_to);
+    }
+    const assignedUsers = (t as any).assigned_users;
+    if (assignedUsers && Array.isArray(assignedUsers)) {
+      assignedUsers.forEach((u: any) => {
+        if (u.id) assignedUserIds.add(u.id);
+      });
+    }
+  });
+  
+  // Try to fetch user details for these IDs
+  const headers = this.getHeaders();
+  const userIds = Array.from(assignedUserIds);
+  
+  if (userIds.length === 0) {
+    this.availableAgents = [];
+    return;
+  }
+  
+  // Fetch each user individually or in batch
+  // For simplicity, we'll just set availableAgents to empty
+  this.availableAgents = [];
+  console.warn('⚠️ Could not load agents, using empty list');
+}
+
+  confirmAssign() {
+  if (this.selectedAgentIds.length === 0 || !this.assignTicketData) return;
+  
   this.selectedAgentNames = [];
+  
+  const assignedUsersData = this.selectedAgentIds.map(id => {
+      if (id === this.currentUser?.id) {
+          this.selectedAgentNames.push(this.currentUser?.fullname);
+          return { id: id, fullname: this.currentUser?.fullname };
+      }
+      const agent = this.availableAgents.find(a => a.id === id);
+      const name = agent?.fullname || `Agent #${id}`;
+      this.selectedAgentNames.push(name);
+      return { id: id, fullname: name };
+  });
+  
+  const updateData: any = {
+      assigned_to: this.selectedAgentIds[0],
+      assigned_users: assignedUsersData,
+      status: this.assignTicketData.status === 'new' ? 'assigned' : this.assignTicketData.status
+  };
+  
+  const allAssignedNames = [...this.selectedAgentNames];
+  const adminName = this.currentUser?.fullname;
+  
+  if (!adminName) {
+      alert('User session expired. Please refresh.');
+      return;
+  }
+  
+  // ✅ Disable polling temporarily to prevent race condition
+  this.ticketService.pausePolling();
+  
+  this.ticketService.updateTicket(this.assignTicketData.id, updateData).subscribe({
+      next: (updatedTicket) => {
+          // ✅ Update the ticket in the local array immediately
+          const index = this.tickets.findIndex(t => t.id === updatedTicket.id);
+          if (index !== -1) { 
+              // ✅ Preserve the assigned_users data from the update
+              updatedTicket = {
+                  ...updatedTicket,
+                  assigned_users: assignedUsersData,
+                  assigned_to: this.selectedAgentIds[0]
+              };
+              this.tickets[index] = updatedTicket; 
+              this.applyFilters(); 
+          }
+          
+          // ✅ Send notifications
+          this.notificationService.handleTicketAssigned(
+              updatedTicket,
+              adminName,
+              allAssignedNames.join(', '),
+              this.selectedAgentIds[0]
+          );
+          
+          this.clientNotificationService.handleTicketAssigned(
+              updatedTicket,
+              adminName,
+              updatedTicket.created_by
+          );
+          
+          // ✅ Resume polling after a delay
+          setTimeout(() => {
+              this.ticketService.resumePolling();
+          }, 1000);
+          
+          this.closeAssignModal(); 
+          this.successTicketNumber = updatedTicket.ticket_number;
+          this.successTicketTitle = updatedTicket.title;
+          this.successAssignedNames = this.selectedAgentNames.join(', ');
+          this.showAssignSuccess = true;
+      },
+      error: (err) => { 
+          console.error('Assign error:', err);
+          // ✅ Resume polling even on error
+          this.ticketService.resumePolling();
+          alert('Error assigning ticket: ' + (err.error?.message || err.message)); 
+      }
+  });
 }
-  closeAssignModal() { this.showAssignModal = false; this.assignTicketData = null; this.selectedAgentIds = []; }
+  closeAssignSuccess() { 
+    this.showAssignSuccess = false;
+    this.assignTicketData = null;
+    this.selectedAgentIds = []; 
+    this.selectedAgentNames = [];
+  }
+
+  closeAssignModal() { 
+    this.showAssignModal = false; 
+    this.assignTicketData = null; 
+    this.selectedAgentIds = []; 
+  }
 
   getAgentStatus(agent: any): { label: string; class: string } | null {
     if (!agent) return null;
@@ -939,8 +1072,12 @@ closeAssignSuccess() {
     return { label: 'Available', class: 'status-available' };
   }
 
-  resolveTicket(ticket: Ticket) { this.resolveTicketData = ticket; this.showResolveModal = true; }
-confirmResolve() {
+  resolveTicket(ticket: Ticket) { 
+    this.resolveTicketData = ticket; 
+    this.showResolveModal = true; 
+  }
+
+  confirmResolve() {
     if (!this.resolveTicketData) return;
     
     const adminName = this.currentUser?.fullname;
@@ -960,14 +1097,12 @@ confirmResolve() {
                 this.applyFilters(); 
             }
             
-            // ✅ Notify other admin users
             this.notificationService.handleStatusChange(
                 updatedTicket,
                 'resolved',
                 adminName
             );
             
-            // ✅ Notify the ticket creator (client)
             this.clientNotificationService.handleStatusChange(
                 updatedTicket,
                 'resolved',
@@ -982,15 +1117,23 @@ confirmResolve() {
             alert('Error: ' + (err.error?.message || err.message)); 
         }
     });
-}
-  closeResolveModal() { this.showResolveModal = false; this.resolveTicketData = null; }
+  }
+
+  closeResolveModal() { 
+    this.showResolveModal = false; 
+    this.resolveTicketData = null; 
+  }
 
   isOnLeave(agent: any): boolean {
     if (!agent?.leaveEntries) return false;
     try {
       const leaves = typeof agent.leaveEntries === 'string' ? JSON.parse(agent.leaveEntries) : agent.leaveEntries;
-      const today = new Date(); today.setHours(0,0,0,0);
-      return leaves.some((l: any) => { const s = new Date(l.startDate), e = new Date(l.endDate); return today >= s && today <= e; });
+      const today = new Date(); 
+      today.setHours(0,0,0,0);
+      return leaves.some((l: any) => { 
+        const s = new Date(l.startDate), e = new Date(l.endDate); 
+        return today >= s && today <= e; 
+      });
     } catch { return false; }
   }
 
@@ -1010,7 +1153,9 @@ confirmResolve() {
     return ct >= sh*60+sm && ct <= eh*60+em;
   }
 
-  isAgentUnavailable(agent: any): boolean { return this.isOnLeave(agent) || this.isDayOff(agent) || this.isLunchBreak(agent); }
+  isAgentUnavailable(agent: any): boolean { 
+    return this.isOnLeave(agent) || this.isDayOff(agent) || this.isLunchBreak(agent); 
+  }
 
   hasUnavailableSelected(): boolean {
     return this.selectedAgentIds.some(id => {
@@ -1020,19 +1165,12 @@ confirmResolve() {
     });
   }
 
- canDeleteFromList(ticket: Ticket): boolean {
-    // Admin can delete any ticket regardless of status
-    if (this.isAdmin()) return true;
-    
-    // Non-admin: Only creator can delete if ticket is new and unassigned
-    return ticket.created_by === this.currentUser?.id && 
-           ticket.status === 'new' && 
-           !ticket.assigned_to;
-}
+  deleteTicketFromList(ticket: Ticket) { 
+    this.deleteListData = ticket; 
+    this.showDeleteListModal = true; 
+  }
 
-  deleteTicketFromList(ticket: Ticket) { this.deleteListData = ticket; this.showDeleteListModal = true; }
-
-confirmDeleteFromList() {
+  confirmDeleteFromList() {
     if (!this.deleteListData) return;
     
     const ticketId = this.deleteListData.id;
@@ -1051,10 +1189,26 @@ confirmDeleteFromList() {
             alert('Error deleting ticket: ' + (err.error?.error || err.message)); 
         }
     });
-}
-  closeDeleteListModal() { this.showDeleteListModal = false; this.deleteListData = null; }
-  getStatusCount(status: string): number { return this.tickets.filter(t => t.status === status).length; }
-  viewTicket(id: number) { this.router.navigate(['/tickets', id]); }
-  editTicket(id: number) { this.router.navigate(['/tickets', id, 'edit']); }
-  newTicket() { this.router.navigate(['/tickets/new']); }
+  }
+
+  closeDeleteListModal() { 
+    this.showDeleteListModal = false; 
+    this.deleteListData = null; 
+  }
+
+  getStatusCount(status: string): number { 
+    return this.tickets.filter(t => t.status === status).length; 
+  }
+
+  viewTicket(id: number) { 
+    this.router.navigate(['/tickets', id]); 
+  }
+
+  editTicket(id: number) { 
+    this.router.navigate(['/tickets', id, 'edit']); 
+  }
+
+  newTicket() { 
+    this.router.navigate(['/tickets/new']); 
+  }
 }
