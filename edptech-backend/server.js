@@ -1522,16 +1522,20 @@ app.get('/api/tickets/:id', async (req, res) => {
             SELECT t.*, 
                    COALESCE(u.fullname, nu.fullname, 'Unknown') as creator_name,
                    COALESCE(u.department, nu.department) as creator_department,
+                   cb.name as creator_branch_name,
+                   cb.company_name as creator_company_name,
                    d.name as department_name,
                    b.name as branch_name,
                    b.company_name as company_name,
-                   a.fullname as agent_name
+                   COALESCE(a.fullname, na.fullname) as agent_name
             FROM tickets t
             LEFT JOIN users u ON t.created_by = u.id
             LEFT JOIN new_user nu ON t.created_by = nu.id
+            LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
             LEFT JOIN departments d ON t.department_id = d.id
             LEFT JOIN branches b ON d.branch_id = b.id
             LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN new_user na ON t.assigned_to = na.id
             WHERE t.id = ?
         `, [req.params.id]);
         
@@ -1539,13 +1543,37 @@ app.get('/api/tickets/:id', async (req, res) => {
             return res.status(404).json({ error: 'Ticket not found' });
         }
         
-        // Parse assigned_users JSON
+        // Parse assigned_users JSON - handle double-stringified
+        let assignedUsers = [];
+        if (tickets[0].assigned_users) {
+            try {
+                let raw = tickets[0].assigned_users;
+                let attempts = 0;
+                while (typeof raw === 'string' && attempts < 3) {
+                    try {
+                        raw = JSON.parse(raw);
+                        attempts++;
+                    } catch (e) {
+                        break;
+                    }
+                }
+                if (Array.isArray(raw)) {
+                    assignedUsers = raw.filter(u => u !== null).map(u => {
+                        if (typeof u === 'object' && u.id) {
+                            return { id: u.id, fullname: u.fullname || null };
+                        }
+                        const uid = typeof u === 'object' ? u.id : u;
+                        return { id: uid, fullname: null };
+                    });
+                }
+            } catch (e) {
+                assignedUsers = [];
+            }
+        }
+        
         const ticket = {
             ...tickets[0],
-            assigned_users: tickets[0].assigned_users ? 
-                (typeof tickets[0].assigned_users === 'string' ? 
-                    JSON.parse(tickets[0].assigned_users) : tickets[0].assigned_users) 
-                : []
+            assigned_users: assignedUsers
         };
         
         res.json(ticket);
@@ -5654,9 +5682,9 @@ app.delete('/api/client-notifications/:id', async (req, res) => {
 // In your backend routes
 app.post('/api/client-notifications/branch', async (req, res) => {
     try {
-        const { branch_id, type, title, message, ticket_id, ticket_number } = req.body;
+        const { branch_id, type, title, message, ticket_id, ticket_number, exclude_user_id } = req.body;
         
-        // Get all EDP/IT users in this branch
+        // ✅ Get EDP/IT users ONLY in this specific branch
         const [edpUsers] = await pool.query(`
             SELECT id FROM users 
             WHERE branch_id = ? 
@@ -5669,7 +5697,15 @@ app.post('/api/client-notifications/branch', async (req, res) => {
             AND (department LIKE '%EDP%' OR department LIKE '%IT%')
         `, [branch_id]);
         
-        const allEdpIds = [...edpUsers.map(u => u.id), ...edpNewUsers.map(u => u.id)];
+        let allEdpIds = [...edpUsers.map(u => u.id), ...edpNewUsers.map(u => u.id)];
+        
+        // ✅ Exclude the ticket creator
+        if (exclude_user_id) {
+            allEdpIds = allEdpIds.filter(id => id !== exclude_user_id);
+        }
+        
+        // ✅ Also filter: only users whose branch_id matches (already done by SQL)
+        console.log(`📢 Branch notification: branch ${branch_id}, notifying ${allEdpIds.length} EDP/IT users`);
         
         // Insert notification for each EDP/IT user
         for (const userId of allEdpIds) {

@@ -177,46 +177,22 @@ fetchTickets(): void {
             }
         });
 }
-  private checkForUpdates(newTickets: Ticket[]): void {
+private checkForUpdates(newTickets: Ticket[]): void {
     const oldTickets = this.previousTickets;
-    const oldMap = new Map(oldTickets.map(t => [t.id, t]));
-    const newMap = new Map(newTickets.map(t => [t.id, t]));
-
-    for (const [id, ticket] of newMap) {
-      // NEW ticket
-      if (!oldMap.has(id)) {
-        if (ticket.status === 'new' && ticket.created_by === this.authService.getCurrentUser()?.id) {
-          this.clientNotificationService.handleNewTicket(ticket);
+    
+    for (const ticket of newTickets) {
+        const oldTicket = oldTickets.find(t => t.id === ticket.id);
+        if (oldTicket) {
+            if (oldTicket.status !== ticket.status || 
+                oldTicket.assigned_to !== ticket.assigned_to ||
+                JSON.stringify(oldTicket.assigned_users) !== JSON.stringify(ticket.assigned_users)) {
+                this.ticketUpdateSubject.next(ticket);
+            }
         }
-        continue;
-      }
-
-      const oldTicket = oldMap.get(id)!;
-
-      // STATUS CHANGES
-      if (oldTicket.status !== ticket.status) {
-        this.clientNotificationService.handleStatusChange(
-          ticket,
-          ticket.status,
-          ticket.agent_name || 'Administrator',
-          ticket.created_by
-        );
-      }
-
-      // ASSIGNED
-      if (oldTicket.assigned_to !== ticket.assigned_to && ticket.assigned_to) {
-        const assignedToName = ticket.agent_name || `Agent #${ticket.assigned_to}`;
-        this.clientNotificationService.handleTicketAssigned(
-          ticket,
-          ticket.agent_name || 'Administrator',
-          ticket.created_by,
-          assignedToName
-        );
-      }
     }
 
     this.previousTickets = newTickets;
-  }
+}
 
   // ✅ UPDATED: Use /api/client/tickets/:id endpoint
   getTicket(id: number): Observable<Ticket> {

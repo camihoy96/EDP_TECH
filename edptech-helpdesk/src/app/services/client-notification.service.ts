@@ -21,25 +21,35 @@ export class ClientNotificationService {
   private notificationsSubject = new BehaviorSubject<ClientNotification[]>([]);
   public notifications$ = this.notificationsSubject.asObservable();
   private ticketNotifications: ClientNotification[] = [];
-  private readonly TICKET_NOTIF_KEY = 'client_ticket_notifications';
   private isBrowser: boolean;
   private toastContainer: HTMLElement | null = null;
   private currentUserId: number | null = null;
   private serverPolling: any;
   private shownToastIds: Set<string> = new Set();
 
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.isBrowser = isPlatformBrowser(this.platformId);
     if (this.isBrowser) {
       this.injectToastStyles();
       this.createToastContainer();
       this.loadCurrentUser();
-      this.loadNotificationsFromStorage();
-      this.loadNotificationsFromServer();
-      this.serverPolling = setInterval(() => this.loadNotificationsFromServer(), 5000);
+      this.loadNotificationsFromStorage(); // Load local first
+      // ✅ Delay server fetch to avoid race condition
+      setTimeout(() => {
+        this.loadNotificationsFromServer();
+        this.serverPolling = setInterval(() => this.loadNotificationsFromServer(), 30000); // 30s instead of 5s
+      }, 2000);
     }
-  }
-
+}
+private getTicketNotifKey(): string {
+    try {
+      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const userId = user.id || 'anonymous';
+      return `client_ticket_notifications_${userId}`;
+    } catch {
+      return 'client_ticket_notifications_anonymous';
+    }
+}
   // ── STORAGE ──────────────────────────────────────
   private getStorageKey(): string {
     try {
@@ -51,7 +61,7 @@ export class ClientNotificationService {
     }
   }
 
-  private loadNotificationsFromStorage(): void {
+ private loadNotificationsFromStorage(): void {
     try {
       const key = this.getStorageKey();
       const stored = localStorage.getItem(key);
@@ -59,15 +69,32 @@ export class ClientNotificationService {
         const parsed: ClientNotification[] = JSON.parse(stored);
         parsed.forEach(n => {
           n.timestamp = new Date(n.timestamp);
-          if (n.id.startsWith('srv_')) this.shownToastIds.add(n.id);
+          // ✅ Mark ALL stored notifications as already shown
+          this.shownToastIds.add(`toast-${n.id}`);
+          // Also mark server IDs
+          if (n.id.startsWith('srv_')) {
+            this.shownToastIds.add(n.id);
+          }
         });
-        this.notificationsSubject.next(parsed);
+        // ✅ Filter out duplicates before setting
+        const unique = this.removeDuplicates(parsed);
+        this.notificationsSubject.next(unique);
       }
     } catch {
       localStorage.removeItem(this.getStorageKey());
     }
-  }
-
+}
+private removeDuplicates(notifications: ClientNotification[]): ClientNotification[] {
+  const seen = new Map<string, ClientNotification>();
+  // Keep the most recent version of each notification
+  notifications.forEach(n => {
+    const key = n.id.startsWith('srv_') ? n.id : `${n.title}|${n.message}|${n.ticketId}`;
+    if (!seen.has(key) || n.timestamp > seen.get(key)!.timestamp) {
+      seen.set(key, n);
+    }
+  });
+  return Array.from(seen.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+}
   private saveNotifications(notifications: ClientNotification[]): void {
     if (!this.isBrowser) return;
     try {
@@ -89,20 +116,8 @@ handleNewTicketForBranch(ticket: any, branchId: number): void {
   // Save to server for ALL EDP/IT users in the branch
   this.saveBranchNotificationToServer(ticket, branchId);
   
-  // ✅ Only add local notification and toast if the CURRENT user is EDP/IT staff
-  if (this.isCurrentUserEDPIT()) {
-    this.addNotification({
-      id: this.generateId(),
-      type: 'info',
-      title: '🆕 New Support Ticket',
-      message: `New ticket #${ticket.ticket_number}: "${ticket.title}" from ${ticket.created_by_name}`,
-      ticketId: ticket.id,
-      ticketNumber: ticket.ticket_number,
-      targetUserId: undefined,
-      timestamp: new Date(),
-      read: false,
-    });
-
+  // ✅ Only show toast (notification will come from server polling)
+  if (this.isCurrentUserEDPIT() && this.currentUserId !== ticket.created_by) {
     this.showToastPopup(
       '🆕 New Support Ticket',
       `#${ticket.ticket_number}: "${ticket.title}" from ${ticket.created_by_name}`,
@@ -141,10 +156,10 @@ private saveBranchNotificationToServer(ticket: any, branchId: number): void {
       message: `New ticket #${ticket.ticket_number}: "${ticket.title}" from ${ticket.created_by_name}`,
       ticket_id: ticket.id,
       ticket_number: ticket.ticket_number,
+      exclude_user_id: ticket.created_by,  // ✅ Skip the creator
     }),
   }).catch(err => console.log('⚠️ Failed to save branch notification:', err));
 }
-
 /**
  * Called when admin assigns ticket to EDP/IT agent(s)
  */
@@ -266,6 +281,11 @@ handleStatusChangeForCreator(ticket: any, newStatus: string, changedByName: stri
     this.currentUserId = userId;
   }
 addTicketNotification(notification: Omit<ClientNotification, 'id' | 'timestamp' | 'read'>): void {
+  // ✅ Only add if this notification is for the current user or has no target
+  if (notification.targetUserId && notification.targetUserId !== this.currentUserId) {
+    return; // Skip - this notification is for a different user
+  }
+  
   const newNotif: ClientNotification = {
     id: 'ticket_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
     timestamp: new Date(),
@@ -280,13 +300,13 @@ addTicketNotification(notification: Omit<ClientNotification, 'id' | 'timestamp' 
 
 private saveTicketNotifications(): void {
   try {
-    localStorage.setItem(this.TICKET_NOTIF_KEY, JSON.stringify(this.ticketNotifications));
+    localStorage.setItem(this.getTicketNotifKey(), JSON.stringify(this.ticketNotifications));
   } catch (e) {}
 }
 
 private loadTicketNotifications(): void {
   try {
-    const stored = localStorage.getItem(this.TICKET_NOTIF_KEY);
+    const stored = localStorage.getItem(this.getTicketNotifKey());
     if (stored) {
       this.ticketNotifications = JSON.parse(stored);
     }
@@ -295,11 +315,15 @@ private loadTicketNotifications(): void {
   }
 }
 
+
 // Override the emit to include ticket notifications
 private emitAllNotifications(): void {
-  // ✅ Use the current value from the subject
   const current = this.notificationsSubject.value;
-  const allNotifs = [...this.ticketNotifications, ...current];
+  // ✅ Only include ticket notifications meant for current user or with no target
+  const relevantTicketNotifs = this.ticketNotifications.filter(n => 
+    !n.targetUserId || n.targetUserId === this.currentUserId
+  );
+  const allNotifs = [...relevantTicketNotifs, ...current];
   this.notificationsSubject.next(allNotifs);
 }
 
@@ -307,6 +331,9 @@ private emitAllNotifications(): void {
  * Called when a new ticket is created
  */
 handleNewTicket(ticket: any): void {
+  // ✅ Don't notify if current user is the ticket creator
+  if (this.currentUserId === ticket.created_by) return;
+  
   this.addTicketNotification({
     type: 'info',
     title: 'New Ticket',
@@ -345,52 +372,58 @@ private loadNotificationsFromServer(): void {
     const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
     const serverNotifications: ClientNotification[] = [];
     
-    data.forEach(n => {
-      const srvId = 'srv_' + n.id;
-      const existing = currentMap.get(srvId);
-      if (existing) {
-        existing.read = n.is_read === 1;
+   data.forEach(n => {
+    const srvId = 'srv_' + n.id;
+    const existing = currentMap.get(srvId);
+    if (existing) {
+        // ✅ Keep existing read state if already marked as read locally
+        existing.read = existing.read || (n.is_read === 1);
         serverNotifications.push(existing);
-      } else {
+    } else {
+        // Check for duplicate by title+message+ticketId
         const localDuplicate = localNotifications.find(
-          ln => ln.title === n.title && ln.message === n.message && ln.ticketId === n.ticket_id
+            ln => ln.title === n.title && ln.message === n.message && ln.ticketId === n.ticket_id
         );
         if (localDuplicate) {
-          localDuplicate.read = n.is_read === 1;
-          serverNotifications.push(localDuplicate);
+            localDuplicate.read = localDuplicate.read || (n.is_read === 1);
+            serverNotifications.push(localDuplicate);
         } else {
-          const newNotif: ClientNotification = {
-            id: srvId,
-            type: n.type || 'info',
-            title: n.title,
-            message: n.message,
-            ticketId: n.ticket_id,
-            ticketNumber: n.ticket_number,
-            targetUserId: n.user_id,
-            timestamp: new Date(n.created_at),
-            read: n.is_read === 1,
-          };
-          serverNotifications.push(newNotif);
-          
-          console.log('🆕 New server notification:', newNotif.title, '->', newNotif.message);
-          
-          // ✅ Show toast for brand new server notifications
-          const toastKey = `toast-${srvId}`;
-          if (!this.shownToastIds.has(toastKey) && n.is_read === 0) {
-            this.shownToastIds.add(toastKey);
-            this.showToastPopup(
-              newNotif.title,
-              newNotif.message,
-              newNotif.ticketId
-            );
-          }
+            // Check if this exact server notification already exists by ID
+            const alreadyExists = serverNotifications.find(sn => sn.id === srvId);
+            if (!alreadyExists) {
+                const newNotif: ClientNotification = {
+                    id: srvId,
+                    type: n.type || 'info',
+                    title: n.title,
+                    message: n.message,
+                    ticketId: n.ticket_id,
+                    ticketNumber: n.ticket_number,
+                    targetUserId: n.user_id,
+                    timestamp: new Date(n.created_at),
+                    read: n.is_read === 1,
+                };
+                serverNotifications.push(newNotif);
+                
+                // ✅ Only show toast if truly new and unread
+                const toastKey = `toast-${srvId}`;
+                if (!this.shownToastIds.has(toastKey) && n.is_read === 0) {
+                    this.shownToastIds.add(toastKey);
+                    this.showToastPopup(
+                        newNotif.title,
+                        newNotif.message,
+                        newNotif.ticketId
+                    );
+                }
+            }
         }
-      }
-    });
+    }
+});
 
     const merged = [...serverNotifications, ...localNotifications];
-    this.notificationsSubject.next(merged);
-    this.saveNotifications(merged);
+// ✅ Remove duplicates before emitting
+const deduped = this.removeDuplicates(merged);
+this.notificationsSubject.next(deduped);
+this.saveNotifications(deduped);
   })
   .catch((err) => {
     console.log('⚠️ Client notifications fetch failed:', err.message);
@@ -436,6 +469,9 @@ handleTicketAssigned(ticket: any, assignedByName: string, targetUserId?: number,
 }
 /** Called when admin changes status of client's ticket */
 handleStatusChange(ticket: any, newStatus: string, changedByName: string, targetUserId?: number): void {
+  // ✅ Don't notify if current user is the one who made the change
+  if (this.currentUserId === targetUserId) return;
+  
   const key = `${newStatus}-${ticket.id}`;
   if (this.shownToastIds.has(key)) return;
   this.shownToastIds.add(key);
@@ -455,8 +491,9 @@ handleStatusChange(ticket: any, newStatus: string, changedByName: string, target
     title: 'Status Updated',
     message: `Ticket #${ticket.ticket_number} status changed to ${statusLabel} by ${changedByName}`,
     ticketId: ticket.id,
-    ticketNumber: ticket.ticket_number
-  });
+    ticketNumber: ticket.ticket_number,
+    targetUserId: clientUserId  // ✅ Add this
+});
 
   const statusConfig: Record<string, { emoji: string; verb: string }> = {
     in_progress: { emoji: '⚙️', verb: 'started working on' },
@@ -540,15 +577,31 @@ handleStatusChange(ticket: any, newStatus: string, changedByName: string, target
   // ✅ Save to server with correct user_id
   this.saveToServer(notif);
 }
-  markAsRead(id: string): void {
+markAsRead(id: string): void {
     const current = this.notificationsSubject.value;
     const idx = current.findIndex(n => n.id === id);
     if (idx === -1) return;
+    
     const updated = [...current];
     updated[idx] = { ...updated[idx], read: true };
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
-  }
+
+    // ✅ Tell the server this notification was read
+    if (id.startsWith('srv_')) {
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        if (token) {
+            const numericId = id.replace('srv_', '');
+            fetch(`${environment.apiUrl}/api/client-notifications/${numericId}/read`, {
+                method: 'PUT',
+                headers: { 
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            }).catch(() => {});
+        }
+    }
+}
 
   markAllAsRead(): void {
     const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true }));
@@ -586,8 +639,8 @@ clearAll(): void {
   }
   // ✅ Also clear ticket notifications
   this.ticketNotifications = [];
-  localStorage.removeItem(this.TICKET_NOTIF_KEY);
-  
+   localStorage.removeItem(this.getTicketNotifKey()); 
+  this.shownToastIds.clear(); 
   this.notificationsSubject.next([]);
   localStorage.removeItem(this.getStorageKey());
 }

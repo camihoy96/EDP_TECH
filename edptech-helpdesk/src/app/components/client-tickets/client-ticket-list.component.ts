@@ -829,7 +829,18 @@ confirmAssign() {
       this.successTicketTitle = updatedTicket.title || this.assignTicketData.title;
       this.successAssignedNames = assignedNames.join(', ');
       this.showAssignSuccess = true;
-      
+       this.clientNotificationService.handleTicketAssigned(
+        updatedTicket,
+        adminName,
+        updatedTicket.created_by,
+        assignedNames.join(', ')
+      );
+      // ✅ Notify the ASSIGNED AGENTS
+      this.clientNotificationService.handleTicketAssignedToAgent(
+        updatedTicket,
+        adminName,
+        this.selectedAgentIds
+      );
       // Refresh in background
       if (this.currentUser) {
         this.fetchTicketsDirectly(this.currentUser);

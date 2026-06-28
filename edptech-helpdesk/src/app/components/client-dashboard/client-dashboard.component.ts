@@ -2108,51 +2108,41 @@ loadMyTickets() {
 private detectTicketChanges(tickets: any[]): void {
   if (!this.currentUser) return;
   
-  const isEDP = this.isEDPUser();
   const currentUserId = this.currentUser?.id;
   
   tickets.forEach(ticket => {
     const prevStatus = this.previousTicketStates.get(ticket.id);
-    // Store the full assignment snapshot (assigned_to + assigned_users IDs)
     const prevAssignedSnapshot = this.previousAssignedStates.get(ticket.id);
-    
-    // Create current snapshot
     const currentAssignedSnapshot = this.getAssignedSnapshot(ticket);
     
-    // Store current state for next comparison
     this.previousTicketStates.set(ticket.id, ticket.status);
     this.previousAssignedStates.set(ticket.id, currentAssignedSnapshot);
     
     const isFirstLoad = !prevStatus;
     
-    // ─── For EDP/IT users ───
-    if (isEDP) {
-      if (isFirstLoad) {
-        // First time seeing this ticket
-        if (ticket.status === 'new' && !ticket.assigned_to) {
-          // New unassigned ticket
-          this.allTicketsNotificationCount++;
-        }
-        // Don't return here - also check if already assigned to current user
-      }
-      
-      // Check if current user was assigned (new assignment or first load with assignment)
-      const wasAssigned = prevAssignedSnapshot ? 
-        prevAssignedSnapshot.includes(currentUserId) : false;
-      const isAssigned = currentAssignedSnapshot.includes(currentUserId);
-      
-      if (!wasAssigned && isAssigned && ticket.status === 'assigned') {
-        this.allTicketsNotificationCount++;
-      }
-    }
-    
-    // ─── For ticket creator ───
+    // ✅ ONLY notify if current user is the TICKET CREATOR
     if (this.isCurrentUserCreator(ticket)) {
-      if (isFirstLoad) return;
+      if (isFirstLoad) return; // Don't notify on first load
       
+      // Status change notification for creator
       if (prevStatus !== ticket.status && 
           ['assigned', 'in_progress', 'pending', 'resolved'].includes(ticket.status)) {
         this.myTicketsNotificationCount++;
+      }
+    }
+    
+    // ✅ ONLY notify if current user is an ASSIGNED AGENT
+    if (currentAssignedSnapshot.includes(currentUserId)) {
+      const wasAssigned = prevAssignedSnapshot ? 
+        prevAssignedSnapshot.includes(currentUserId) : false;
+      
+      if (!wasAssigned && ticket.status === 'assigned') {
+        // Only increment if this user was just assigned
+        if (this.isEDPUser()) {
+          this.allTicketsNotificationCount++;
+        } else {
+          this.myTicketsNotificationCount++;
+        }
       }
     }
   });

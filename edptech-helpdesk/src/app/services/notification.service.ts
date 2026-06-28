@@ -191,7 +191,6 @@ export class NotificationService {
       this.showToastPopup('📌 Ticket Assigned to You', `#${ticket.ticket_number}: "${ticket.title}" — assigned by ${assignedByName}`, ticket.id);
     }
     
-    // ✅ Broadcast notification — ONLY if assigning to someone ELSE
     // (When admin assigns to self, no need to broadcast)
     if (!assignedToId || assignedToId !== this.currentUserId) {
       this.addBellNotification({

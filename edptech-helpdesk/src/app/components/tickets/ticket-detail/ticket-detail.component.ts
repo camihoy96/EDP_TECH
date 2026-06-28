@@ -35,34 +35,41 @@ import { ClientNotificationService } from '../../../services/client-notification
           <div class="detail-card">
             <h3 class="ticket-title">{{ ticket.title }}</h3>
             
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">Created By</span>
-                <span class="info-value">{{ ticket.created_by_name || ticket.creator_name || 'Unknown' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Department</span>
-                <span class="info-value">{{ ticket.department_name || '—' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Location</span>
-                <span class="info-value">{{ ticket.location || '—' }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">Created</span>
-                <span class="info-value">{{ ticket.created_at | date:'MMM d, y h:mm a' }}</span>
-              </div>
-        <div class="info-item" *ngIf="ticket.assigned_to || (ticket.assigned_users && ticket.assigned_users.length > 0)">
-  <span class="info-label">Assigned To</span>
-  <span class="info-value">
-    {{ getAssignedNames(ticket) }}
-  </span>
+            <<div class="info-grid">
+  <div class="info-item">
+    <span class="info-label">Created By</span>
+    <span class="info-value">{{ ticket.created_by_name || ticket.creator_name || 'Unknown' }}</span>
+  </div>
+  <div class="info-item">
+    <span class="info-label">Creator's Department</span>
+    <span class="info-value">{{ ticket.creator_department || '—' }}</span>
+  </div>
+  <div class="info-item">
+    <span class="info-label">Creator's Branch</span>
+    <span class="info-value">
+      <span *ngIf="ticket.creator_branch_name">🏢 {{ ticket.creator_branch_name }}</span>
+      <span *ngIf="ticket.creator_company_name"> ({{ ticket.creator_company_name }})</span>
+      <span *ngIf="!ticket.creator_branch_name">—</span>
+    </span>
+  </div>
+  
+  <div class="info-item">
+    <span class="info-label">Location</span>
+    <span class="info-value">{{ ticket.location || '—' }}</span>
+  </div>
+  <div class="info-item">
+    <span class="info-label">Created</span>
+    <span class="info-value">{{ ticket.created_at | date:'MMM d, y h:mm a' }}</span>
+  </div>
+  <div class="info-item" *ngIf="ticket.assigned_to || (ticket.assigned_users && ticket.assigned_users.length > 0)">
+    <span class="info-label">Assigned To</span>
+    <span class="info-value">{{ getAssignedNames(ticket) }}</span>
+  </div>
+  <div class="info-item" *ngIf="ticket.resolved_at">
+    <span class="info-label">Resolved</span>
+    <span class="info-value">{{ ticket.resolved_at | date:'MMM d, y h:mm a' }}</span>
+  </div>
 </div>
-              <div class="info-item" *ngIf="ticket.resolved_at">
-                <span class="info-label">Resolved</span>
-                <span class="info-value">{{ ticket.resolved_at | date:'MMM d, y h:mm a' }}</span>
-              </div>
-            </div>
           </div>
 
           <!-- Description -->
@@ -1080,15 +1087,26 @@ confirmAssign() {
             this.ticket = updated;
             this.editStatus = updated.status;
             
-          if (!this.currentUser?.fullname) {
-    this.showErrorModal('User session expired. Please refresh.');
-    return;
-}
-this.clientNotificationService.handleTicketAssigned(
-    updated,
-    this.currentUser.fullname,
-    updated.created_by    
-);    
+            if (!this.currentUser?.fullname) {
+                this.showErrorModal('User session expired. Please refresh.');
+                return;
+            }
+            
+            // ✅ Notify ticket creator
+            this.clientNotificationService.handleTicketAssigned(
+                updated,
+                this.currentUser.fullname,
+                updated.created_by,
+                allNames
+            );
+            
+            // ✅ Notify assigned agents
+            this.clientNotificationService.handleTicketAssignedToAgent(
+                updated,
+                this.currentUser.fullname,
+                this.selectedAgentIds
+            );
+            
             this.closeAssignModal();
             this.showSuccessModal('Ticket assigned successfully!');
         },

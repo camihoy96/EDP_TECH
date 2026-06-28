@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3307
--- Generation Time: Jun 19, 2026 at 12:04 PM
+-- Generation Time: Jun 19, 2026 at 12:38 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -68,8 +68,8 @@ CREATE TABLE `branches` (
 INSERT INTO `branches` (`id`, `name`, `company_name`, `registration_key`, `address`, `is_active`, `created_by`, `updated_by`, `created_at`, `updated_at`) VALUES
 (1, 'LSP - Main', '1Prime Retail Corporation', 'Leeplaza', 'Perdices Street, Dumaguete City, Negros Oriental 6200 Philippines', 1, NULL, 1, '2026-06-16 06:36:59', '2026-06-17 06:34:48'),
 (2, 'Hypermart', 'Superstore Retail Corporation', 'hyper', 'Jose E. Romero Sr. Avenue cor colon st, Bagacay, Dumaguete City, 6200 Negros Oriental', 1, 1, 1, '2026-06-16 08:46:04', '2026-06-17 06:33:33'),
-(3, 'LPB - Bayawan', 'Luxe Prime Retail Corporation', 'lpbbayawan', ' Puregold building, directly beside the city plaza in Bayawan City, Negros Oriental', 1, 1, 1, '2026-06-16 08:47:32', '2026-06-18 07:29:29'),
-(4, 'LPD - Depolog', 'Luxe Prime Retail Corporation', 'lpddepolog', 'Quezon Ave, Dipolog City, Zamboanga del Norte', 1, 1, 1, '2026-06-16 08:48:34', '2026-06-18 07:30:19');
+(3, 'LP - Bayawan', 'Luxe Prime Retail Corporation', 'lpbayawan', ' Puregold building, directly beside the city plaza in Bayawan City, Negros Oriental', 1, 1, 1, '2026-06-16 08:47:32', '2026-06-19 10:27:56'),
+(4, 'LP - Dipolog', 'Luxe Prime Retail Corporation', 'lpdipolog', 'Quezon Ave, Dipolog City, Zamboanga del Norte', 1, 1, 1, '2026-06-16 08:48:34', '2026-06-19 10:28:04');
 
 -- --------------------------------------------------------
 
@@ -744,7 +744,8 @@ CREATE TABLE `new_user` (
 
 INSERT INTO `new_user` (`id`, `username`, `password`, `fullname`, `role`, `department`, `branch_id`, `department_id`, `email`, `birthdate`, `workDays`, `dayOff`, `workStart`, `workEnd`, `lunchStart`, `lunchEnd`, `leaveEntries`, `avatar_color`, `photo_url`, `registration_key`, `key_used_at`, `is_verified`, `created_at`, `locked_until`, `failed_attempts`) VALUES
 (101, 'user', '$2a$10$3rG.TxX5s1.oNRfJR9w4supu007VVHYcf7GxqC5RZafpuUq0fN8wu', 'User Agent', 'staff', 'Personnel', 1, 10, 'clamihoy20@gmail.com', '1899-11-29', '[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\"]', '[\"Saturday\",\"Sunday\"]', '08:00', '17:00', '12:00', '13:00', NULL, '#e17055', '/uploads/profiles/profile-1777359299502-894214923.png', 'Leeplaza', '2026-04-26 06:47:59', 1, '2026-04-26 06:47:59', NULL, 0),
-(105, 'hyper@edp', '$2a$10$DRl6wLMoajC/75Tjo/PcX.RiyZvp2RAdWC/yVbnPRqk4057k80YXi', 'Sample User', 'Supervisor', 'EDP/IT', 2, 14, 'hype.edp@gmail.com', '0000-00-00', '[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\"]', '[\"Saturday\",\"Sunday\"]', '08:00', '17:00', '12:00', '13:00', NULL, '#4f6ef7', '/uploads/profiles/profile-1781860574568-810344910.png', 'Hyper', '2026-06-19 03:51:06', 1, '2026-06-19 03:51:06', NULL, 0);
+(105, 'hyper@edp', '$2a$10$DRl6wLMoajC/75Tjo/PcX.RiyZvp2RAdWC/yVbnPRqk4057k80YXi', 'Sample User', 'Supervisor', 'EDP/IT', 2, 14, 'hype.edp@gmail.com', '0000-00-00', '[\"Monday\",\"Tuesday\",\"Wednesday\",\"Thursday\",\"Friday\"]', '[\"Saturday\",\"Sunday\"]', '08:00', '17:00', '12:00', '13:00', NULL, '#4f6ef7', '/uploads/profiles/profile-1781860574568-810344910.png', 'Hyper', '2026-06-19 03:51:06', 1, '2026-06-19 03:51:06', NULL, 0),
+(106, 'lp@dipolog', '$2a$10$.F8yfApzp940TZfy0Yp9rOCQVsLln/Doq3epgnBZFRGI3jPB43FfS', 'Sample User', 'Head/Manager', 'HR', 4, 29, 'lpdipoloag@gmail.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '#4f6ef7', NULL, 'lpdipolog', '2026-06-19 10:25:18', 1, '2026-06-19 10:25:18', NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -1333,7 +1334,7 @@ ALTER TABLE `knowledge_base`
 -- AUTO_INCREMENT for table `new_user`
 --
 ALTER TABLE `new_user`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=106;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=107;
 
 --
 -- AUTO_INCREMENT for table `notifications`

@@ -113,78 +113,80 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- LIST VIEW -->
 <div class="retro-table-container" *ngIf="viewMode === 'list'">
   <table class="retro-table">
-   <thead>
+ <thead>
   <tr>
     <th>Ticket Code</th>
+    <th>Origin Branch</th>
     <th>Origin Department</th>
     <th>Title</th>
     <th>Priority</th>
     <th>Status</th>
-    <th>Department</th>
     <th>Created</th>
     <th>Actions</th>
   </tr>
 </thead>
-    <tbody>
-     <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket.id)">
-  <td class="ticket-cell">
-    <div class="ticket-code">{{ ticket.ticket_number }}</div>
-    <div class="ticket-creator">from: {{ ticket.created_by_name || 'Unknown' }}</div>
-</td>
-   <!-- Origin Column -->
-  <td class="origin-cell">
-    <div class="origin-info">
-      <span class="origin-dept" *ngIf="$any(ticket).creator_department">
-        {{ $any(ticket).creator_department }}
+<tbody>
+  <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket.id)">
+    <td class="ticket-cell">
+      <div class="ticket-code">{{ ticket.ticket_number }}</div>
+      <div class="ticket-creator">from: {{ ticket.created_by_name || 'Unknown' }}</div>
+    </td>
+    <!-- Origin Branch -->
+    <td class="origin-cell">
+      <div class="origin-info">
+        <span class="origin-branch" *ngIf="$any(ticket).creator_branch_name">
+          🏢 {{ $any(ticket).creator_branch_name }}
+          <span *ngIf="$any(ticket).creator_company_name">({{ $any(ticket).creator_company_name }})</span>
+        </span>
+        <span class="origin-branch" *ngIf="!$any(ticket).creator_branch_name" style="color:#999;">—</span>
+      </div>
+    </td>
+    <!-- Origin Department -->
+    <td class="date-cell">{{ ticket.creator_department || '—' }}</td>
+    <!-- Title -->
+    <td class="ticket-title">{{ ticket.title }}</td>
+    <!-- Priority -->
+    <td>
+      <span class="priority-badge" [class]="'priority-' + ticket.priority">
+        {{ ticket.priority | uppercase }}
       </span>
-      <span class="origin-branch" *ngIf="$any(ticket).creator_branch_name">
-        🏢 {{ $any(ticket).creator_branch_name }}
-        <span *ngIf="$any(ticket).creator_company_name">({{ $any(ticket).creator_company_name }})</span>
+    </td>
+    <!-- Status -->
+    <td>
+      <span class="status-badge" [class]="'status-' + ticket.status">
+        {{ ticket.status | titlecase }}
       </span>
-    </div>
-  </td>
-  <td class="ticket-title">
-    {{ ticket.title }}
-  </td>
-  <td>
-    <span class="priority-badge" [class]="'priority-' + ticket.priority">
-      {{ ticket.priority | uppercase }}
-    </span>
-  </td>
-  <td>
-    <span class="status-badge" [class]="'status-' + ticket.status">
-      {{ ticket.status | titlecase }}
-    </span>
-    <div class="ticket-meta" *ngIf="ticket.assigned_to">
-      <ng-container [ngSwitch]="ticket.status">
-        <span *ngSwitchCase="'assigned'">to: {{ getAssignedNames(ticket) }}</span>
-        <span *ngSwitchCase="'in_progress'">by: {{ getAssignedNames(ticket) }}</span>
-        <span *ngSwitchCase="'pending'">by: {{ getAssignedNames(ticket) }}</span>
-        <span *ngSwitchCase="'resolved'">by: {{ getAssignedNames(ticket) }}</span>
-        <span *ngSwitchDefault>{{ getAssignedNames(ticket) }}</span>
-      </ng-container>
-    </div>
-  </td>
-  <td class="date-cell">{{ ticket.department_name || '—' }}</td>
-  <td class="date-cell">{{ ticket.created_at | date:'MMM d, h:mm a' }}</td>
-  <td class="action-cell" (click)="$event.stopPropagation()">
-    <button class="action-btn" (click)="viewTicket(ticket.id)" title="View">📋</button>
-    <button *ngIf="canEditTicket(ticket)" class="action-btn" (click)="editTicket(ticket.id)" title="Edit">✏️</button>
-    <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" [title]="ticket.assigned_to ? 'Reassign' : 'Assign'">{{ ticket.assigned_to ? '🔄' : '👤' }}</button>
-    <button *ngIf="canResolveTicket(ticket)" class="action-btn resolve-btn" (click)="resolveTicket(ticket)" title="Mark as Resolved">✅</button>
-    <button *ngIf="canDeleteFromList(ticket)" class="action-btn delete-list-btn" (click)="deleteTicketFromList(ticket)" title="Delete">🗑️</button>
-  </td>
-</tr>
-      <tr *ngIf="filteredTickets.length === 0">
-        <td colspan="8" class="empty-row">
-          <div class="empty-state">
-            <span class="empty-icon">📭</span>
-            <p>No tickets found</p>
-            <button class="retro-btn" (click)="newTicket()">Create your first ticket</button>
-          </div>
-        </td>
-      </tr>
-    </tbody>
+      <div class="ticket-meta" *ngIf="ticket.assigned_to">
+        <ng-container [ngSwitch]="ticket.status">
+          <span *ngSwitchCase="'assigned'">to: {{ getAssignedNames(ticket) }}</span>
+          <span *ngSwitchCase="'in_progress'">by: {{ getAssignedNames(ticket) }}</span>
+          <span *ngSwitchCase="'pending'">by: {{ getAssignedNames(ticket) }}</span>
+          <span *ngSwitchCase="'resolved'">by: {{ getAssignedNames(ticket) }}</span>
+          <span *ngSwitchDefault>{{ getAssignedNames(ticket) }}</span>
+        </ng-container>
+      </div>
+    </td>
+    <!-- Created -->
+    <td class="date-cell">{{ ticket.created_at | date:'MMM d, h:mm a' }}</td>
+    <!-- Actions -->
+    <td class="action-cell" (click)="$event.stopPropagation()">
+      <button class="action-btn" (click)="viewTicket(ticket.id)" title="View">📋</button>
+      <button *ngIf="canEditTicket(ticket)" class="action-btn" (click)="editTicket(ticket.id)" title="Edit">✏️</button>
+      <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" [title]="ticket.assigned_to ? 'Reassign' : 'Assign'">{{ ticket.assigned_to ? '🔄' : '👤' }}</button>
+      <button *ngIf="canResolveTicket(ticket)" class="action-btn resolve-btn" (click)="resolveTicket(ticket)" title="Mark as Resolved">✅</button>
+      <button *ngIf="canDeleteFromList(ticket)" class="action-btn delete-list-btn" (click)="deleteTicketFromList(ticket)" title="Delete">🗑️</button>
+    </td>
+  </tr>
+  <tr *ngIf="filteredTickets.length === 0">
+    <td colspan="8" class="empty-row">
+      <div class="empty-state">
+        <span class="empty-icon">📭</span>
+        <p>No tickets found</p>
+        <button class="retro-btn" (click)="newTicket()">Create your first ticket</button>
+      </div>
+    </td>
+  </tr>
+</tbody>
   </table>
   <!-- Pagination -->
   <div class="pagination-bar" *ngIf="totalPages > 1">
@@ -1025,11 +1027,12 @@ private loadAgentsFromTickets() {
               allAssignedNames.join(', '),
               this.selectedAgentIds[0]
           );
-          
+          const assignedNames = assignedUsersData.map((u: any) => u.fullname).join(', ');
           this.clientNotificationService.handleTicketAssigned(
               updatedTicket,
               adminName,
-              updatedTicket.created_by
+              updatedTicket.created_by, 
+              assignedNames
           );
           
           // ✅ Resume polling after a delay

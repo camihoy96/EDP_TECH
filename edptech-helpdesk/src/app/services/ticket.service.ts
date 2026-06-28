@@ -150,44 +150,25 @@ private hasTicketDataChanged(newTickets: Ticket[]): boolean {
     const newMap = new Map(newTickets.map(t => [t.id, t]));
 
     for (const [id, ticket] of newMap) {
-      // NEW ticket
-      if (!oldMap.has(id)) {
-        if (ticket.status === 'new' && !ticket.assigned_to) {
-          this.notificationService.handleNewTicket(ticket);
+        // Skip notifications entirely - they're handled by components directly
+        // Just emit update events so the UI refreshes
+        
+        if (!oldMap.has(id)) {
+            // New ticket - emit event for UI refresh
+            this.ticketUpdateSubject.next(ticket);
+            continue;
         }
-        continue;
-      }
 
-      const oldTicket = oldMap.get(id)!;
+        const oldTicket = oldMap.get(id)!;
 
-      // ASSIGNED
-      if (oldTicket.assigned_to !== ticket.assigned_to && ticket.assigned_to) {
-        // Get names for the notification
-        const assignedByName = this.getUserName(ticket.assigned_to === this.getCurrentUserId() ? null : null) || 'Administrator';
-        const assignedToName = ticket.agent_name || ('User #' + ticket.assigned_to);
-        
-        this.notificationService.handleTicketAssigned(
-          ticket,
-          assignedByName,
-          assignedToName,
-          ticket.assigned_to
-        );
-      }
-
-      // STATUS CHANGES
-      if (oldTicket.status !== ticket.status && 
-          ['in_progress', 'pending', 'resolved'].includes(ticket.status)) {
-        
-        const changedByName = ticket.agent_name || this.getCurrentUserName() || 'Administrator';
-        
-        this.notificationService.handleStatusChange(
-          ticket,
-          ticket.status,
-          changedByName
-        );
-      }
+        // Emit update event for any changes
+        if (oldTicket.status !== ticket.status || 
+            oldTicket.assigned_to !== ticket.assigned_to ||
+            JSON.stringify(oldTicket.assigned_users) !== JSON.stringify(ticket.assigned_users)) {
+            this.ticketUpdateSubject.next(ticket);
+        }
     }
-  }
+}
 
   // Helper methods
   private getCurrentUserId(): number | null {
