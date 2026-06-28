@@ -19,14 +19,21 @@ import { environment } from '../../../environments/environment';
   </div>
 
   <!-- Show when NO requisitions at all (new user) -->
-  <div class="empty-state" *ngIf="requisitions.length === 0">
+  <div class="empty-state" *ngIf="requisitions.length === 0 && !loading">
     <div class="empty-icon">📩</div>
     <h3>No Requisitions Found</h3>
     <p>Submit your first requisition request.</p>
     <button class="btn-new" routerLink="/client/request/new">➕ Create Requisition</button>
   </div>
 
- <!-- Status Tabs - ADD released tab -->
+  <!-- Loading state -->
+  <div class="empty-state" *ngIf="loading">
+    <div class="empty-icon">⏳</div>
+    <h3>Loading...</h3>
+    <p>Fetching your requisitions</p>
+  </div>
+
+ <!-- Status Tabs -->
 <div class="status-tabs" *ngIf="requisitions.length > 0">
   <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
     ⏳ Pending <span class="tab-count">{{ getStatusCount('pending') }}</span>
@@ -34,7 +41,6 @@ import { environment } from '../../../environments/environment';
   <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
     📥 Received <span class="tab-count">{{ getStatusCount('approved') }}</span>
   </button>
-  <!-- ✅ NEW: Released tab -->
   <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
     📦 Released <span class="tab-count">{{ getStatusCount('released') }}</span>
   </button>
@@ -59,30 +65,29 @@ import { environment } from '../../../environments/environment';
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let req of filteredRequisitions" class="clickable-row">
+        <tr *ngFor="let req of filteredRequisitions" class="clickable-row" (click)="viewRequisition(req)">
           <td><code>{{ req.requisition_number || 'N/A' }}</code></td>
           <td>{{ formatDate(req.date) }}</td>
           <td>
-  {{ req.request_from || '—' }}
-  <div class="approved-by" *ngIf="req.approved_name">
-    approved by: {{ req.approved_name }}
-  </div>
-</td>
+            {{ req.request_from || '—' }}
+            <div class="approved-by" *ngIf="req.approved_name">
+              approved by: {{ req.approved_name }}
+            </div>
+          </td>
           <td>{{ req.attn || '—' }}</td>
           <td>{{ req.items?.length || 0 }} item(s)</td>
           <td>{{ getTotal(req.items) | number:'1.2-2' }}</td>
-         <td>
-  <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-    {{ getStatusLabel(req.status) }}
-  </span>
-  <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">
-    by: {{ req.items_prepared_name }}
-  </div>
-  <!-- ✅ Show release info -->
-  <div class="received-by" *ngIf="req.status === 'released' && req.released_name">
-    released by: {{ req.released_name }}
-  </div>
-</td>
+          <td>
+            <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
+              {{ getStatusLabel(req.status) }}
+            </span>
+            <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">
+              by: {{ req.items_prepared_name }}
+            </div>
+            <div class="received-by" *ngIf="req.status === 'released' && req.released_name">
+              released by: {{ req.released_name }}
+            </div>
+          </td>
           <td (click)="$event.stopPropagation()">
             <button class="action-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
             <button class="action-btn" (click)="printRequisition(req)" title="Print">🖨️</button>
@@ -106,18 +111,21 @@ import { environment } from '../../../environments/environment';
     <h3>No Received Requisitions</h3>
     <p>Your requisitions haven't been received yet.</p>
   </div>
-<div class="empty-state" *ngIf="requisitions.length > 0 && activeTab === 'released' && getStatusCount('released') === 0">
-  <div class="empty-icon">📦</div>
-  <h3>No Released Requisitions</h3>
-  <p>No requisitions have been released yet.</p>
-</div>
+
+  <div class="empty-state" *ngIf="requisitions.length > 0 && activeTab === 'released' && getStatusCount('released') === 0">
+    <div class="empty-icon">📦</div>
+    <h3>No Released Requisitions</h3>
+    <p>No requisitions have been released yet.</p>
+  </div>
+
   <div class="empty-state" *ngIf="requisitions.length > 0 && activeTab === 'rejected' && getStatusCount('rejected') === 0">
     <div class="empty-icon">❌</div>
     <h3>No Rejected Requisitions</h3>
     <p>No requisitions have been rejected.</p>
   </div>
 </div>
-    <!-- Delete Confirmation Modal -->
+
+<!-- Delete Confirmation Modal -->
 <div class="modal-overlay" *ngIf="showDeleteModal" (click)="cancelDelete()">
   <div class="confirm-modal" (click)="$event.stopPropagation()">
     <div class="confirm-modal-header confirm-delete">
@@ -152,7 +160,7 @@ import { environment } from '../../../environments/environment';
     .req-list-container { padding: 16px; font-family: 'Segoe UI', sans-serif; font-size: 11px; }
     .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
     .page-header h2 { margin: 0; color: #0a246a; font-size: 16px; }
-    .btn-new { background: #0a3a8c; color: white; border: 2px solid; border-color: #1c5fb5 #042070 #042070 #1c5fb5; padding: 6px 14px; cursor: pointer; font-size: 10px; border-radius: 3px; text-decoration: none; }
+    .btn-new { background: #0a3a8c; color: white; border: 2px solid; border-color: #1c5fb5 #042070 #042070 #1c5fb5; padding: 6px 14px; cursor: pointer; font-size: 10px; border-radius: 3px; text-decoration: none; display: inline-block; }
     .empty-state { text-align: center; padding: 60px 20px; background: white; border-radius: 8px; border: 2px dashed #c0c0c0; color: #0f0e0e; }
     .empty-icon { font-size: 48px; }
     .status-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
@@ -160,7 +168,7 @@ import { environment } from '../../../environments/environment';
     .status-tab.active { background: #0a246a; color: white; border-color: #0a246a; }
     .tab-count { padding: 1px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #e0e0e0; color: #555; }
     .status-tab.active .tab-count { background: rgba(255,255,255,0.3); color: white; }
-    .table-container { background: white; border: 1px solid #c0c0c0; overflow-x: auto; }
+    .table-container { background: white; border: 1px solid #c0c0c0; overflow-x: auto; border-radius: 4px; }
     .req-table { width: 100%; border-collapse: collapse; }
     .req-table th { background: #f0f4f8; padding: 8px 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: left; }
     .req-table td { padding: 7px 10px; border-bottom: 1px solid #eee; font-size: 11px; color: #131212; }
@@ -171,158 +179,137 @@ import { environment } from '../../../environments/environment';
     .status-pending { background: #fffae8; color: #886600; }
     .status-approved { background: #eeffee; color: #008800; }
     .status-rejected { background: #ffecec; color: #cc0000; }
+    .status-released { background: #e8f0ff; color: #0066cc; }
     .received-by { font-size: 9px; color: #666; margin-top: 2px; font-style: italic; }
+    .approved-by { font-size: 9px; color: #666; margin-top: 2px; font-style: italic; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 3px; }
     .action-btn:hover { background: #f0f0f0; border-color: #ccc; }
     .action-btn.delete:hover { background: #ffecec; border-color: #cc0000; }
     /* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  padding: 20px;
-}
-
-.confirm-modal {
-  background: white;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 420px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-  animation: modalSlideIn 0.2s ease;
-}
-
-@keyframes modalSlideIn {
-  from { transform: translateY(-20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.confirm-modal-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  color: white;
-}
-
-.confirm-modal-header.confirm-delete { 
-  background: linear-gradient(135deg, #cc4400, #ee6633); 
-}
-
-.confirm-modal-header h3 { 
-  margin: 0; 
-  font-size: 16px; 
-}
-
-.confirm-icon { 
-  font-size: 28px; 
-}
-
-.confirm-modal-body { 
-  padding: 24px; 
-}
-
-.confirm-modal-body p { 
-  margin: 0 0 16px 0; 
-  font-size: 13px; 
-  color: #444; 
-  line-height: 1.5; 
-}
-
-.confirm-modal-info {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 12px 16px;
-}
-
-.confirm-info-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 6px;
-  font-size: 11px;
-  color: #333;
-}
-
-.confirm-info-row:last-child { 
-  margin-bottom: 0; 
-}
-
-.confirm-label {
-  width: 80px;
-  font-weight: 600;
-  color: #1a1919;
-  flex-shrink: 0;
-}
-
-.confirm-info-row code {
-  font-family: monospace;
-  font-size: 11px;
-  background: #e8e8e8;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.confirm-modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 16px 24px;
-  border-top: 1px solid #eee;
-  background: #fafafa;
-}
-
-.btn {
-  padding: 6px 12px;
-  border: 1px solid #c0c0c0;
-  background: white;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 10px;
-}
-
-.btn-cancel {
-  background: white;
-  color: #555;
-  border: 1px solid #ddd;
-}
-
-.btn-cancel:hover { 
-  background: #f0f0f0; 
-}
-
-.btn-confirm {
-  color: white;
-  border: none;
-  font-weight: 600;
-  padding: 8px 16px;
-}
-
-.btn-confirm.btn-delete { 
-  background: #cc4400; 
-}
-
-.btn-confirm.btn-delete:hover { 
-  background: #aa3300; 
-}
-  .approved-by {
-  font-size: 9px;
-  color: #666;
-  margin-top: 2px;
-  font-style: italic;
-}
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 20px;
+    }
+    .confirm-modal {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 420px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+      animation: modalSlideIn 0.2s ease;
+    }
+    @keyframes modalSlideIn {
+      from { transform: translateY(-20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .confirm-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 20px 24px;
+      color: white;
+    }
+    .confirm-modal-header.confirm-delete { 
+      background: linear-gradient(135deg, #cc4400, #ee6633); 
+    }
+    .confirm-modal-header h3 { 
+      margin: 0; 
+      font-size: 16px; 
+    }
+    .confirm-icon { 
+      font-size: 28px; 
+    }
+    .confirm-modal-body { 
+      padding: 24px; 
+    }
+    .confirm-modal-body p { 
+      margin: 0 0 16px 0; 
+      font-size: 13px; 
+      color: #444; 
+      line-height: 1.5; 
+    }
+    .confirm-modal-info {
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .confirm-info-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: #333;
+    }
+    .confirm-info-row:last-child { 
+      margin-bottom: 0; 
+    }
+    .confirm-label {
+      width: 80px;
+      font-weight: 600;
+      color: #1a1919;
+      flex-shrink: 0;
+    }
+    .confirm-info-row code {
+      font-family: monospace;
+      font-size: 11px;
+      background: #e8e8e8;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+    .confirm-modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 16px 24px;
+      border-top: 1px solid #eee;
+      background: #fafafa;
+    }
+    .btn {
+      padding: 6px 12px;
+      border: 1px solid #c0c0c0;
+      background: white;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 10px;
+    }
+    .btn-cancel {
+      background: white;
+      color: #555;
+      border: 1px solid #ddd;
+    }
+    .btn-cancel:hover { 
+      background: #f0f0f0; 
+    }
+    .btn-confirm {
+      color: white;
+      border: none;
+      font-weight: 600;
+      padding: 8px 16px;
+    }
+    .btn-confirm.btn-delete { 
+      background: #cc4400; 
+    }
+    .btn-confirm.btn-delete:hover { 
+      background: #aa3300; 
+    }
   `]
 })
 export class ClientRequisitionListComponent implements OnInit {
   requisitions: any[] = [];
   activeTab = 'pending';
-// Confirmation modal
-showDeleteModal = false;
-deleteTargetReq: any = null;
+  loading = false;
+  
+  // Confirmation modal
+  showDeleteModal = false;
+  deleteTargetReq: any = null;
+
   constructor(
     private http: HttpClient, 
     private router: Router, 
@@ -330,8 +317,9 @@ deleteTargetReq: any = null;
   ) {}
 
   ngOnInit() { 
-    this.loadRequisitions(); // ADD THIS BACK - initial load
+    this.loadRequisitions();
     
+    // Reload when navigating back to this component
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe(() => {
@@ -342,55 +330,95 @@ deleteTargetReq: any = null;
   }
 
   loadRequisitions() {
+    this.loading = true;
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    if (!token) {
+      console.error('No token found');
+      this.loading = false;
+      return;
+    }
+    
     const headers = { 'Authorization': `Bearer ${token}` };
+    
     this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
       next: (data) => { 
+        console.log('📋 Loaded requisitions:', data);
         this.requisitions = Array.isArray(data) ? data : []; 
+        this.loading = false;
       },
-      error: () => {
+      error: (err) => {
+        console.error('Failed to load requisitions:', err);
+        // Fallback to localStorage
         const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
         this.requisitions = saved;
+        this.loading = false;
       }
     });
   }
 
   get filteredRequisitions(): any[] {
+    if (!this.requisitions || this.requisitions.length === 0) return [];
     return this.requisitions.filter(r => (r.status || 'pending') === this.activeTab);
   }
 
-  setActiveTab(tab: string) { this.activeTab = tab; }
+  setActiveTab(tab: string) { 
+    this.activeTab = tab; 
+  }
   
   getStatusCount(status: string): number { 
+    if (!this.requisitions || this.requisitions.length === 0) return 0;
     return this.requisitions.filter(r => (r.status || 'pending') === status).length; 
   }
   
   canModify(req: any): boolean { 
+    // Can only modify pending requisitions
     return (req.status || 'pending') === 'pending'; 
   }
   
   getTotal(items: any[]): number { 
-    return items?.reduce((sum: number, i: any) => sum + ((i.qty || 0) * (i.unit_price || 0)), 0) || 0; 
+    if (!items || items.length === 0) return 0;
+    return items.reduce((sum: number, i: any) => {
+      const qty = Number(i.qty) || 0;
+      const unitPrice = Number(i.unit_price) || 0;
+      return sum + (qty * unitPrice);
+    }, 0);
   }
-getStatusLabel(status: string): string {
+
+  getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
-        'pending': 'Pending',
-        'approved': 'Received',
-        'released': 'Released',
-        'rejected': 'Rejected'
+      'pending': 'Pending',
+      'approved': 'Received',
+      'released': 'Released',
+      'rejected': 'Rejected'
     };
     return labels[status] || status || 'Pending';
-}
-editRequisition(req: any) {
+  }
+
+  viewRequisition(req: any) {
+    // Navigate to view/edit based on ID
+    if (req.id) {
+      this.router.navigate(['/client/request/edit'], { 
+        queryParams: { id: req.id } 
+      });
+    }
+  }
+
+  editRequisition(req: any) {
     console.log('🔧 Editing requisition:', req);
     // Always use the database ID, not the requisition_number
     const id = req.id;
+    if (!id) {
+      console.error('No ID found for requisition:', req);
+      return;
+    }
     console.log('🔧 Navigating with ID:', id);
     this.router.navigate(['/client/request/edit'], { 
       queryParams: { id: id } 
     });
   }
- printRequisition(req: any) {
+
+  printRequisition(req: any) {
     // Helper to format date for printing
     const fmtDate = (val: any) => {
       if (!val) return '—';
@@ -402,9 +430,13 @@ editRequisition(req: any) {
       catch { return String(val); }
     };
 
-    const getTotal = (items: any[]) => items?.reduce((s: number, i: any) => s + ((i.qty||0)*(i.unit_price||0)), 0) || 0;
+    const getTotal = (items: any[]) => {
+      if (!items || items.length === 0) return 0;
+      return items.reduce((s: number, i: any) => s + ((Number(i.qty)||0)*(Number(i.unit_price)||0)), 0);
+    };
+    
     const companyName = 'Lee Super Plaza';
-    const statusLabel = req.status === 'approved' ? 'Received' : (req.status || 'Pending');
+    const statusLabel = this.getStatusLabel(req.status);
 
     const printContent = `
       <!DOCTYPE html>
@@ -553,51 +585,62 @@ editRequisition(req: any) {
     if (printWindow) {
       printWindow.document.write(printContent);
       printWindow.document.close();
-      // Focus the window to ensure onload fires
       printWindow.focus();
     } else {
       alert('Please allow popups for this site to print requisitions.');
     }
   }
 
- deleteRequisition(req: any) {
-  this.deleteTargetReq = req;
-  this.showDeleteModal = true;
-}
+  deleteRequisition(req: any) {
+    this.deleteTargetReq = req;
+    this.showDeleteModal = true;
+  }
 
-confirmDelete() {
-  if (!this.deleteTargetReq) return;
-  
-  const req = this.deleteTargetReq;
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}` };
-  
-  this.http.delete(`${environment.apiUrl}/api/requisitions/${req.id || req.requisition_number}`, { headers }).subscribe({
-    next: () => { 
-      this.requisitions = this.requisitions.filter(r => r !== req); 
+  confirmDelete() {
+    if (!this.deleteTargetReq) return;
+    
+    const req = this.deleteTargetReq;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    if (!token) {
+      console.error('No token found');
       this.closeDeleteModal();
-      this.loadRequisitions();
-    },
-    error: () => { 
-      this.requisitions = this.requisitions.filter(r => r !== req); 
-      this.closeDeleteModal();
-       this.loadRequisitions();
+      return;
     }
-  });
-}
+    
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const deleteId = req.id || req.requisition_number;
+    
+    this.http.delete(`${environment.apiUrl}/api/requisitions/${deleteId}`, { headers }).subscribe({
+      next: () => { 
+        this.requisitions = this.requisitions.filter(r => r !== req); 
+        this.closeDeleteModal();
+        this.loadRequisitions(); // Reload to ensure sync
+      },
+      error: (err) => { 
+        console.error('Delete failed:', err);
+        // Remove locally even if API fails
+        this.requisitions = this.requisitions.filter(r => r !== req); 
+        this.closeDeleteModal();
+        this.loadRequisitions();
+      }
+    });
+  }
 
-cancelDelete() {
-  this.closeDeleteModal();
-}
+  cancelDelete() {
+    this.closeDeleteModal();
+  }
 
-closeDeleteModal() {
-  this.showDeleteModal = false;
-  this.deleteTargetReq = null;
-}
+  closeDeleteModal() {
+    this.showDeleteModal = false;
+    this.deleteTargetReq = null;
+  }
+
   formatDate(val: any): string {
     if (!val) return '—';
     try { 
       const d = new Date(val); 
+      if (isNaN(d.getTime())) return String(val);
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; 
     }
     catch { return String(val); }

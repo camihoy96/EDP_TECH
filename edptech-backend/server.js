@@ -3309,6 +3309,7 @@ app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
 // REQUISITIONS API ENDPOINTS (FIXED ORDER)
 // ============================================
 // 1. GET - My Requisitions (STATIC - must come first)
+// GET - My Requisitions
 app.get('/api/requisitions/my', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3341,46 +3342,56 @@ app.get('/api/requisitions/my', async (req, res) => {
 app.get('/api/admin/requisitions', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            console.log('❌ No authorization header');
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        // Extract token - handle both "Bearer token" and just "token" formats
-        const parts = authHeader.split(' ');
-        let token;
-        if (parts.length === 2 && parts[0] === 'Bearer') {
-            token = parts[1];
-        } else if (parts.length === 1) {
-            token = parts[0];
-        } else {
-            console.log('❌ Malformed authorization header:', authHeader);
-            return res.status(401).json({ error: 'Malformed authorization header' });
-        }
-        
-        // Log the token for debugging (first 20 chars only for security)
-        console.log('🔑 Token received:', token.substring(0, 20) + '...');
-        
-        // Verify token with error handling
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
         let decoded;
         try {
             decoded = jwt.verify(token, 'secret_key');
         } catch (jwtError) {
-            console.error('❌ JWT verification failed:', jwtError.message);
-            console.error('   Token (first 50 chars):', token.substring(0, 50));
-            return res.status(401).json({ 
-                error: 'Invalid or expired token', 
-                details: jwtError.message 
-            });
+            return res.status(401).json({ error: 'Invalid or expired token' });
         }
         
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
-            return res.status(403).json({ error: 'Access denied' });
+        // Get user info to determine filtering
+        const [userInfo] = await pool.query(
+            'SELECT department_id, branch_id, department FROM users WHERE id = ?', [decoded.id]
+        );
+        
+        let userDeptId = null;
+        let userBranchId = null;
+        
+        if (userInfo.length > 0) {
+            userDeptId = userInfo[0].department_id;
+            userBranchId = userInfo[0].branch_id;
+        } else {
+            // Check new_user table
+            const [newUserInfo] = await pool.query(
+                'SELECT department_id, branch_id, department FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userDeptId = newUserInfo[0].department_id;
+                userBranchId = newUserInfo[0].branch_id;
+            }
         }
         
-        console.log('📋 GET /api/admin/requisitions');
+        console.log('📋 GET /api/admin/requisitions - User:', decoded.id, 'Branch:', userBranchId, 'Dept:', userDeptId);
         
-        const [reqs] = await pool.query('SELECT * FROM requisitions ORDER BY created_at DESC');
+        let query = 'SELECT * FROM requisitions WHERE 1=1';
+        const params = [];
+        
+        // Filter by department and branch for EDP/IT users
+        if (userDeptId) {
+            query += ' AND department_id = ?';
+            params.push(userDeptId);
+        }
+        if (userBranchId) {
+            query += ' AND branch_id = ?';
+            params.push(userBranchId);
+        }
+        
+        query += ' ORDER BY created_at DESC';
+        
+        const [reqs] = await pool.query(query, params);
+        
         for (const req of reqs) {
             const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [req.id]);
             req.items = items;
@@ -3394,7 +3405,7 @@ app.get('/api/admin/requisitions', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
-// 3. POST - Submit Requisition (STATIC)
+// POST - Client Submit Requisition
 app.post('/api/requisitions', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3408,29 +3419,30 @@ app.post('/api/requisitions', async (req, res) => {
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
             returned_name, returned_signature, returned_date,
-            submitted_by
+            submitted_by, department_id, branch_id
         } = req.body;
         
         const userId = submitted_by || decoded.id;
         
         console.log('📝 POST /api/requisitions - Creating:', requisition_number);
+        console.log('   department_id:', department_id, 'branch_id:', branch_id);
         
         const [result] = await pool.query(`
-            INSERT INTO requisitions (
-                requisition_number, request_from, attn, date, remarks,
-                prepared_name, prepared_signature, prepared_date,
-                approved_name, approved_signature, approved_date,
-                items_prepared_name, items_prepared_signature, items_prepared_date,
-                returned_name, returned_signature, returned_date,
-                submitted_by
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [requisition_number, request_from, attn, date, remarks,
-             prepared_name, prepared_signature, prepared_date,
-             approved_name || null, approved_signature || null, approved_date || null,
-             items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
-             returned_name || null, returned_signature || null, returned_date || null,
-             userId]
-        );
+    INSERT INTO requisitions (
+        requisition_number, request_from, attn, department_id, branch_id, date, remarks,
+        prepared_name, prepared_signature, prepared_date,
+        approved_name, approved_signature, approved_date,
+        items_prepared_name, items_prepared_signature, items_prepared_date,
+        returned_name, returned_signature, returned_date,
+        submitted_by, status
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [requisition_number, request_from, attn, department_id || null, branch_id || null, date, remarks,
+     prepared_name, prepared_signature, prepared_date,
+     approved_name || null, approved_signature || null, approved_date || null,
+     items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
+     returned_name || null, returned_signature || null, returned_date || null,
+     userId, 'pending']
+);
         
         if (items && items.length > 0) {
             for (const item of items) {
@@ -3446,7 +3458,6 @@ app.post('/api/requisitions', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
-
 // 4. GET - Single Requisition by ID
 app.get('/api/requisitions/:id', async (req, res) => {
     try {
@@ -3497,7 +3508,7 @@ app.get('/api/requisitions/:id', async (req, res) => {
     }
 });
 
-// 5. PUT - Admin Status Update (comes before generic PUT)
+
 // 5. PUT - Admin Status Update (UPDATED to support release)
 app.put('/api/admin/requisitions/:id/status', async (req, res) => {
     try {
@@ -3623,16 +3634,17 @@ app.put('/api/requisitions/:id', async (req, res) => {
                 prepared_name, prepared_signature, prepared_date,
                 approved_name, approved_signature, approved_date,
                 items_prepared_name, items_prepared_signature, items_prepared_date,
-                returned_name, returned_signature, returned_date } = req.body;
+                returned_name, returned_signature, returned_date,
+                department_id, branch_id } = req.body;
         
         await pool.query(`UPDATE requisitions SET 
-            request_from = ?, attn = ?, date = ?, remarks = ?,
+            request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, remarks = ?,
             prepared_name = ?, prepared_signature = ?, prepared_date = ?,
             approved_name = ?, approved_signature = ?, approved_date = ?,
             items_prepared_name = ?, items_prepared_signature = ?, items_prepared_date = ?,
             returned_name = ?, returned_signature = ?, returned_date = ?
             WHERE id = ?`,
-            [request_from, attn, date, remarks,
+            [request_from, attn, department_id || null, branch_id || null, date, remarks,
              prepared_name, prepared_signature, prepared_date,
              approved_name || null, approved_signature || null, approved_date || null,
              items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
@@ -3656,7 +3668,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// GET - Admin/Technician Users
+// GET - Specific Users basing on the specific department of specific branch
 app.get('/api/admin/users', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3664,11 +3676,21 @@ app.get('/api/admin/users', async (req, res) => {
         const token = authHeader.split(' ')[1];
         jwt.verify(token, 'secret_key');
         
+        // ✅ Add department_id
         const [users] = await pool.query(
-            "SELECT id, fullname, username, role FROM users WHERE role IN ('admin', 'Technician') ORDER BY fullname"
+            "SELECT id, fullname, username, role, branch_id, department_id FROM users ORDER BY fullname"
         );
         
-        res.json(users);
+        // ✅ Also check new_user table with department_id
+        const [newUsers] = await pool.query(
+            "SELECT id, fullname, username, role, branch_id, department_id FROM new_user ORDER BY fullname"
+        );
+        
+        // ✅ Combine both tables
+        const allUsers = [...users, ...newUsers];
+        
+        console.log(`📋 /api/admin/users - Returning ${allUsers.length} users`);
+        res.json(allUsers);
     } catch (error) {
         console.error('GET /api/admin/users error:', error);
         res.status(500).json({ error: error.message });

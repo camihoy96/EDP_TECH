@@ -23,32 +23,63 @@ import { environment } from '../../../environments/environment';
       </div>
 
       <div class="req-form" id="print-section">
-        <div class="req-form-header">
-          <h2>{{ companyName }}</h2>
-          <h3>REQUISITION FORM</h3>
-          <div class="ctrl-no">CTRL NO.: EDR-30</div>
-        </div>
+       <div class="req-form-header">
+  <h2>{{ companyName }}</h2>
+  <div style="font-size:10px;color:#555;" *ngIf="userBranch?.name">
+    🏢 {{ userBranch.name }}
+  </div>
+  <h3>REQUISITION FORM</h3>
+  <div class="ctrl-no">CTRL NO.: EDR-30</div>
+</div>
 
-        <div class="req-top-row">
-          <div class="field-row">
-            <label>Request From:</label>
-            <input type="text" [(ngModel)]="reqData.request_from" class="req-input" readonly>
-          </div>
-          <div class="field-row">
+       <div class="req-top-row">
+  <div class="field-row">
+    <label>Request From:</label>
+    <input type="text" [(ngModel)]="reqData.request_from" class="req-input" readonly>
+  </div>
+  
+ <!-- Branch Selection (only for non-main branch users) -->
+<div class="field-row" *ngIf="!isMainBranch">
+  <label>Send To Branch:</label>
+  <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()">
+    <option value="">— Select Branch —</option>
+    <option [value]="userBranch?.id" *ngIf="userBranch">
+      🏢 {{ userBranch?.name }} <small>({{ userBranch?.company_name }})</small> - Your Branch
+    </option>
+    <option *ngFor="let branch of mainBranches" [value]="branch.id">
+      🏛️ {{ branch.name }} <small>({{ branch.company_name }})</small>
+    </option>
+  </select>
+</div>
+
+  <!-- Department Selection (based on selected branch) -->
+  <div class="field-row">
+    <label>Dept:</label>
+    <select [(ngModel)]="reqData.department_id" class="req-input" (change)="onDepartmentChange()">
+      <option value="">— Select Department —</option>
+      <option *ngFor="let dept of filteredDepartments" [value]="dept.id">
+        {{ dept.displayName || dept.name }}
+      </option>
+    </select>
+  </div>
+</div>
+
+<div class="req-top-row">
+  <!-- ATTN (auto-filled from department supervisor) -->
+  <div class="field-row">
     <label>ATTN.:</label>
     <select [(ngModel)]="reqData.attn" class="req-input">
-        <option value="">— Select —</option>
-        <option *ngFor="let user of adminUsers" [value]="user.fullname || user.username">
-            {{ user.fullname || user.username }}
-        </option>
+      <option value="">— Auto from department —</option>
+      <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
+        {{ user.fullname || user.username }} ({{ user.role }})
+      </option>
     </select>
+  </div>
+  <div class="field-row">
+    <label>Date:</label>
+    <input type="date" [(ngModel)]="reqData.date" class="req-input">
+  </div>
 </div>
-          <div class="field-row">
-            <label>Date:</label>
-            <input type="date" [(ngModel)]="reqData.date" class="req-input">
-          </div>
-        </div>
-
         <div class="req-section">
           <label>Remarks / Reason:</label>
           <textarea [(ngModel)]="reqData.remarks" class="req-textarea" rows="3" 
@@ -105,20 +136,12 @@ import { environment } from '../../../environments/environment';
         <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'upload'" (click)="setSigMode('prepared', 'upload')">📁 Upload</button>
       </div>
       
-      <!-- Draw Mode -->
+      <!-- Draw Mode - Opens Modal -->
       <div class="sig-draw-area" *ngIf="sigMode['prepared'] === 'draw'">
-        <canvas id="preparedCanvas" width="200" height="60" class="sig-canvas"
-                (mousedown)="startSigDraw($event, 'prepared')"
-                (mousemove)="drawSig($event, 'prepared')"
-                (mouseup)="stopSigDraw()"
-                (mouseleave)="stopSigDraw()"
-                (touchstart)="startSigDraw($event, 'prepared')"
-                (touchmove)="drawSig($event, 'prepared')"
-                (touchend)="stopSigDraw()"></canvas>
-        <div class="sig-canvas-actions">
-          <button type="button" class="sig-sm-btn" (click)="clearSigCanvas('prepared')">Clear</button>
-          <button type="button" class="sig-sm-btn save" (click)="saveSigCanvas('prepared')">Save</button>
-        </div>
+        <button type="button" class="sig-draw-trigger" (click)="openSigModal('prepared')">
+          <span class="sig-draw-icon">✍️</span>
+          <span>Click to Draw Signature</span>
+        </button>
       </div>
       
       <!-- Upload Mode -->
@@ -142,7 +165,7 @@ import { environment } from '../../../environments/environment';
       </div>
     </ng-container>
     
-    <!-- Saved Signature Preview (shows after canvas save or upload) -->
+    <!-- Saved Signature Preview -->
     <div class="sig-saved-preview" *ngIf="preparedSignature && sigSaved['prepared']">
       <img [src]="preparedSignature" alt="Signature" class="sig-image-small">
       <span class="sig-saved-label">✓ Signature</span>
@@ -168,20 +191,12 @@ import { environment } from '../../../environments/environment';
         <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'upload'" (click)="setSigMode('approved', 'upload')">📁 Upload</button>
       </div>
       
-      <!-- Draw Mode -->
+      <!-- Draw Mode - Opens Modal -->
       <div class="sig-draw-area" *ngIf="sigMode['approved'] === 'draw'">
-        <canvas id="approvedCanvas" width="200" height="60" class="sig-canvas"
-                (mousedown)="startSigDraw($event, 'approved')"
-                (mousemove)="drawSig($event, 'approved')"
-                (mouseup)="stopSigDraw()"
-                (mouseleave)="stopSigDraw()"
-                (touchstart)="startSigDraw($event, 'approved')"
-                (touchmove)="drawSig($event, 'approved')"
-                (touchend)="stopSigDraw()"></canvas>
-        <div class="sig-canvas-actions">
-          <button type="button" class="sig-sm-btn" (click)="clearSigCanvas('approved')">Clear</button>
-          <button type="button" class="sig-sm-btn save" (click)="saveSigCanvas('approved')">Save</button>
-        </div>
+        <button type="button" class="sig-draw-trigger" (click)="openSigModal('approved')">
+          <span class="sig-draw-icon">✍️</span>
+          <span>Click to Draw Signature</span>
+        </button>
       </div>
       
       <!-- Upload Mode -->
@@ -225,27 +240,18 @@ import { environment } from '../../../environments/environment';
       <input type="date" [(ngModel)]="reqData.items_prepared_date" class="req-input-sm" [readonly]="!approvalMode">
     </div>
     
-    <!-- Only show draw/upload options in approval mode -->
     <ng-container *ngIf="approvalMode">
       <div class="sig-options">
         <button type="button" class="sig-option-btn" [class.active]="sigMode['items_prepared'] === 'draw'" (click)="setSigMode('items_prepared', 'draw')">✍️ Draw</button>
         <button type="button" class="sig-option-btn" [class.active]="sigMode['items_prepared'] === 'upload'" (click)="setSigMode('items_prepared', 'upload')">📁 Upload</button>
       </div>
       
-      <!-- Draw Mode -->
+      <!-- Draw Mode - Opens Modal -->
       <div class="sig-draw-area" *ngIf="sigMode['items_prepared'] === 'draw'">
-        <canvas id="itemsPreparedCanvas" width="200" height="60" class="sig-canvas"
-                (mousedown)="startSigDraw($event, 'items_prepared')"
-                (mousemove)="drawSig($event, 'items_prepared')"
-                (mouseup)="stopSigDraw()"
-                (mouseleave)="stopSigDraw()"
-                (touchstart)="startSigDraw($event, 'items_prepared')"
-                (touchmove)="drawSig($event, 'items_prepared')"
-                (touchend)="stopSigDraw()"></canvas>
-        <div class="sig-canvas-actions">
-          <button type="button" class="sig-sm-btn" (click)="clearSigCanvas('items_prepared')">Clear</button>
-          <button type="button" class="sig-sm-btn save" (click)="saveSigCanvas('items_prepared')">Save</button>
-        </div>
+        <button type="button" class="sig-draw-trigger" (click)="openSigModal('items_prepared')">
+          <span class="sig-draw-icon">✍️</span>
+          <span>Click to Draw Signature</span>
+        </button>
       </div>
       
       <!-- Upload Mode -->
@@ -278,6 +284,30 @@ import { environment } from '../../../environments/environment';
   </div>
 </div>
 
+<!-- Signature Drawing Modal -->
+<div class="modal-overlay" *ngIf="showSigModal" (click)="closeSigModal()">
+  <div class="sig-modal" (click)="$event.stopPropagation()">
+    <div class="sig-modal-header">
+      <span>✍️ Draw Signature</span>
+      <button type="button" class="sig-modal-close" (click)="closeSigModal()">✕</button>
+    </div>
+    <div class="sig-modal-body">
+      <canvas id="sigModalCanvas" width="600" height="200" class="sig-modal-canvas"
+              (mousedown)="startSigDraw($event, sigModalTarget)"
+              (mousemove)="drawSig($event, sigModalTarget)"
+              (mouseup)="stopSigDraw()"
+              (mouseleave)="stopSigDraw()"
+              (touchstart)="startSigDraw($event, sigModalTarget)"
+              (touchmove)="drawSig($event, sigModalTarget)"
+              (touchend)="stopSigDraw()"></canvas>
+    </div>
+    <div class="sig-modal-footer">
+      <button type="button" class="sig-modal-btn clear" (click)="clearSigCanvas(sigModalTarget)">🗑️ Clear</button>
+      <button type="button" class="sig-modal-btn cancel" (click)="closeSigModal()">Cancel</button>
+      <button type="button" class="sig-modal-btn save" (click)="saveSigCanvas(sigModalTarget); closeSigModal()">✅ Save Signature</button>
+    </div>
+  </div>
+</div>
         <!-- Returned By (only for borrow) -->
         <div class="req-section" *ngIf="reqData.request_from === 'BORROW'">
           <h4>Items (For borrowed items only) Returned By:</h4>
@@ -313,7 +343,7 @@ import { environment } from '../../../environments/environment';
 </div>
   `,
   styles: [`
-    .req-container { padding: 16px; max-width: 900px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; font-size: 11px; background: #d4d0c8; min-height: 100vh; }
+    .req-container { padding: 16px; max-width: 1500px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #d4d0c8; min-height: 100vh; }
     .req-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 8px 14px; background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; border: 2px solid; border-color: #fff #808080 #808080 #fff; }
     .header-left h1 { margin: 0; font-size: 16px; }
     .header-sub { font-size: 10px; opacity: 0.8; }
@@ -329,7 +359,7 @@ import { environment } from '../../../environments/environment';
     .req-input { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 10px; color: #0f0e0e; font-family: 'Courier New', monospace; }
     .req-textarea { width: 100%; padding: 6px; border: 1px solid #888; font-size: 10px; font-family: 'Courier New', monospace; resize: vertical; box-sizing: border-box; }
     .req-section { margin-bottom: 12px; color: #0f0e0e; font-weight: bold; }
-    .req-section h4 { font-size: 11px; margin: 0 0 6px 0; color: #000000; }
+    .req-section h4 { font-size: 12px; margin: 0 0 6px 0; color: #000000; }
     .items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .add-item-btn { background: #0a3a8c; color: white; border: 1px solid #042070; padding: 3px 10px; cursor: pointer; font-size: 9px; border-radius: 3px; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
@@ -360,7 +390,7 @@ import { environment } from '../../../environments/environment';
     .req-footer { align-items: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .req-footer p { margin: 2px 0; }
     .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
-    .action-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 11px; font-weight: bold; border-radius: 3px; }
+    .action-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 3px; }
     .action-btn.cancel { background: #f0f0f0; color: #000; }
     .action-btn.submit { background: #0a3a8c; color: white; border-color: #1c5fb5 #042070 #042070 #1c5fb5; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -371,6 +401,116 @@ import { environment } from '../../../environments/environment';
     .sig-upload.has-file {
   border-style: solid;
   border-color: #008800;
+}
+  .sig-draw-trigger {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  border: 2px dashed #ccc;
+  background: #fafafa;
+  cursor: pointer;
+  width: 100%;
+  border-radius: 4px;
+  font-size: 9px;
+  color: #666;
+  transition: all 0.2s;
+}
+.sig-draw-trigger:hover {
+  border-color: #0a3a8c;
+  background: #e8f0ff;
+  color: #0a3a8c;
+}
+.sig-draw-icon { font-size: 24px; }
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.sig-modal {
+  background: white;
+  border: 2px solid #808080;
+  box-shadow: 3px 4px 14px rgba(0,0,0,0.3);
+  width: 650px;
+  max-width: 95vw;
+}
+.sig-modal-header {
+  background: linear-gradient(180deg, #1c5fb5, #0a3a8c);
+  color: white;
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+}
+.sig-modal-close {
+  background: none;
+  border: 1px solid rgba(255,255,255,0.4);
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 8px;
+}
+.sig-modal-body {
+  padding: 16px;
+  background: #f5f5f5;
+}
+.sig-modal-canvas {
+  border: 1px solid #ccc;
+  background: white;
+  cursor: crosshair;
+  display: block;
+  width: 100%;
+  height: 200px;
+  touch-action: none;
+}
+.sig-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #ddd;
+}
+.sig-modal-btn {
+  padding: 6px 16px;
+  border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 3px;
+}
+.sig-modal-btn.clear { background: #f0f0f0; color: #cc0000; }
+.sig-modal-btn.cancel { background: #f0f0f0; color: #000; }
+.sig-modal-btn.save { background: #008800; color: white; border-color: #00aa00 #006600 #006600 #00aa00; }
+  .req-input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #888;
+  font-size: 10px;
+  color: #0f0e0e;
+  font-family: 'Courier New', monospace;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.req-input option {
+  font-size: 9px;
+  padding: 2px 4px;
+}
+
+.req-input option small {
+  font-size: 8px;
+  color: #666;
 }
 .sig-placeholder {
   display: flex;
@@ -440,7 +580,6 @@ import { environment } from '../../../environments/environment';
   `]
 })
 export class ClientRequisitionFormComponent implements OnInit {
-  companyName = 'Lee Super Plaza';
   submitting = false;
   editMode = false;
   approvalMode = false;
@@ -449,12 +588,23 @@ export class ClientRequisitionFormComponent implements OnInit {
   private sigDrawing = false;
   adminUsers: any[] = [];
   showToast = false;
+  showSigModal = false;
+sigModalTarget: string = '';
 toastMessage = '';
 toastType: 'success' | 'error' | 'warning' = 'success';
 private toastTimer: any;
-  reqData = {
+selectedBranchId: number | null = null;
+branches: any[] = [];
+mainBranches: any[] = [];
+userBranch: any = null;
+filteredDepartments: any[] = [];
+allDepartments: any[] = [];
+attnUsers: any[] = [];
+mainBranchIds = [1, 5];
+ reqData: any = {  // ✅ Change to 'any' type
     request_from: '',
     attn: '',
+    department_id: null,
     date: new Date().toISOString().split('T')[0],
     remarks: '',
     prepared_name: '',
@@ -465,7 +615,7 @@ private toastTimer: any;
     items_prepared_date: '',
     returned_name: '',
     returned_date: ''
-  };
+};
 
   items: any[] = [];
   
@@ -504,7 +654,7 @@ private toastTimer: any;
       this.editMode = true;
     }
 
-    
+    this.loadBranchesAndDepartments();
     // Check for edit mode via query param
     this.route.queryParams.subscribe(params => {
       if (params['id']) {
@@ -537,6 +687,125 @@ showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     this.showToast = true;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.showToast = false, 3000);
+}
+get isMainBranch(): boolean {
+  const user: any = this.authService.getCurrentUser();  // ✅ Cast to any
+  return !!(user && this.mainBranchIds.includes(Number(user.branch_id)));
+}
+get companyName(): string {
+    if (this.userBranch?.company_name) {
+        return this.userBranch.company_name;
+    }
+    if (this.userBranch?.name) {
+        return this.userBranch.name;
+    }
+    return 'Lee Super Plaza'; // fallback
+}
+loadBranchesAndDepartments() {
+   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  const user: any = this.authService.getCurrentUser();
+  
+  // Load branches
+   this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+    next: (branches) => {
+      this.branches = branches || [];
+      this.userBranch = this.branches.find(b => b.id == user?.branch_id);
+      this.mainBranches = this.branches.filter(b => this.mainBranchIds.includes(b.id));
+      
+      // Load departments
+      this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+        next: (depts) => {
+          this.allDepartments = (depts || []).map(d => {
+            const branch = this.branches.find(b => b.id == d.branch_id);
+            return {
+              ...d,
+              displayName: `${d.name} (${branch?.name || 'Unknown'})`,
+              branch_name: branch?.name
+            };
+          });
+          
+          // Filter EDP/IT departments only
+          this.allDepartments = (depts || []).map(d => {
+  const branch = this.branches.find(b => b.id == d.branch_id);
+  return {
+    ...d,
+    displayName: `${d.name} — ${branch?.name || 'Unknown'} (${branch?.company_name || ''})`,
+    branch_name: branch?.name,
+    company_name: branch?.company_name
+  };
+});
+          
+          if (this.isMainBranch && user?.branch_id) {
+            // Main branch users: show only their branch departments
+            this.selectedBranchId = user.branch_id;
+            this.filterDepartmentsByBranch(user.branch_id);
+          } else {
+            // Non-main branch: default to user's branch
+            this.selectedBranchId = user?.branch_id || null;
+            if (this.selectedBranchId) {
+              this.filterDepartmentsByBranch(this.selectedBranchId);
+            }
+          }
+        }
+      });
+    }
+  });
+}
+
+onBranchChange() {
+  if (this.selectedBranchId) {
+    this.filterDepartmentsByBranch(this.selectedBranchId);
+    this.reqData.department_id = null;
+    this.reqData.attn = '';
+    this.attnUsers = [];
+  }
+}
+filterDepartmentsByBranch(branchId: number) {
+  this.filteredDepartments = this.allDepartments.filter(d => d.branch_id == branchId);
+  
+  // Auto-select first department
+  if (this.filteredDepartments.length > 0 && !this.reqData.department_id) {
+    this.reqData.department_id = this.filteredDepartments[0].id;
+    this.onDepartmentChange();
+  }
+}
+
+onDepartmentChange() {
+  if (!this.reqData.department_id) {
+    this.attnUsers = [];
+    return;
+  }
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
+  const deptBranchId = selectedDept?.branch_id;
+  const deptId = selectedDept?.id;
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+    next: (users) => {
+      // ✅ Filter by branch_id, role, AND department_id
+      this.attnUsers = (users || []).filter(u => {
+        const userBranchId = Number(u.branch_id);
+        const userDeptId = Number(u.department_id);
+        const matchBranch = userBranchId === Number(deptBranchId);
+        const matchDept = !deptId || userDeptId === Number(deptId);
+        const role = (u.role || '').toLowerCase();
+        const matchRole = role === 'head/manager' || role === 'supervisor';
+        return matchBranch && matchDept && matchRole;
+      });
+      
+      console.log('👥 ATTN users found:', this.attnUsers.length);
+      
+      if (this.attnUsers.length > 0 && !this.reqData.attn) {
+        this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+      }
+    },
+    error: (err) => {
+      this.attnUsers = [];
+    }
+  });
 }
 loadAdminUsers() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -585,19 +854,20 @@ loadAdminUsers() {
         
         // Update reqData with loaded values
         this.reqData = {
-          request_from: data.request_from || '',
-          attn: data.attn || '',
-          date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
-          remarks: data.remarks || '',
-          prepared_name: data.prepared_name || '',
-          prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
-          approved_name: data.approved_name || '',
-          approved_date: this.parseDate(data.approved_date) || '',
-          items_prepared_name: data.items_prepared_name || '',
-          items_prepared_date: this.parseDate(data.items_prepared_date) || '',
-          returned_name: data.returned_name || '',
-          returned_date: this.parseDate(data.returned_date) || ''
-        };
+  request_from: data.request_from || '',
+  attn: data.attn || '',
+  department_id: data.department_id || null,  // ✅ Add this
+  date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
+  remarks: data.remarks || '',
+  prepared_name: data.prepared_name || '',
+  prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
+  approved_name: data.approved_name || '',
+  approved_date: this.parseDate(data.approved_date) || '',
+  items_prepared_name: data.items_prepared_name || '',
+  items_prepared_date: this.parseDate(data.items_prepared_date) || '',
+  returned_name: data.returned_name || '',
+  returned_date: this.parseDate(data.returned_date) || ''
+};
         
         // Load items
         this.items = data.items || [];
@@ -606,7 +876,10 @@ loadAdminUsers() {
         this.preparedSignature = data.prepared_signature || null;
         this.approvedSignature = data.approved_signature || null;
         this.itemsPreparedSignature = data.items_prepared_signature || null;
-        
+        if (data.branch_id) {
+  this.selectedBranchId = data.branch_id;
+  this.filterDepartmentsByBranch(data.branch_id);
+}
         // Set sigSaved and switch to upload mode for existing signatures
         if (this.preparedSignature) {
           this.sigSaved['prepared'] = true;
@@ -764,52 +1037,37 @@ loadAdminUsers() {
     this.sigSaved[target] = false;
   }
 
-  setSigMode(target: string, mode: 'draw' | 'upload') {
-    this.sigMode[target] = mode;
-    if (mode === 'draw') {
-      setTimeout(() => {
-        const canvasId = target === 'prepared' ? 'preparedCanvas' : target === 'approved' ? 'approvedCanvas' : 'itemsPreparedCanvas';
-        const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-        if (canvas) {
-          const ctx = canvas.getContext('2d');
-          if (ctx) { ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.lineCap = 'round'; }
-        }
-      }, 200);
-    }
-  }
-
-  startSigDraw(event: any, target: string) {
+startSigDraw(event: any, target: string) {
     event.preventDefault();
     this.sigDrawing = true;
-    const canvasId = target === 'prepared' ? 'preparedCanvas' : target === 'approved' ? 'approvedCanvas' : 'itemsPreparedCanvas';
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;  // ✅ Always use modal canvas
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.touches?.[0]?.clientX || event.clientX) - rect.left;
     const y = (event.touches?.[0]?.clientY || event.clientY) - rect.top;
     const ctx = canvas.getContext('2d');
     if (ctx) { ctx.beginPath(); ctx.moveTo(x, y); }
-  }
+}
 
-  drawSig(event: any, target: string) {
+drawSig(event: any, target: string) {
     if (!this.sigDrawing) return;
     event.preventDefault();
-    const canvasId = target === 'prepared' ? 'preparedCanvas' : target === 'approved' ? 'approvedCanvas' : 'itemsPreparedCanvas';
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;  // ✅ Always use modal canvas
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.touches?.[0]?.clientX || event.clientX) - rect.left;
     const y = (event.touches?.[0]?.clientY || event.clientY) - rect.top;
     const ctx = canvas.getContext('2d');
     if (ctx) { ctx.lineTo(x, y); ctx.stroke(); }
-  }
-
+}
   stopSigDraw() { this.sigDrawing = false; }
 
   clearSigCanvas(target: string) {
-    const canvasId = target === 'prepared' ? 'preparedCanvas' : target === 'approved' ? 'approvedCanvas' : 'itemsPreparedCanvas';
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-    if (canvas) { const ctx = canvas.getContext('2d'); if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); }
+    const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;
+    if (canvas) { 
+      const ctx = canvas.getContext('2d'); 
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    }
     this.sigSaved[target] = false;
     if (target === 'prepared') {
       this.preparedSignature = null;
@@ -823,28 +1081,62 @@ loadAdminUsers() {
       this.itemsPreparedSignature = null;
       this.sigMode['items_prepared'] = 'draw';
     }
-  }
+}
+setSigMode(target: string, mode: 'draw' | 'upload') {
+    this.sigMode[target] = mode;
+}
  saveSigCanvas(target: string) {
-    const canvasId = target === 'prepared' ? 'preparedCanvas' : target === 'approved' ? 'approvedCanvas' : 'itemsPreparedCanvas';
-    const canvas = document.getElementById(canvasId) as HTMLCanvasElement;
+    const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;
     if (canvas) {
       const dataUrl = canvas.toDataURL('image/png');
       if (target === 'prepared') {
         this.preparedSignature = dataUrl;
-        this.sigMode['prepared'] = 'upload'; // Switch to show preview
+        this.sigMode['prepared'] = 'upload';
       }
       if (target === 'approved') {
         this.approvedSignature = dataUrl;
-        this.sigMode['approved'] = 'upload'; // Switch to show preview
+        this.sigMode['approved'] = 'upload';
       }
       if (target === 'items_prepared') {
         this.itemsPreparedSignature = dataUrl;
-        this.sigMode['items_prepared'] = 'upload'; // Switch to show preview
+        this.sigMode['items_prepared'] = 'upload';
       }
       this.sigSaved[target] = true;
     }
-  }
+}
+openSigModal(target: string) {
+  this.sigModalTarget = target;
+  this.showSigModal = true;
+  setTimeout(() => {
+    const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;
+    if (canvas) {
+      // Set actual pixel dimensions to match CSS size
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) { 
+        ctx.strokeStyle = '#000'; 
+        ctx.lineWidth = 2; 
+        ctx.lineCap = 'round';
+        // Restore existing signature
+        const existingSig = target === 'prepared' ? this.preparedSignature :
+                           target === 'approved' ? this.approvedSignature : this.itemsPreparedSignature;
+        if (existingSig) {
+          const img = new Image();
+          img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          img.src = existingSig;
+        }
+      }
+    }
+  }, 100);
+}
 
+closeSigModal() {
+  this.showSigModal = false;
+  this.sigDrawing = false;
+}
   handleSigFile(event: any, target: string) {
     const file = event.target.files?.[0];
     if (file) {
@@ -922,6 +1214,7 @@ const payload = {
       ...this.reqData,
       requisition_number: this.reqNumber,
       items: this.items,
+       branch_id: this.selectedBranchId,
       prepared_signature: this.preparedSignature,
       approved_signature: this.approvedSignature,
       items_prepared_signature: this.itemsPreparedSignature,
@@ -1023,7 +1316,7 @@ const payload = {
             color: #0a246a;
           }
           .req-header .title {
-            font-size: 11px;
+            font-size: 12px;
             font-weight: bold;
             letter-spacing: 3px;
             margin-top: 4px;
