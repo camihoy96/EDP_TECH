@@ -16,7 +16,7 @@ import { environment } from '../../../environments/environment';
     <div class="req-container">
       <div class="req-header">
         <div class="header-left">
-          <h1>{{ approvalMode ? '✅ Receive Requisition' : editMode ? '✏️ Edit Requisition' : '📩 Requisition Form' }}</h1>
+          <h1>{{ approvalMode ? '✅ Accept Requisition' : editMode ? '✏️ Edit Requisition' : '📩 Requisition Form' }}</h1>
           <span class="header-sub">{{ approvalMode ? 'Fill in items prepared by details and signature' : editMode ? 'Update your requisition request' : 'Submit a requisition for items/equipment' }}</span>
         </div>
         <button class="print-btn" (click)="printForm()">🖨️ Print</button>
@@ -38,10 +38,10 @@ import { environment } from '../../../environments/environment';
     <input type="text" [(ngModel)]="reqData.request_from" class="req-input" readonly>
   </div>
   
- <!-- Branch Selection (only for non-main branch users) -->
+ <!-- Branch Selection - readonly for recipient edit -->
 <div class="field-row" *ngIf="!isMainBranch">
-  <label>Send To Branch:</label>
-  <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()">
+  <label>Recipient:</label>
+  <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()" [disabled]="isRecipientEdit">
     <option value="">— Select Branch —</option>
     <option [value]="userBranch?.id" *ngIf="userBranch">
       🏢 {{ userBranch?.name }} <small>({{ userBranch?.company_name }})</small> - Your Branch
@@ -52,18 +52,17 @@ import { environment } from '../../../environments/environment';
   </select>
 </div>
 
-  <!-- Department Selection (based on selected branch) -->
-  <div class="field-row">
-    <label>Dept:</label>
-    <select [(ngModel)]="reqData.department_id" class="req-input" (change)="onDepartmentChange()">
-      <option value="">— Select Department —</option>
-      <option *ngFor="let dept of filteredDepartments" [value]="dept.id">
-        {{ dept.displayName || dept.name }}
-      </option>
-    </select>
-  </div>
+<!-- Department Selection - readonly for recipient edit -->
+<div class="field-row">
+  <label>Dept:</label>
+  <select [(ngModel)]="reqData.department_id" class="req-input" (change)="onDepartmentChange()" [disabled]="isRecipientEdit">
+    <option value="">— Select Department —</option>
+    <option *ngFor="let dept of filteredDepartments" [value]="dept.id">
+      {{ dept.displayName || dept.name }}
+    </option>
+  </select>
 </div>
-
+</div>
 <div class="req-top-row">
   <!-- ATTN (auto-filled from department supervisor) -->
   <div class="field-row">
@@ -333,7 +332,7 @@ import { environment } from '../../../environments/environment';
       <div class="form-actions">
         <button class="action-btn cancel" (click)="cancel()">✕ Cancel</button>
         <button class="action-btn submit" (click)="submitRequisition()" [disabled]="submitting">
-          {{ submitting ? 'Saving...' : (approvalMode ? '✅ Receive Requisition' : editMode ? '💾 Update' : '✅ Submit Requisition') }}
+          {{ submitting ? 'Saving...' : (approvalMode ? '✅ Accept Requisition' : editMode ? '💾 Update' : '✅ Submit Requisition') }}
         </button>
       </div>
     </div>
@@ -535,6 +534,11 @@ import { environment } from '../../../environments/environment';
   display: block;
   margin: 0 auto;
 }
+  .req-input:disabled {
+  background: #e8e8e8;
+  color: #666;
+  cursor: not-allowed;
+}
 .sig-saved-preview {
   display: flex;
   align-items: center;
@@ -592,6 +596,7 @@ export class ClientRequisitionFormComponent implements OnInit {
 sigModalTarget: string = '';
 toastMessage = '';
 toastType: 'success' | 'error' | 'warning' = 'success';
+isRecipientEdit: boolean = false;
 private toastTimer: any;
 selectedBranchId: number | null = null;
 branches: any[] = [];
@@ -642,8 +647,7 @@ mainBranchIds = [1, 5];
     private route: ActivatedRoute,
     private notificationService: NotificationService
   ) {}
-
-  ngOnInit() {
+ngOnInit() {
     // Load admin users for the ATTN dropdown (always)
     this.loadAdminUsers();
     
@@ -654,18 +658,23 @@ mainBranchIds = [1, 5];
       this.editMode = true;
     }
 
-    this.loadBranchesAndDepartments();
-    // Check for edit mode via query param
+    // Check for edit mode via query param FIRST
     this.route.queryParams.subscribe(params => {
       if (params['id']) {
         this.editMode = true;
         this.editReqId = params['id'];
-        // Load existing requisition - don't generate new reqNumber
+        
+        // ✅ Check for approval mode via query param
+        if (params['mode'] === 'approve') {
+          this.approvalMode = true;
+        }
+        
+        // DON'T call loadBranchesAndDepartments() here
         this.loadRequisition(params['id']);
       } else {
         // Only generate new reqNumber for new requisitions
         this.reqNumber = this.generateReqNumber();
-        // Pre-fill user info only for new requisitions
+        this.loadBranchesAndDepartments();
         this.authService.currentUser$.subscribe((user: any) => {
           if (user) {
             this.reqData.prepared_name = user.fullname || '';
@@ -675,7 +684,7 @@ mainBranchIds = [1, 5];
       }
     });
   }
-  triggerSigFileInput(target: string) {
+  triggerSigFileInput(target: string): void {
   const fileInput = document.getElementById(target + 'FileInput') as HTMLInputElement;
   if (fileInput) {
     fileInput.click();
@@ -821,7 +830,7 @@ loadAdminUsers() {
         }
     });
 }
-  loadRequisition(id: string) {
+ loadRequisition(id: string) {
     console.log('🔍 loadRequisition called with id:', id, 'type:', typeof id);
     
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -829,8 +838,7 @@ loadAdminUsers() {
 
     this.http.get<any>(`${environment.apiUrl}/api/requisitions/${id}`, { headers }).subscribe({
       next: (response) => {
-        console.log('📦 API Response type:', typeof response, Array.isArray(response) ? 'array' : 'object');
-        console.log('📦 Full API Response:', response);
+        console.log('📦 API Response:', response);
         
         // Handle response - it might be an array or single object
         const data = Array.isArray(response) ? response[0] : response;
@@ -839,10 +847,17 @@ loadAdminUsers() {
           console.error('❌ No requisition data found in response');
           return;
         }
-        
+        const currentUser = this.authService.getCurrentUser();
+if (currentUser && data.submitted_by !== currentUser.id) {
+  this.isRecipientEdit = true;
+} else {
+  this.isRecipientEdit = false;
+}
         console.log('📋 Requisition loaded:', {
           id: data.id,
           number: data.requisition_number,
+          branch_id: data.branch_id,
+          department_id: data.department_id,
           has_prepared_sig: !!data.prepared_signature,
           has_approved_sig: !!data.approved_signature,
           has_items_prepared_sig: !!data.items_prepared_signature,
@@ -852,22 +867,27 @@ loadAdminUsers() {
         // Set the requisition number from the loaded data
         this.reqNumber = data.requisition_number || data.req_number || '';
         
-        // Update reqData with loaded values
+        // ✅ FIRST: Set branch and department BEFORE loading departments
+        // This ensures the dropdowns are populated correctly
+        const savedBranchId = data.branch_id || null;
+        const savedDeptId = data.department_id || null;
+        
+        // ✅ Update reqData with ALL loaded values
         this.reqData = {
-  request_from: data.request_from || '',
-  attn: data.attn || '',
-  department_id: data.department_id || null,  // ✅ Add this
-  date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
-  remarks: data.remarks || '',
-  prepared_name: data.prepared_name || '',
-  prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
-  approved_name: data.approved_name || '',
-  approved_date: this.parseDate(data.approved_date) || '',
-  items_prepared_name: data.items_prepared_name || '',
-  items_prepared_date: this.parseDate(data.items_prepared_date) || '',
-  returned_name: data.returned_name || '',
-  returned_date: this.parseDate(data.returned_date) || ''
-};
+          request_from: data.request_from || '',
+          attn: data.attn || '',
+          department_id: savedDeptId,
+          date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
+          remarks: data.remarks || '',
+          prepared_name: data.prepared_name || '',
+          prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
+          approved_name: data.approved_name || '',
+          approved_date: this.parseDate(data.approved_date) || '',
+          items_prepared_name: data.items_prepared_name || '',
+          items_prepared_date: this.parseDate(data.items_prepared_date) || '',
+          returned_name: data.returned_name || '',
+          returned_date: this.parseDate(data.returned_date) || ''
+        };
         
         // Load items
         this.items = data.items || [];
@@ -876,10 +896,12 @@ loadAdminUsers() {
         this.preparedSignature = data.prepared_signature || null;
         this.approvedSignature = data.approved_signature || null;
         this.itemsPreparedSignature = data.items_prepared_signature || null;
-        if (data.branch_id) {
-  this.selectedBranchId = data.branch_id;
-  this.filterDepartmentsByBranch(data.branch_id);
-}
+        
+        // ✅ Set branch AFTER loading departments are ready
+        // We need to wait for loadBranchesAndDepartments to complete
+        // Use a delayed approach to ensure departments are loaded
+        this.loadBranchesAndDepartmentsForEdit(savedBranchId, savedDeptId);
+        
         // Set sigSaved and switch to upload mode for existing signatures
         if (this.preparedSignature) {
           this.sigSaved['prepared'] = true;
@@ -894,15 +916,6 @@ loadAdminUsers() {
           this.sigMode['items_prepared'] = 'upload';
         }
         
-        console.log('✅ Requisition loaded successfully:', {
-          number: this.reqNumber,
-          preparedSig: this.preparedSignature ? 'YES' : 'NO',
-          approvedSig: this.approvedSignature ? 'YES' : 'NO',
-          itemsPrepSig: this.itemsPreparedSignature ? 'YES' : 'NO',
-          sigSaved: this.sigSaved,
-          sigMode: this.sigMode
-        });
-        
         // In approval mode, pre-fill admin info
         if (this.approvalMode) {
           const currentUser = this.authService.getCurrentUser();
@@ -915,10 +928,8 @@ loadAdminUsers() {
       error: (err) => {
         console.error('❌ API call failed:', err.status, err.message);
         
-        // Try loading from localStorage as fallback
+        // Fallback to localStorage
         const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
-        console.log('📦 Looking in localStorage, entries:', saved.length);
-        
         const found = saved.find((r: any) => 
           String(r.id) === String(id) || 
           String(r.requisition_number) === String(id)
@@ -945,9 +956,69 @@ loadAdminUsers() {
             this.sigSaved['items_prepared'] = true;
             this.sigMode['items_prepared'] = 'upload';
           }
+          
+          // Also try to set branch for localStorage data
+          if (found.branch_id) {
+            this.loadBranchesAndDepartmentsForEdit(found.branch_id, found.department_id);
+          }
         } else {
           console.error('❌ Requisition not found anywhere');
         }
+      }
+    });
+  }
+
+  // ✅ NEW METHOD: Load branches/departments specifically for edit mode
+  loadBranchesAndDepartmentsForEdit(branchId: number | null, deptId: number | null) {
+    const user: any = this.authService.getCurrentUser();
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+      next: (branches) => {
+        this.branches = branches || [];
+        this.userBranch = this.branches.find(b => b.id == user?.branch_id);
+        this.mainBranches = this.branches.filter(b => this.mainBranchIds.includes(b.id));
+        
+        // Load departments
+        this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+          next: (depts) => {
+            this.allDepartments = (depts || []).map(d => {
+              const branch = this.branches.find(b => b.id == d.branch_id);
+              return {
+                ...d,
+                displayName: `${d.name} — ${branch?.name || 'Unknown'} (${branch?.company_name || ''})`,
+                branch_name: branch?.name,
+                company_name: branch?.company_name
+              };
+            });
+            
+            // ✅ Now set the branch and filter departments
+            if (branchId) {
+              this.selectedBranchId = branchId;
+              this.filterDepartmentsByBranch(branchId);
+              
+              // ✅ Set the department AFTER filtering
+              // Use setTimeout to ensure Angular has updated the filteredDepartments
+              setTimeout(() => {
+                if (deptId) {
+                  this.reqData.department_id = deptId;
+                  // Check if department exists in filtered list
+                  const deptExists = this.filteredDepartments.some(d => d.id == deptId);
+                  if (deptExists) {
+                    this.onDepartmentChange();
+                  }
+                }
+              }, 100);
+            } else if (this.isMainBranch && user?.branch_id) {
+              this.selectedBranchId = user.branch_id;
+              this.filterDepartmentsByBranch(user.branch_id);
+            } else {
+              this.selectedBranchId = user?.branch_id || null;
+              if (this.selectedBranchId) {
+                this.filterDepartmentsByBranch(this.selectedBranchId);
+              }
+            }
+          }
+        });
       }
     });
   }
@@ -1143,52 +1214,85 @@ closeSigModal() {
       this.processSigFile(file, target);
     }
   }
-
-  submitRequisition() {
+getStatusLabel(status: string): string {
+    const labels: Record<string, string> = {
+        'pending': 'Pending', 
+        'approved': 'Accepted',  // Changed from 'Received'
+        'released': 'Released', 
+        'rejected': 'Rejected'
+    };
+    return labels[status] || status || 'Pending';
+}
+ submitRequisition() {
     // Approval mode - only validate items prepared by
     if (this.approvalMode) {
-      if (!this.reqData.items_prepared_name) {
-       this.showToastMsg('Please fill in Items Prepared By name.', 'warning');
-        return;
-      }
-      if (!this.itemsPreparedSignature) {
-        alert('Please provide Items Prepared By signature.');
-        return;
-      }
-     // In submitRequisition() - Approval mode section
-this.submitting = true;
-const payload = {
+  if (!this.reqData.items_prepared_name) {
+    this.showToastMsg('Please fill in Items Prepared By name.', 'warning');
+    return;
+  }
+  if (!this.itemsPreparedSignature) {
+    alert('Please provide Items Prepared By signature.');
+    return;
+  }
+  
+  this.submitting = true;
+  const payload: any = {
     status: 'approved',
-    items: this.items,  // ADD THIS - send the items array with updated unit prices
+    items: this.items,
     items_prepared_name: this.reqData.items_prepared_name,
     items_prepared_date: this.reqData.items_prepared_date,
     items_prepared_signature: this.itemsPreparedSignature
-};
-      
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-      
-      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/approve`, payload, { headers }).subscribe({
-        next: () => {
-          this.submitting = false;
-          this.notificationService.addBellNotification({
-            type: 'success',
-            title: '📥 Requisition Received',
-            message: `Requisition #${this.reqNumber} items prepared by ${this.reqData.items_prepared_name}`,
-            ticketNumber: this.reqNumber,
-            targetUserId: null,
-            countInBadge: true,
-          });
-          this.showToastMsg('✅ Requisition received!', 'success');
-          this.router.navigate(['/admin/requisitions']);
-        },
-        error: () => {
-          this.submitting = false;
-         this.showToastMsg('⚠️ Failed to receive requisition', 'error');
-        }
+  };
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  
+  // ✅ Use the status update endpoint instead of the admin approve endpoint
+  // This works for both admin and non-admin users who are recipients
+  const url = `${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/status`;
+  
+  console.log('📥 Accepting requisition:', this.editReqId, payload);
+  
+  this.http.put(url, payload, { headers }).subscribe({
+    next: (response: any) => {
+      console.log('✅ Accept response:', response);
+      this.submitting = false;
+      this.notificationService.addBellNotification({
+        type: 'success',
+        title: '📥 Requisition Accepted',
+        message: `Requisition #${this.reqNumber} items prepared by ${this.reqData.items_prepared_name}`,
+        ticketNumber: this.reqNumber,
+        targetUserId: null,
+        countInBadge: true,
       });
-      return;
+      this.showToastMsg('✅ Requisition accepted!', 'success');
+      // ✅ Navigate back to client request list (not admin)
+      this.router.navigate(['/client/request']);
+    },
+    error: (err) => {
+      console.error('❌ Accept error:', err);
+      this.submitting = false;
+      
+      // Check if it's a permission error
+      if (err.status === 403) {
+        // Try the approve endpoint as fallback
+        this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/approve`, payload, { headers }).subscribe({
+          next: () => {
+            this.submitting = false;
+            this.showToastMsg('✅ Requisition accepted!', 'success');
+            this.router.navigate(['/client/request']);
+          },
+          error: () => {
+            this.showToastMsg('⚠️ Failed to accept requisition', 'error');
+          }
+        });
+      } else {
+        this.showToastMsg('⚠️ Failed to accept requisition', 'error');
+      }
     }
+  });
+  return;
+}
 
     // Client mode - validate prepared by and approved by
     if (!this.reqData.request_from) {
@@ -1210,16 +1314,22 @@ const payload = {
 
     this.submitting = true;
 
-    const payload = {
+    const payload: any = {
       ...this.reqData,
       requisition_number: this.reqNumber,
       items: this.items,
-       branch_id: this.selectedBranchId,
+      branch_id: this.selectedBranchId,
       prepared_signature: this.preparedSignature,
       approved_signature: this.approvedSignature,
       items_prepared_signature: this.itemsPreparedSignature,
-      submitted_by: this.authService.getCurrentUser()?.id || null
     };
+
+    // ✅ For new requisitions, set submitted_by to current user
+    // For edits (especially by recipient), preserve the original submitted_by
+    if (!this.editMode) {
+      payload.submitted_by = this.authService.getCurrentUser()?.id || null;
+    }
+    // ✅ Don't send submitted_by for edits - let backend keep the original
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };

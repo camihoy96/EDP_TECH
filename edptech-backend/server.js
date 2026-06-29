@@ -3319,17 +3319,47 @@ app.get('/api/requisitions/my', async (req, res) => {
         
         console.log('📋 GET /api/requisitions/my - User:', decoded.id);
         
-        const [reqs] = await pool.query(
-            'SELECT * FROM requisitions WHERE submitted_by = ? ORDER BY created_at DESC', 
-            [decoded.id]
+        // Get user's branch and department
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id FROM users WHERE id = ?', [decoded.id]
         );
         
-        for (const req of reqs) {
-            const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [req.id]);
-            req.items = items;
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+        } else {
+            // Check new_user table
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+            }
         }
         
-        console.log('📋 Returning', reqs.length, 'requisitions');
+        console.log('📋 User branch:', userBranchId, 'dept:', userDeptId);
+        
+        // ✅ Get requisitions where:
+        // 1. User is the creator (submitted_by = user.id)
+        // 2. OR requisition is sent to user's branch AND department
+        const [reqs] = await pool.query(
+            `SELECT * FROM requisitions 
+             WHERE submitted_by = ? 
+             OR (branch_id = ? AND department_id = ?)
+             ORDER BY created_at DESC`,
+            [decoded.id, userBranchId, userDeptId]
+        );
+        
+        for (const reqRecord of reqs) {
+            const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [reqRecord.id]);
+            reqRecord.items = items;
+        }
+        
+        console.log('📋 Returning', reqs.length, 'requisitions (mine + sent to my dept)');
         res.json(reqs);
     } catch (error) { 
         console.error('GET /api/requisitions/my error:', error);
@@ -3462,7 +3492,6 @@ app.post('/api/requisitions', async (req, res) => {
 app.get('/api/requisitions/:id', async (req, res) => {
     try {
         console.log('🔍 Backend received GET /api/requisitions/:id with params:', req.params);
-        console.log('🔍 Full URL:', req.originalUrl);
         
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
@@ -3472,7 +3501,6 @@ app.get('/api/requisitions/:id', async (req, res) => {
         const id = req.params.id;
         const numericId = parseInt(id);
         
-        // RENAME: Change [reqs] to [requisitions] to avoid conflict with Express 'req'
         let [requisitions] = await pool.query(
             'SELECT * FROM requisitions WHERE id = ? OR requisition_number = ?', 
             [isNaN(numericId) ? 0 : numericId, id]
@@ -3482,25 +3510,51 @@ app.get('/api/requisitions/:id', async (req, res) => {
             return res.status(404).json({ error: 'Requisition not found' });
         }
         
-        // RENAME: Change req to requisition to avoid conflict
         const requisition = requisitions[0];
         const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [requisition.id]);
         requisition.items = items;
         
-        // Check permissions - use requisition.submitted_by not req.submitted_by
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician' && requisition.submitted_by !== decoded.id) {
+        // ✅ Get user's branch and department for recipient check
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        const [userInfo] = await pool.query('SELECT branch_id, department_id FROM users WHERE id = ?', [decoded.id]);
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+        } else {
+            const [newUserInfo] = await pool.query('SELECT branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]);
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+            }
+        }
+        
+        // ✅ Check if user is the recipient (same branch + department)
+        const isRecipient = userBranchId && userDeptId && 
+                           requisition.branch_id == userBranchId && 
+                           requisition.department_id == userDeptId;
+        
+        // Allow access if:
+        // 1. User is admin/Technician
+        // 2. User is the creator (submitted_by)
+        // 3. User is the recipient (same branch + department)
+        const hasAccess = decoded.role === 'admin' || 
+                         decoded.role === 'Technician' || 
+                         requisition.submitted_by === decoded.id ||
+                         isRecipient;
+        
+        if (!hasAccess) {
             return res.status(403).json({ error: 'Access denied' });
         }
         
         console.log('📦 Returning requisition:', {
             id: requisition.id,
             number: requisition.requisition_number,
-            has_prepared_sig: !!requisition.prepared_signature,
-            has_approved_sig: !!requisition.approved_signature,
-            has_items_prepared_sig: !!requisition.items_prepared_signature
+            isCreator: requisition.submitted_by === decoded.id,
+            isRecipient: isRecipient
         });
         
-        // Return the requisition object, not 'req'
         res.json(requisition);
     } catch (error) { 
         console.error('❌ GET /api/requisitions/:id error:', error);
@@ -3508,15 +3562,48 @@ app.get('/api/requisitions/:id', async (req, res) => {
     }
 });
 
-
-// 5. PUT - Admin Status Update (UPDATED to support release)
+// 5. PUT - Admin Status Update (UPDATED to support release AND recipient access)
 app.put('/api/admin/requisitions/:id/status', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
+        
+        // ✅ Get user info for recipient check
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id, role FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+            decoded.role = userInfo[0].role || decoded.role;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id, role FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+                decoded.role = newUserInfo[0].role || decoded.role;
+            }
+        }
+        
+        // ✅ Check if user is the recipient of this requisition
+        const [requisition] = await pool.query(
+            'SELECT branch_id, department_id FROM requisitions WHERE id = ?', [req.params.id]
+        );
+        const isRecipient = requisition.length > 0 && 
+                           userBranchId && userDeptId &&
+                           requisition[0].branch_id == userBranchId && 
+                           requisition[0].department_id == userDeptId;
+        
+        // Allow if admin, Technician, OR the recipient
+        const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
+        if (!isAdmin && !isRecipient) {
             return res.status(403).json({ error: 'Access denied' });
         }
         
@@ -3524,7 +3611,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
             status, 
             approved_name, approved_date, approved_signature,
             items_prepared_name, items_prepared_date, items_prepared_signature,
-            released_name, released_date  // ✅ NEW: release fields
+            released_name, released_date
         } = req.body;
         
         const updates = ['status = ?'];
@@ -3540,14 +3627,14 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
         if (items_prepared_signature !== undefined) { updates.push('items_prepared_signature = ?'); values.push(items_prepared_signature); }
         
-        // ✅ NEW: Released fields
+        // Released fields
         if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
         if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
         
         values.push(req.params.id);
         
         await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-        console.log('✅ Admin status update:', req.params.id, '→', status);
+        console.log('✅ Status update:', req.params.id, '→', status);
         res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/status error:', error);
@@ -3555,14 +3642,48 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
     }
 });
 
-// 6. PUT - Admin Approve
+// 6. PUT - Admin Approve (UPDATED to support recipient access)
 app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
+        
+        // ✅ Get user info for recipient check
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id, role FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+            decoded.role = userInfo[0].role || decoded.role;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id, role FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+                decoded.role = newUserInfo[0].role || decoded.role;
+            }
+        }
+        
+        // ✅ Check if user is the recipient of this requisition
+        const [requisition] = await pool.query(
+            'SELECT branch_id, department_id FROM requisitions WHERE id = ?', [req.params.id]
+        );
+        const isRecipient = requisition.length > 0 && 
+                           userBranchId && userDeptId &&
+                           requisition[0].branch_id == userBranchId && 
+                           requisition[0].department_id == userDeptId;
+        
+        // Allow if admin, Technician, OR the recipient
+        const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
+        if (!isAdmin && !isRecipient) {
             return res.status(403).json({ error: 'Access denied' });
         }
         
@@ -3596,14 +3717,13 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
             }
         }
         
-        console.log('✅ Admin approve:', req.params.id);
+        console.log('✅ Approve:', req.params.id);
         res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/approve error:', error);
         res.status(500).json({ error: error.message }); 
     }
 });
-
 // 7. PUT - Update Requisition (client edit) - GENERIC, comes last
 app.put('/api/requisitions/:id', async (req, res) => {
     try {

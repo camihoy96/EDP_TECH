@@ -191,6 +191,7 @@ export const routes: Routes = [
       { path: 'about', loadComponent: () => import('./components/client-dashboard/client-about.component').then(m => m.ClientAboutComponent) },
       { path: 'shortcuts', loadComponent: () => import('./components/client-dashboard/client-shortcuts.component').then(m => m.ClientShortcutsComponent) },
       { path: 'features', component: ClientFeaturesComponent }, 
+      { path: 'client/request/approve', component: ClientRequisitionFormComponent },
     ]
   },
   

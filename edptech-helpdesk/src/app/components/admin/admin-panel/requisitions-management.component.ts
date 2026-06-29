@@ -13,68 +13,155 @@ import { environment } from '../../../../environments/environment';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="admin-container">
-      <div class="page-header">
-        <h2>📩 Requisition Management</h2>
-        <span class="header-sub">Manage and process all requisition requests</span>
-      </div>
-
-      <div class="stats-bar">
-        <div class="stat-item"><span class="stat-label">Total</span><span class="stat-value">{{ allReqs.length }}</span></div>
-        <div class="stat-item pending"><span class="stat-label">Pending</span><span class="stat-value">{{ getStatusCount('pending') }}</span></div>
-        <div class="stat-item approved"><span class="stat-label">Received</span><span class="stat-value">{{ getStatusCount('approved') }}</span></div>
-        <!-- ✅ NEW: Released stat -->
-        <div class="stat-item released"><span class="stat-label">Released</span><span class="stat-value">{{ getStatusCount('released') }}</span></div>
-        <div class="stat-item rejected"><span class="stat-label">Rejected</span><span class="stat-value">{{ getStatusCount('rejected') }}</span></div>
-      </div>
+    <div class="req-list-container">
+      <!-- Header -->
+      <div class="view-header">
+  <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
+  <div class="header-actions">
+    <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
+      📤 Our Requests
+    </button>
+    <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
+      📥 Request Management
+    </button>
+    <button class="classic-btn primary" routerLink="/client/request/new">
+      <span>➕</span> New Requisition
+    </button>
+  </div>
+</div>
 
       <div class="status-tabs">
-        <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">⏳ Pending <span class="tab-count">{{ getStatusCount('pending') }}</span></button>
-        <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">📥 Received <span class="tab-count">{{ getStatusCount('approved') }}</span></button>
-        <!-- ✅ NEW: Released tab -->
-        <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">📦 Released <span class="tab-count">{{ getStatusCount('released') }}</span></button>
-        <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">❌ Rejected <span class="tab-count">{{ getStatusCount('rejected') }}</span></button>
-      </div>
-
-      <div class="filter-bar">
-        <input type="text" [(ngModel)]="searchTerm" (input)="applyFilters()" class="filter-input" placeholder="REQ #, name...">
-        <button class="btn" (click)="loadAll()">🔄 Refresh</button>
-        <span class="count-badge">{{ filteredReqs.length }} requisition(s)</span>
-      </div>
+  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">📋 All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">⏳ Pending <span class="tab-count">{{ getFilteredStatusCount('pending') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">📥 Accepted <span class="tab-count">{{ getFilteredStatusCount('approved') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">⚙️ Processing <span class="tab-count">{{ getFilteredStatusCount('processing') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">📦 Released <span class="tab-count">{{ getFilteredStatusCount('released') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">❌ Rejected <span class="tab-count">{{ getFilteredStatusCount('rejected') }}</span></button>
+</div>
+      <!-- Filter Bar -->
+<div class="filter-bar">
+ <div class="filter-group">
+  <label>Branch:</label>
+  <select class="classic-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
+    <option value="">All Branches</option>
+    <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+      🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+    </option>
+  </select>
+</div>
+  
+<div class="filter-group">
+  <label>Request From:</label>
+  <select class="classic-select" [(ngModel)]="filters.requestFromDept" (change)="applyFilters()">
+    <option value="">All Departments</option>
+    <option *ngFor="let dept of filteredFilterDepartments" [value]="dept.name">
+      {{ dept.name }}
+    </option>
+  </select>
+</div>
+  <div class="filter-group search-group">
+    <label>Search:</label>
+    <input type="text" class="classic-input" placeholder="REQ #, ATTN, name..." 
+           [(ngModel)]="searchTerm" (input)="applyFilters()">
+  </div>
+  
+  <button class="classic-btn" (click)="clearFilters()">
+    <span>🔄</span> Clear
+  </button>
+</div>
+<div class="classic-status-bar">
+  <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Requests' : '📥 Request Management' }}</strong></span>
+  <span class="status-sep">|</span>
+  <span>Showing: <strong>{{ filteredReqs.length }}</strong> requisitions</span>
+  <span class="status-sep">|</span>
+  <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
+  <!-- Bulk Actions -->
+  <ng-container *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing')">
+    <span class="status-sep">|</span>
+    <label class="select-all-label">
+      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
+    </label>
+    <button class="btn btn-process" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" (click)="bulkProcess()">
+      ⚙️ Process ({{ selectedReqIds.length }})
+    </button>
+    <button class="btn btn-release" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" (click)="bulkRelease()">
+      📦 Release ({{ selectedReqIds.length }})
+    </button>
+  </ng-container>
+</div>
 
       <div class="table-container">
         <table class="data-table">
-          <thead>
-            <tr><th>REQ #</th><th>Date</th><th>Request From</th><th>ATTN</th><th>Prepared By</th><th>Items</th><th>Status</th><th>Actions</th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let req of filteredReqs" class="clickable-row">
-              <td><code>{{ req.requisition_number || 'N/A' }}</code></td>
-              <td>{{ formatDate(req.date) }}</td>
-              <td>{{ req.request_from || '—' }}</td>
-              <td>{{ req.attn || '—' }}</td>
-              <td>{{ req.prepared_name || '—' }}</td>
-              <td>{{ req.items?.length || 0 }} item(s)</td>
-              <td>
-                <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-                  {{ getStatusLabel(req.status) }}
-                </span>
-                <!-- ✅ Show who prepared/released items -->
-                <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">by: {{ req.items_prepared_name }}</div>
-                <div class="received-by" *ngIf="req.status === 'released' && req.released_name">by: {{ req.released_name }}</div>
-              </td>
-              <td (click)="$event.stopPropagation()">
-                <button class="action-btn view" (click)="viewDetail(req)" title="View">👁️</button>
-                <button class="action-btn print" (click)="printReq(req)" title="Print">🖨️</button>
-                <button class="action-btn approve" *ngIf="req.status === 'pending'" (click)="receiveReq(req)" title="Receive">📥</button>
-                <!-- ✅ NEW: Release button -->
-                <button class="action-btn release" *ngIf="req.status === 'approved'" (click)="releaseReq(req)" title="Release Items">📦</button>
-                <button class="action-btn reject" *ngIf="req.status === 'pending'" (click)="updateStatus(req, 'rejected')" title="Reject">❌</button>
-                <button class="action-btn delete" *ngIf="(req.status === 'pending' || req.status === 'rejected') && currentUser?.role === 'admin'" (click)="deleteReq(req)" title="Delete">🗑️</button>
-              </td>
-            </tr>
-            <tr *ngIf="filteredReqs.length === 0"><td colspan="8" class="empty-row">No requisitions found</td></tr>
-          </tbody>
+      <thead>
+  <tr>
+    <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing' || activeTab === 'all')" style="width:30px;">
+      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
+    </th>
+    <th>REQ Code</th>
+    <th>Date</th>
+    <th *ngIf="viewMode === 'incoming'">Request From</th>
+    <th *ngIf="viewMode === 'our'">{{ isEDPUser() ? 'Department' : 'Recipient' }}</th>
+    <th>ATTN</th>
+    <th>Items</th>
+    <th>Total</th>
+    <th>Status</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+
+<tbody>
+  <tr *ngFor="let req of filteredReqs" class="clickable-row" (click)="viewDetail(req)">
+    <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing' || activeTab === 'all')" 
+        (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
+      <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
+    </td>
+    <td>
+      <code>{{ req.requisition_number || 'N/A' }}</code>
+      <div class="creator-info" *ngIf="req.prepared_name">
+        <span class="creator-label">by: {{ req.prepared_name }}</span>
+      </div>
+    </td>
+    <td>{{ formatDate(req.date) }}</td>
+    <td *ngIf="viewMode === 'incoming'">
+      <span class="dept-name-small">{{ req.request_from || '—' }}</span>
+      <span class="branch-tag-tiny" *ngIf="req.branch_id">🏢 {{ getBranchName(req.branch_id) }}</span>
+    </td>
+    <td *ngIf="viewMode === 'our'">
+      <span class="dept-name-small">{{ getDepartmentName(req.department_id) || '—' }}</span>
+      <span class="branch-tag-tiny" *ngIf="req.branch_id">🏢 {{ getBranchName(req.branch_id) }}</span>
+      <span class="direction-tag outgoing">📤 Sent by you</span>
+    </td>
+    <td class="attn-cell">
+  <div class="attn-info">
+    <span>{{ req.attn || '—' }}</span>
+    <span class="role-tag-tiny" *ngIf="req.attn">
+      {{ getAttnRole(req.attn) }}
+    </span>
+  </div>
+</td>
+    <td>{{ req.items?.length || 0 }} item(s)</td>
+    <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
+    <td>
+      <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
+        {{ getStatusLabel(req.status) }}
+      </span>
+      <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">by: {{ req.items_prepared_name }}</div>
+      <div class="received-by" *ngIf="req.status === 'released' && req.released_name">by: {{ req.released_name }}</div>
+    </td>
+    <td (click)="$event.stopPropagation()">
+      <button class="action-btn view" (click)="viewDetail(req)" title="View">👁️</button>
+      <button class="action-btn print" (click)="printReq(req)" title="Print">🖨️</button>
+      <button class="action-btn approve" *ngIf="req.status === 'pending'" (click)="receiveReq(req)" title="Accept">✅</button>
+      <button class="action-btn process" *ngIf="req.status === 'approved' && viewMode === 'incoming'" (click)="processReq(req)" title="Process">⚙️</button>
+      <button class="action-btn release-btn" *ngIf="req.status === 'processing' && viewMode === 'incoming'" (click)="releaseReq(req)" title="Release">📦</button>
+      <button class="action-btn reject" *ngIf="req.status === 'pending'" (click)="updateStatus(req, 'rejected')" title="Reject">❌</button>
+      <button class="action-btn delete" *ngIf="canDelete(req)" (click)="deleteReq(req)" title="Delete">🗑️</button>
+    </td>
+  </tr>
+  <tr *ngIf="filteredReqs.length === 0">
+    <td [attr.colspan]="getColspan()" class="empty-row">No requisitions found</td>
+  </tr>
+</tbody>
         </table>
       </div>
     </div>
@@ -87,37 +174,49 @@ import { environment } from '../../../../environments/environment';
           <button class="modal-close" (click)="closeModal()">✕</button>
         </div>
         <div class="modal-body" *ngIf="selectedReq">
-          <div class="detail-section">
-            <div class="detail-row">
-              <span class="detail-label">REQ #:</span>
-              <span class="detail-value"><code>{{ selectedReq.requisition_number || 'N/A' }}</code></span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Status:</span>
-              <span class="status-badge" [class]="'status-' + (selectedReq.status || 'pending')">{{ getStatusLabel(selectedReq.status) }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Date:</span>
-              <span class="detail-value">{{ formatDate(selectedReq.date) }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Request From:</span>
-              <span class="detail-value">{{ selectedReq.request_from || '—' }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">ATTN:</span>
-              <span class="detail-value">{{ selectedReq.attn || '—' }}</span>
-            </div>
-            <!-- ✅ Show release info if released -->
-            <div class="detail-row" *ngIf="selectedReq.status === 'released'">
-              <span class="detail-label">Released By:</span>
-              <span class="detail-value">{{ selectedReq.released_name || '—' }}</span>
-            </div>
-            <div class="detail-row" *ngIf="selectedReq.released_date">
-              <span class="detail-label">Released Date:</span>
-              <span class="detail-value">{{ formatDate(selectedReq.released_date) }}</span>
-            </div>
-          </div>
+         <div class="detail-section">
+  <div class="detail-row">
+    <span class="detail-label">REQ #:</span>
+    <span class="detail-value"><code>{{ selectedReq.requisition_number || 'N/A' }}</code></span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Status:</span>
+    <span class="status-badge" [class]="'status-' + (selectedReq.status || 'pending')">{{ getStatusLabel(selectedReq.status) }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Date:</span>
+    <span class="detail-value">{{ formatDate(selectedReq.date) }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Request From:</span>
+    <span class="detail-value">{{ selectedReq.request_from || '—' }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Branch:</span>
+    <span class="detail-value">🏢 {{ getBranchName(selectedReq.branch_id) || '—' }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Company:</span>
+    <span class="detail-value">{{ getBranchCompany(selectedReq.branch_id) || '—' }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">Department:</span>
+    <span class="detail-value">{{ getDepartmentName(selectedReq.department_id) || '—' }}</span>
+  </div>
+  <div class="detail-row">
+    <span class="detail-label">ATTN:</span>
+    <span class="detail-value">{{ selectedReq.attn || '—' }} <span class="role-tag-tiny" *ngIf="selectedReq.attn">{{ getAttnRole(selectedReq.attn) }}</span></span>
+  </div>
+  <!-- Show release info if released -->
+  <div class="detail-row" *ngIf="selectedReq.status === 'released'">
+    <span class="detail-label">Released By:</span>
+    <span class="detail-value">{{ selectedReq.released_name || '—' }}</span>
+  </div>
+  <div class="detail-row" *ngIf="selectedReq.released_date">
+    <span class="detail-label">Released Date:</span>
+    <span class="detail-value">{{ formatDate(selectedReq.released_date) }}</span>
+  </div>
+</div>
 
           <div class="detail-section" *ngIf="selectedReq.remarks">
             <h4>Remarks / Reason</h4>
@@ -230,7 +329,55 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
     </div>
+      <!-- Bulk Process Modal -->
+    <div class="modal-overlay" *ngIf="showBulkProcessConfirm" (click)="cancelBulkProcess()">
+      <div class="modal-window" (click)="$event.stopPropagation()">
+        <div class="modal-titlebar" style="background: #cc6600;">
+          <span>⚙️ Bulk Process</span>
+          <button type="button" (click)="cancelBulkProcess()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-message">
+              <h3>Process {{ bulkCount }} selected requisition(s)?</h3>
+              <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
+                This will change the status to <strong>On Process</strong> for all selected requisitions.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn" (click)="cancelBulkProcess()">Cancel</button>
+            <button class="btn btn-process" style="background: #cc6600; color: white;" (click)="confirmBulkProcess()">⚙️ Process All</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
+    <!-- Bulk Release Modal -->
+    <div class="modal-overlay" *ngIf="showBulkReleaseConfirm" (click)="cancelBulkRelease()">
+      <div class="modal-window" (click)="$event.stopPropagation()">
+        <div class="modal-titlebar" style="background: #0066cc;">
+          <span>📦 Bulk Release</span>
+          <button type="button" (click)="cancelBulkRelease()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">📦</span>
+            <div class="warning-message">
+              <h3>Release {{ bulkCount }} selected requisition(s)?</h3>
+              <p class="warning-hint" style="color: #0066cc; background: #e8f0ff; border: 1px solid #b8d0e8;">
+                This will mark all selected items as <strong>Released</strong>.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn" (click)="cancelBulkRelease()">Cancel</button>
+            <button class="btn" style="background: #0066cc; color: white;" (click)="confirmBulkRelease()">📦 Release All</button>
+          </div>
+        </div>
+      </div>
+    </div>
   `,
   styles: [`
     .admin-container { padding: 20px; font-family: 'Segoe UI', sans-serif; font-size: 11px; }
@@ -254,8 +401,8 @@ import { environment } from '../../../../environments/environment';
     .count-badge { margin-left: auto; color: #888; font-size: 11px; }
     .table-container { background: white; border: 1px solid #c0c0c0; border-radius: 6px; overflow-x: auto; }
     .data-table { width: 100%; border-collapse: collapse; }
-    .data-table th { background: #f0f4f8; padding: 10px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: left; }
-    .data-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 11px; color: #131212; cursor: pointer; }
+    .data-table th { background: #f0f4f8; padding: 10px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: center; }
+    .data-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 11px; color: #131212; cursor: pointer; text-align: center;}
     .clickable-row:hover td { background: #f8faff; }
     code { font-family: monospace; font-size: 10px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
     .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 9px; font-weight: 600; }
@@ -280,6 +427,18 @@ import { environment } from '../../../../environments/environment';
     .confirm-modal-header.confirm-release { background: linear-gradient(135deg, #0066cc, #3388ee); }
     .btn-confirm.btn-release { background: #0066cc; }
     .btn-confirm.btn-release:hover { background: #0044aa; }
+    .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; }
+.branch-tag-tiny { font-size: 8px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
+.direction-tag { font-size: 7px; padding: 1px 4px; border-radius: 2px; margin-top: 1px; font-style: italic; }
+.direction-tag.outgoing { background: #e8f0ff; color: #0066cc; }
+.direction-tag.incoming { background: #fff8e8; color: #886600; }
+.action-btn.release-btn { color: #0066cc; }
+.action-btn.release-btn:hover { background: #e8f0ff; border-color: #0066cc; }
+.action-btn.approve { color: #008800; }
+.action-btn.approve:hover { background: #eeffee; border-color: #008800; }
+.total-cell { font-weight: bold; color: #0a3a8c; font-family: monospace; text-align: right; }
+.creator-info { font-size: 9px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
+.creator-label { color: #555; }
     /* Modal Styles */
     .modal-overlay {
       position: fixed;
@@ -459,6 +618,37 @@ import { environment } from '../../../../environments/environment';
   font-weight: 600;
   padding: 8px 16px;
 }
+  .attn-cell { max-width: 120px; }
+.attn-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
+.role-tag-tiny {
+  font-size: 7px;
+  background: #f5f0ff;
+  color: #6600cc;
+  padding: 1px 4px;
+  border-radius: 2px;
+  border: 1px solid #d0c0e8;
+  white-space: nowrap;
+  font-style: italic;
+}
+  .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
+.view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
+.view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
+.header-actions { display: flex; gap: 6px; align-items: center; }
+.classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
+.classic-btn:hover { background: #dde8f0; }
+.classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
+.classic-btn.primary:hover { background: #1a3a8a; }
+.classic-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
+.classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 10px; background: white; }
+.classic-select option small { font-size: 8px; color: #888; }
+.classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 10px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.filter-group { display: flex; align-items: center; gap: 4px; }
+.filter-group label { font-size: 10px; font-weight: bold; color: #000; }
+.search-group .classic-input { width: 160px; }
+.status-sep { color: #b0b0b0; }
+.classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 10px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+.classic-table th:last-child { border-right: none; }
+.classic-table td { padding: 7px 8px; text-align: center; border-bottom: 1px solid #e0e0e0; color: #000; }
 .btn-confirm.btn-receive { background: #008800; }
 .btn-confirm.btn-receive:hover { background: #006600; }
 .btn-confirm.btn-reject { background: #cc0000; }
@@ -468,6 +658,31 @@ import { environment } from '../../../../environments/environment';
     .sig-image-container img { max-width: 100%; max-height: 45px; object-fit: contain; }
     .sig-info strong { display: block; font-size: 10px; color: #333; }
     .sig-info span { font-size: 9px; color: #888; }
+     /* Add these new styles */
+    .view-mode-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+    .view-mode-btn { flex: 1; padding: 10px 16px; background: white; border: 1px solid #c0c0c0; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .view-mode-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
+    
+    .stat-item.processing { border-left-color: #cc6600; }
+    .status-processing { background: #fff8e8; color: #cc6600; }
+    .action-btn.process { color: #cc6600; }
+    .action-btn.process:hover { background: #fff8e8; border-color: #cc6600; }
+    
+    .select-all-label { font-size: 10px; color: #333; display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+    .status-sep { color: #b0b0b0; }
+    .btn-process { background: #cc6600; color: white; border-color: #cc6600; }
+    .btn-process:hover { background: #aa4400; }
+    .btn-release { background: #0066cc; color: white; border-color: #0066cc; }
+    .btn-release:hover { background: #0044aa; }
+    
+    .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 450px; border-radius: 2px; }
+    .modal-titlebar { background: #0a246a; color: white; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: bold; }
+    .modal-close { background: none; border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; padding: 3px 8px; font-size: 14px; border-radius: 2px; }
+    .warning-content { display: flex; gap: 14px; align-items: flex-start; }
+    .warning-icon { font-size: 36px; flex-shrink: 0; }
+    .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
+    .warning-hint { font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   `]
 })
 export class RequisitionsManagementComponent implements OnInit {
@@ -475,6 +690,9 @@ export class RequisitionsManagementComponent implements OnInit {
   filteredReqs: any[] = [];
   searchTerm = '';
   activeTab = 'pending';
+  viewMode: string = 'our';
+  selectedReqIds: number[] = [];
+  
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
@@ -484,9 +702,22 @@ export class RequisitionsManagementComponent implements OnInit {
   showConfirmModal = false;
   confirmModalTitle = '';
   confirmModalMessage = '';
-  confirmModalType: 'receive' | 'reject' | 'release' | 'delete' = 'receive';  // ✅ Added 'release'
+  confirmModalType: 'receive' | 'reject' | 'release' | 'delete' = 'receive';
   confirmTargetReq: any = null;
-
+  branches: any[] = [];
+  showBulkProcessConfirm = false;
+  showBulkReleaseConfirm = false;
+  bulkCount = 0;
+filters = {
+  requestFrom: '',
+  requestFromDept: '',
+  departmentId: '',
+  branchId: ''
+};
+filteredBranches: any[] = [];
+filteredFilterDepartments: any[] = [];
+departments: any[] = [];
+mainBranchIds = [1, 5];
   constructor(
     private http: HttpClient,
     private authService: AuthService,
@@ -502,10 +733,12 @@ export class RequisitionsManagementComponent implements OnInit {
     });
   }
 
-  ngOnInit() {
-    this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    this.loadAll();
-  }
+ ngOnInit() {
+  this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  this.loadBranchesAndDepartments(); 
+   this.loadUserRoles();
+  this.loadAll();
+}
 
   private getAuthHeaders() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -519,8 +752,38 @@ export class RequisitionsManagementComponent implements OnInit {
     });
   }
 
-  applyFilters() {
-    let filtered = this.allReqs.filter(r => (r.status || 'pending') === this.activeTab);
+  setViewMode(mode: string) {
+    this.viewMode = mode;
+    this.activeTab = 'pending';
+    this.selectedReqIds = [];
+    this.applyFilters();
+  }
+
+ applyFilters() {
+    let filtered = [...this.allReqs];
+    
+    // Filter by view mode
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    if (this.viewMode === 'our') {
+      // Show requests created by current user (our own requests)
+      filtered = filtered.filter(r => r.submitted_by == userId);
+    } else if (this.viewMode === 'incoming') {
+      // Show requests sent TO our branch/department (from others)
+      filtered = filtered.filter(r => 
+        r.branch_id == userBranchId && 
+        r.department_id == userDeptId && 
+        r.submitted_by != userId  // Not our own
+      );
+    }
+    
+    // Filter by status
+    if (this.activeTab !== 'all') {
+      filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
+    }
+    
     if (this.searchTerm.trim()) {
       const term = this.searchTerm.toLowerCase();
       filtered = filtered.filter(r =>
@@ -531,22 +794,163 @@ export class RequisitionsManagementComponent implements OnInit {
     }
     this.filteredReqs = filtered;
   }
+onFilterBranchChange() {
+  if (this.filters.branchId) {
+    this.filteredFilterDepartments = this.departments.filter(d => {
+      const branch = this.branches.find(b => b.id == d.branch_id);
+      return branch && branch.id == this.filters.branchId;
+    });
+  } else {
+    this.filteredFilterDepartments = [];
+  }
+  this.filters.requestFromDept = '';
+  this.applyFilters();
+}
 
-  setActiveTab(tab: string) { this.activeTab = tab; this.applyFilters(); }
+clearFilters() {
+  this.activeTab = 'all';
+  this.filters = { requestFrom: '', requestFromDept: '', departmentId: '', branchId: '' };
+  this.searchTerm = '';
+  this.filteredFilterDepartments = [];
+  this.applyFilters();
+}
+  setActiveTab(tab: string) { this.activeTab = tab; this.selectedReqIds = []; this.applyFilters(); }
   getStatusCount(status: string): number { return this.allReqs.filter(r => (r.status || 'pending') === status).length; }
-
-  // ✅ NEW: Status label helper
+ getFilteredStatusCount(status: string): number {
+  let filtered = [...this.allReqs];
+  const userBranchId = this.currentUser?.branch_id;
+  const userDeptId = this.currentUser?.department_id;
+  const userId = this.currentUser?.id;
+  
+  if (this.viewMode === 'our') {
+    filtered = filtered.filter(r => r.submitted_by == userId);
+  } else if (this.viewMode === 'incoming') {
+    filtered = filtered.filter(r => 
+      r.branch_id == userBranchId && 
+      r.department_id == userDeptId && 
+      r.submitted_by != userId
+    );
+  }
+  
+  if (status === 'all') return filtered.length;
+  return filtered.filter(r => (r.status || 'pending') === status).length;
+}
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
-      'pending': 'Pending',
-      'approved': 'Received',
-      'released': 'Released',
-      'rejected': 'Rejected'
+      'pending': 'Pending', 'approved': 'Accepted', 'processing': 'On Process',
+      'released': 'Released', 'rejected': 'Rejected'
     };
     return labels[status] || status || 'Pending';
   }
-
+private userRolesMap: Map<string, string> = new Map();
+getBranchCompany(branchId: number): string {
+  if (!branchId) return '';
+  const branch = this.branches.find(b => b.id == branchId);
+  return branch?.company_name || branch?.name || '';
+}
+loadUserRoles() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+    next: (users) => {
+      (users || []).forEach(u => {
+        const name = u.fullname || u.username;
+        if (name) {
+          this.userRolesMap.set(name, u.role || 'Staff');
+        }
+      });
+    }
+  });
+}
+getAttnRole(attnName: string): string {
+  if (!attnName) return '';
+  return this.userRolesMap.get(attnName) || '';
+}
   getTotal(items: any[]): number { return items?.reduce((s: number, i: any) => s + ((i.qty || 0) * (i.unit_price || 0)), 0) || 0; }
+getDepartmentName(deptId: number): string {
+  if (!deptId) return '—';
+  const dept = this.departments.find(d => d.id == deptId);
+  return dept?.name || dept?.displayName || 'Dept #' + deptId;
+}
+  // Selection methods
+  isSelected(req: any): boolean { return this.selectedReqIds.includes(req.id); }
+  toggleSelect(req: any) {
+    const index = this.selectedReqIds.indexOf(req.id);
+    if (index === -1) this.selectedReqIds.push(req.id);
+    else this.selectedReqIds.splice(index, 1);
+  }
+  isAllSelected(): boolean {
+    return this.filteredReqs.length > 0 && this.filteredReqs.every(r => this.selectedReqIds.includes(r.id));
+  }
+  toggleSelectAll() {
+    if (this.isAllSelected()) this.selectedReqIds = [];
+    else this.selectedReqIds = this.filteredReqs.map(r => r.id);
+  }
+
+  // Bulk actions
+  bulkProcess() {
+    if (this.selectedReqIds.length === 0) return;
+    this.bulkCount = this.selectedReqIds.length;
+    this.showBulkProcessConfirm = true;
+  }
+  confirmBulkProcess() {
+    this.showBulkProcessConfirm = false;
+    if (this.bulkCount === 0) return;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const ids = [...this.selectedReqIds];
+    let completed = 0;
+    ids.forEach(id => {
+      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, { status: 'processing' }, { headers }).subscribe({
+        next: () => { completed++; if (completed === ids.length) { this.selectedReqIds = []; this.loadAll(); this.showToastMsg(`⚙️ ${ids.length} processed!`, 'success'); } },
+        error: () => { completed++; const r = this.allReqs.find(x => x.id === id); if (r) r.status = 'processing'; if (completed === ids.length) { this.applyFilters(); this.selectedReqIds = []; } }
+      });
+    });
+  }
+  cancelBulkProcess() { this.showBulkProcessConfirm = false; this.bulkCount = 0; }
+
+  bulkRelease() {
+    if (this.selectedReqIds.length === 0) return;
+    this.bulkCount = this.selectedReqIds.length;
+    this.showBulkReleaseConfirm = true;
+  }
+  confirmBulkRelease() {
+    this.showBulkReleaseConfirm = false;
+    if (this.bulkCount === 0) return;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const payload = { status: 'released', released_name: this.currentUser?.fullname || 'Admin', released_date: new Date().toISOString().split('T')[0] };
+    const ids = [...this.selectedReqIds];
+    let completed = 0;
+    ids.forEach(id => {
+      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, payload, { headers }).subscribe({
+        next: () => { completed++; if (completed === ids.length) { this.selectedReqIds = []; this.loadAll(); this.showToastMsg(`📦 ${ids.length} released!`, 'success'); } },
+        error: () => { completed++; const r = this.allReqs.find(x => x.id === id); if (r) { r.status = 'released'; r.released_name = payload.released_name; } if (completed === ids.length) { this.applyFilters(); this.selectedReqIds = []; } }
+      });
+    });
+  }
+  cancelBulkRelease() { this.showBulkReleaseConfirm = false; this.bulkCount = 0; }
+
+  canDelete(req: any): boolean {
+    if (this.currentUser?.role === 'admin') return true;
+    return (req.status === 'pending' || req.status === 'rejected');
+  }
+
+  processReq(req: any) {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'processing' }, { headers }).subscribe({
+      next: () => { req.status = 'processing'; this.applyFilters(); this.showToastMsg('⚙️ Processing!', 'success'); },
+      error: () => { req.status = 'processing'; this.applyFilters(); }
+    });
+  }
+
+  getColspan(): number {
+  let cols = 9; // Base: REQ#, Date, ATTN, Items, Total, Status, Actions + Request From/Recipient
+  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'processing' || this.activeTab === 'all')) cols++; // Checkbox
+  return cols;
+}
 
   viewDetail(req: any) { this.selectedReq = req; }
   closeModal() { this.selectedReq = null; }
@@ -579,7 +983,38 @@ export class RequisitionsManagementComponent implements OnInit {
     this.confirmTargetReq = req;
     this.showConfirmModal = true;
   }
-
+loadBranchesAndDepartments() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+    next: (branches) => {
+      this.branches = (branches || []).map(b => ({
+        ...b,
+        company_name: b.company_name || b.name
+      }));
+      const user: any = this.authService.getCurrentUser() || this.currentUser;
+      
+      // For non-main branch users, only show: their branch + main branches
+      if (user && !this.mainBranchIds.includes(Number(user.branch_id))) {
+        this.filteredBranches = this.branches.filter(b => 
+          b.id == user.branch_id || this.mainBranchIds.includes(b.id)
+        );
+      } else {
+        this.filteredBranches = [...this.branches];
+      }
+      
+      // Load departments
+      this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+        next: (depts) => {
+          this.departments = (depts || []).map(d => {
+            const branch = this.branches.find(b => b.id == d.branch_id);
+            return { ...d, displayName: `${d.name} — ${branch?.name || 'Unknown'}`, branch_id: d.branch_id };
+          });
+          // Initialize as empty - departments show only when branch is selected
+          this.filteredFilterDepartments = [];
+        }
+      });
+    }
+  });
+}
   confirmAction() {
     if (!this.confirmTargetReq) return;
     const req = this.confirmTargetReq;
@@ -640,7 +1075,17 @@ export class RequisitionsManagementComponent implements OnInit {
       error: () => { req.status = 'released'; this.applyFilters(); this.showToastMsg('⚠️ Updated locally', 'error'); }
     });
   }
+isEDPUser(): boolean {
+  if (!this.currentUser) return false;
+  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
+  return dept === 'edp' || dept === 'it' || dept === 'edp/it' || dept.includes('edp') || dept.includes('it');
+}
 
+getBranchName(branchId: number): string {
+  if (!branchId) return '';
+  const branch = this.branches.find(b => b.id == branchId);
+  return branch?.name || 'Branch #' + branchId;
+}
   processReject(req: any) {
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'rejected' }, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
