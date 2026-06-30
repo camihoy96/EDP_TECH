@@ -3435,6 +3435,59 @@ app.get('/api/admin/requisitions', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
+app.post('/api/admin/requisitions', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const {
+            requisition_number, request_from, attn, date, remarks, items,
+            prepared_name, prepared_signature, prepared_date,
+            approved_name, approved_signature, approved_date,
+            items_prepared_name, items_prepared_signature, items_prepared_date,
+            returned_name, returned_date,
+            submitted_by, department_id, branch_id
+        } = req.body;
+        
+        const userId = submitted_by || decoded.id;
+        
+        console.log('📝 POST /api/admin/requisitions - Admin Creating:', requisition_number);
+        console.log('   department_id:', department_id, 'branch_id:', branch_id);
+        
+        const [result] = await pool.query(`
+            INSERT INTO requisitions (
+                requisition_number, request_from, attn, department_id, branch_id, date, remarks,
+                prepared_name, prepared_signature, prepared_date,
+                approved_name, approved_signature, approved_date,
+                items_prepared_name, items_prepared_signature, items_prepared_date,
+                returned_name, returned_date,
+                submitted_by, status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [requisition_number, request_from, attn, department_id || null, branch_id || null, date, remarks,
+             prepared_name, prepared_signature, prepared_date,
+             approved_name || null, approved_signature || null, approved_date || null,
+             items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
+             returned_name || null, returned_date || null,
+             userId, 'pending']
+        );
+        
+        if (items && items.length > 0) {
+            for (const item of items) {
+                await pool.query('INSERT INTO requisition_items (requisition_id, qty, item, unit_price) VALUES (?,?,?,?)',
+                    [result.insertId, item.qty, item.item, item.unit_price]);
+            }
+        }
+        
+        console.log('✅ Admin Requisition created:', result.insertId);
+        res.json({ success: true, id: result.insertId, requisition_number });
+    } catch (error) { 
+        console.error('POST /api/admin/requisitions error:', error);
+        res.status(500).json({ error: error.message }); 
+    }
+});
+
 // POST - Client Submit Requisition
 app.post('/api/requisitions', async (req, res) => {
     try {
@@ -3794,7 +3847,15 @@ app.get('/api/admin/users', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        
+        // ✅ Better error handling for JWT
+        let decoded;
+        try {
+            decoded = jwt.verify(token, 'secret_key');
+        } catch (jwtError) {
+            console.error('JWT verification failed:', jwtError.message);
+            return res.status(401).json({ error: 'Invalid token' });
+        }
         
         // ✅ Add department_id
         const [users] = await pool.query(
