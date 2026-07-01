@@ -3308,8 +3308,7 @@ app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
 // ============================================
 // REQUISITIONS API ENDPOINTS (FIXED ORDER)
 // ============================================
-// 1. GET - My Requisitions (STATIC - must come first)
-// GET - My Requisitions
+// GET - My Requisitions (FIXED)
 app.get('/api/requisitions/my', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3319,7 +3318,7 @@ app.get('/api/requisitions/my', async (req, res) => {
         
         console.log('📋 GET /api/requisitions/my - User:', decoded.id);
         
-        // Get user's branch and department
+        // Get user's branch and department from both tables
         const [userInfo] = await pool.query(
             'SELECT branch_id, department_id FROM users WHERE id = ?', [decoded.id]
         );
@@ -3331,7 +3330,6 @@ app.get('/api/requisitions/my', async (req, res) => {
             userBranchId = userInfo[0].branch_id;
             userDeptId = userInfo[0].department_id;
         } else {
-            // Check new_user table
             const [newUserInfo] = await pool.query(
                 'SELECT branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]
             );
@@ -3343,30 +3341,50 @@ app.get('/api/requisitions/my', async (req, res) => {
         
         console.log('📋 User branch:', userBranchId, 'dept:', userDeptId);
         
-        // ✅ Get requisitions where:
-        // 1. User is the creator (submitted_by = user.id)
-        // 2. OR requisition is sent to user's branch AND department
+        // ✅ FIXED: Get requisitions with creator info
+        // This returns:
+        // 1. Requisitions I created (submitted_by = me)
+        // 2. Requisitions created by colleagues in my branch+department (for "Our Requests")
+        // 3. Requisitions sent TO my branch+department (for "Request Management")
+        // 4. Requisitions forwarded TO my branch+department
         const [reqs] = await pool.query(
-            `SELECT * FROM requisitions 
-             WHERE submitted_by = ? 
-             OR (branch_id = ? AND department_id = ?)
-             ORDER BY created_at DESC`,
-            [decoded.id, userBranchId, userDeptId]
+            `SELECT r.*, 
+                    COALESCE(u.department_id, nu.department_id) as creator_dept_id,
+                    COALESCE(u.branch_id, nu.branch_id) as creator_branch_id
+             FROM requisitions r
+             LEFT JOIN users u ON r.submitted_by = u.id
+             LEFT JOIN new_user nu ON r.submitted_by = nu.id
+             WHERE 
+                -- My own requisitions
+                r.submitted_by = ?
+                -- OR Colleagues in my same branch+department (creator info match)
+                OR (COALESCE(u.department_id, nu.department_id) = ? AND COALESCE(u.branch_id, nu.branch_id) = ?)
+                -- OR Sent to my branch+department (original destination)
+                OR (r.branch_id = ? AND r.department_id = ? AND r.submitted_by != ?)
+                -- OR Forwarded TO my branch+department
+                OR (r.is_forwarded = 1 AND r.forwarded_to_branch_id = ? AND r.forwarded_to_department_id = ?)
+             ORDER BY r.created_at DESC`,
+            [
+                decoded.id,                          // My own
+                userDeptId, userBranchId,            // Colleagues in same dept/branch
+                userBranchId, userDeptId, decoded.id, // Sent to my dept (not by me)
+                userBranchId, userDeptId             // Forwarded to me
+            ]
         );
         
+        // Load items for each requisition
         for (const reqRecord of reqs) {
             const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [reqRecord.id]);
             reqRecord.items = items;
         }
         
-        console.log('📋 Returning', reqs.length, 'requisitions (mine + sent to my dept)');
+        console.log('📋 Returning', reqs.length, 'requisitions');
         res.json(reqs);
     } catch (error) { 
         console.error('GET /api/requisitions/my error:', error);
         res.status(500).json({ error: error.message }); 
     }
 });
-
 // 2. GET - All Requisitions (Admin) (STATIC)
 // GET - All Requisitions (Admin)
 app.get('/api/admin/requisitions', async (req, res) => {
@@ -3381,44 +3399,63 @@ app.get('/api/admin/requisitions', async (req, res) => {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
         
-        // Get user info to determine filtering
+        // Get user info from both tables
         const [userInfo] = await pool.query(
-            'SELECT department_id, branch_id, department FROM users WHERE id = ?', [decoded.id]
+            'SELECT department_id, branch_id, department, role FROM users WHERE id = ?', [decoded.id]
         );
         
         let userDeptId = null;
         let userBranchId = null;
+        let userRole = decoded.role || '';
         
         if (userInfo.length > 0) {
             userDeptId = userInfo[0].department_id;
             userBranchId = userInfo[0].branch_id;
+            userRole = userInfo[0].role || userRole;
         } else {
-            // Check new_user table
             const [newUserInfo] = await pool.query(
-                'SELECT department_id, branch_id, department FROM new_user WHERE id = ?', [decoded.id]
+                'SELECT department_id, branch_id, department, role FROM new_user WHERE id = ?', [decoded.id]
             );
             if (newUserInfo.length > 0) {
                 userDeptId = newUserInfo[0].department_id;
                 userBranchId = newUserInfo[0].branch_id;
+                userRole = newUserInfo[0].role || userRole;
             }
         }
         
-        console.log('📋 GET /api/admin/requisitions - User:', decoded.id, 'Branch:', userBranchId, 'Dept:', userDeptId);
+        console.log('📋 GET /api/admin/requisitions - User:', decoded.id, 'Role:', userRole);
         
-        let query = 'SELECT * FROM requisitions WHERE 1=1';
-        const params = [];
+        // Check if admin role
+        const isAdminRole = userRole === 'admin' || userRole === 'Technician' || userRole === 'head/manager';
         
-        // Filter by department and branch for EDP/IT users
-        if (userDeptId) {
-            query += ' AND department_id = ?';
-            params.push(userDeptId);
+        let query;
+        let params;
+        
+        if (isAdminRole) {
+            // Show ALL requisitions with creator info
+            query = `SELECT r.*, 
+                            COALESCE(u.department_id, nu.department_id) as creator_dept_id,
+                            COALESCE(u.branch_id, nu.branch_id) as creator_branch_id
+                     FROM requisitions r
+                     LEFT JOIN users u ON r.submitted_by = u.id
+                     LEFT JOIN new_user nu ON r.submitted_by = nu.id
+                     ORDER BY r.created_at DESC`;
+            params = [];
+        } else {
+            // For non-admin users:
+query = `SELECT r.*, 
+                COALESCE(u.department_id, nu.department_id) as creator_dept_id,
+                COALESCE(u.branch_id, nu.branch_id) as creator_branch_id
+         FROM requisitions r
+         LEFT JOIN users u ON r.submitted_by = u.id
+         LEFT JOIN new_user nu ON r.submitted_by = nu.id
+         WHERE r.submitted_by = ? 
+         OR (r.branch_id = ? AND r.department_id = ?)
+         OR (r.forwarded_to_branch_id = ? AND r.forwarded_to_department_id = ?)
+         OR (COALESCE(u.department_id, nu.department_id) = ? AND COALESCE(u.branch_id, nu.branch_id) = ?)
+         ORDER BY r.created_at DESC`;
+params = [decoded.id, userBranchId, userDeptId, userBranchId, userDeptId, userDeptId, userBranchId];
         }
-        if (userBranchId) {
-            query += ' AND branch_id = ?';
-            params.push(userBranchId);
-        }
-        
-        query += ' ORDER BY created_at DESC';
         
         const [reqs] = await pool.query(query, params);
         
@@ -3487,7 +3524,59 @@ app.post('/api/admin/requisitions', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
-
+// PUT - Admin Update/Edit Requisition
+app.put('/api/admin/requisitions/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const {
+            request_from, attn, date, remarks, items,
+            prepared_name, prepared_signature, prepared_date,
+            approved_name, approved_signature, approved_date,
+            items_prepared_name, items_prepared_signature, items_prepared_date,
+            returned_name, returned_date,
+            department_id, branch_id
+        } = req.body;
+        
+        console.log('✏️ PUT /api/admin/requisitions/:id - Updating:', id);
+        
+        await pool.query(`
+            UPDATE requisitions SET
+                request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, remarks = ?,
+                prepared_name = ?, prepared_signature = ?, prepared_date = ?,
+                approved_name = ?, approved_signature = ?, approved_date = ?,
+                items_prepared_name = ?, items_prepared_signature = ?, items_prepared_date = ?,
+                returned_name = ?, returned_date = ?
+            WHERE id = ?`,
+            [request_from, attn, department_id || null, branch_id || null, date, remarks,
+             prepared_name, prepared_signature, prepared_date,
+             approved_name || null, approved_signature || null, approved_date || null,
+             items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
+             returned_name || null, returned_date || null,
+             id]
+        );
+        
+        // Delete old items and re-insert
+        await pool.query('DELETE FROM requisition_items WHERE requisition_id = ?', [id]);
+        
+        if (items && items.length > 0) {
+            for (const item of items) {
+                await pool.query('INSERT INTO requisition_items (requisition_id, qty, item, unit_price) VALUES (?,?,?,?)',
+                    [id, item.qty, item.item, item.unit_price]);
+            }
+        }
+        
+        console.log('✅ Admin Requisition updated:', id);
+        res.json({ success: true, id });
+    } catch (error) { 
+        console.error('PUT /api/admin/requisitions/:id error:', error);
+        res.status(500).json({ error: error.message }); 
+    }
+});
 // POST - Client Submit Requisition
 app.post('/api/requisitions', async (req, res) => {
     try {
@@ -3539,6 +3628,43 @@ app.post('/api/requisitions', async (req, res) => {
     } catch (error) { 
         console.error('POST /api/requisitions error:', error);
         res.status(500).json({ error: error.message }); 
+    }
+});
+
+// Update the PUT /api/admin/requisitions/:id/status endpoint
+// PUT - Forward Requisition (Admin)
+app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const { 
+            forwarded_to_branch_id, 
+            forwarded_to_department_id, 
+            forwarded_by_name 
+        } = req.body;
+        
+        console.log('📤 Forwarding requisition:', id, 'to branch:', forwarded_to_branch_id, 'dept:', forwarded_to_department_id);
+        
+        await pool.query(`
+            UPDATE requisitions SET 
+                is_forwarded = 1,
+                forwarded_to_branch_id = ?,
+                forwarded_to_department_id = ?,
+                forwarded_by_name = ?,
+                forwarded_date = CURDATE(),
+                status = 'forwarded'
+            WHERE id = ?
+        `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, id]);
+        
+        console.log('✅ Requisition forwarded:', id);
+        res.json({ success: true, message: 'Requisition forwarded successfully' });
+    } catch (error) {
+        console.error('PUT /api/admin/requisitions/:id/forward error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 // 4. GET - Single Requisition by ID
@@ -3623,7 +3749,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // ✅ Get user info for recipient check
+        // ✅ Get user info
         let userBranchId = null;
         let userDeptId = null;
         
@@ -3645,18 +3771,45 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
             }
         }
         
-        // ✅ Check if user is the recipient of this requisition
-        const [requisition] = await pool.query(
-            'SELECT branch_id, department_id FROM requisitions WHERE id = ?', [req.params.id]
-        );
-        const isRecipient = requisition.length > 0 && 
-                           userBranchId && userDeptId &&
-                           requisition[0].branch_id == userBranchId && 
-                           requisition[0].department_id == userDeptId;
+        const { id } = req.params;
         
-        // Allow if admin, Technician, OR the recipient
+        // ✅ Get existing requisition with forwarded info
+        const [existing] = await pool.query(
+            'SELECT * FROM requisitions WHERE id = ?', [id]
+        );
+        
+        if (existing.length === 0) {
+            return res.status(404).json({ error: 'Requisition not found' });
+        }
+        
+        const reqData = existing[0];
+        
+        // ✅ Check access - Allow if:
+        // 1. Admin/Technician
+        // 2. Original recipient (branch_id + department_id match)
+        // 3. Forwarded-to recipient (forwarded_to_branch_id + forwarded_to_department_id match)
         const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
-        if (!isAdmin && !isRecipient) {
+        const isOriginalRecipient = userBranchId && userDeptId &&
+                                    reqData.branch_id == userBranchId && 
+                                    reqData.department_id == userDeptId;
+        const isForwardedRecipient = reqData.is_forwarded && userBranchId && userDeptId &&
+                                     reqData.forwarded_to_branch_id == userBranchId && 
+                                     reqData.forwarded_to_department_id == userDeptId;
+        
+        console.log('🔍 Status update access check:', {
+            isAdmin,
+            isOriginalRecipient,
+            isForwardedRecipient,
+            userBranchId,
+            userDeptId,
+            reqBranchId: reqData.branch_id,
+            reqDeptId: reqData.department_id,
+            forwardedToBranch: reqData.forwarded_to_branch_id,
+            forwardedToDept: reqData.forwarded_to_department_id,
+            isForwarded: reqData.is_forwarded
+        });
+        
+        if (!isAdmin && !isOriginalRecipient && !isForwardedRecipient) {
             return res.status(403).json({ error: 'Access denied' });
         }
         
@@ -3667,27 +3820,64 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
             released_name, released_date
         } = req.body;
         
-        const updates = ['status = ?'];
-        const values = [status];
+        // ✅ Handle forwarded request status updates
+        if (reqData.is_forwarded) {
+            if (status === 'processing' || status === 'released') {
+                // Recipient is processing/releasing a forwarded request
+                const updates = ['status = ?', 'forwarded_status = ?'];
+                const values = [status, status];
+                
+                if (released_name !== undefined) { 
+                    updates.push('released_name = COALESCE(?, released_name)'); 
+                    values.push(released_name); 
+                }
+                if (released_date !== undefined) { 
+                    updates.push('released_date = COALESCE(?, released_date)'); 
+                    values.push(released_date); 
+                }
+                
+                values.push(id);
+                await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                console.log('✅ Forwarded request status update:', id, '→', status);
+                
+            } else if (reqData.status === 'forwarded' && status === 'released') {
+                // Forwarding department releasing - clear forwarded_status
+                const updates = ['status = ?', 'forwarded_status = NULL'];
+                const values = [status];
+                
+                if (released_name !== undefined) { 
+                    updates.push('released_name = COALESCE(?, released_name)'); 
+                    values.push(released_name); 
+                }
+                if (released_date !== undefined) { 
+                    updates.push('released_date = COALESCE(?, released_date)'); 
+                    values.push(released_date); 
+                }
+                
+                values.push(id);
+                await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                console.log('✅ Forwarding dept released:', id, '→ released');
+            }
+            
+        } else {
+            // ✅ Normal (non-forwarded) status update
+            const updates = ['status = ?'];
+            const values = [status];
+            
+            if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
+            if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
+            if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
+            if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
+            if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
+            if (items_prepared_signature !== undefined) { updates.push('items_prepared_signature = ?'); values.push(items_prepared_signature); }
+            if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+            if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
+            
+            values.push(id);
+            await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+            console.log('✅ Status update:', id, '→', status);
+        }
         
-        // Approved/Received fields
-        if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
-        if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
-        if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
-        
-        // Items prepared fields
-        if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
-        if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
-        if (items_prepared_signature !== undefined) { updates.push('items_prepared_signature = ?'); values.push(items_prepared_signature); }
-        
-        // Released fields
-        if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
-        if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
-        
-        values.push(req.params.id);
-        
-        await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-        console.log('✅ Status update:', req.params.id, '→', status);
         res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/status error:', error);
@@ -3774,6 +3964,30 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
         res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/approve error:', error);
+        res.status(500).json({ error: error.message }); 
+    }
+});
+// DELETE - Admin Delete Requisition
+app.delete('/api/admin/requisitions/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        
+        console.log('🗑️ DELETE /api/admin/requisitions/:id - Deleting:', id);
+        
+        // Delete items first (foreign key)
+        await pool.query('DELETE FROM requisition_items WHERE requisition_id = ?', [id]);
+        // Delete the requisition
+        await pool.query('DELETE FROM requisitions WHERE id = ?', [id]);
+        
+        console.log('✅ Requisition deleted:', id);
+        res.json({ success: true, id });
+    } catch (error) { 
+        console.error('DELETE /api/admin/requisitions/:id error:', error);
         res.status(500).json({ error: error.message }); 
     }
 });
