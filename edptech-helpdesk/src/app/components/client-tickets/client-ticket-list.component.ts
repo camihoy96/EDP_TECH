@@ -510,7 +510,8 @@ showAssignSuccess = false;
 successTicketNumber: string = '';
 successTicketTitle: string = '';
 successAssignedNames: string = '';
-
+private userSub!: Subscription;
+private ticketUpdateSub!: Subscription;
   constructor(
     private ticketService: ClientTicketService,
     private authService: AuthService,
@@ -520,17 +521,18 @@ successAssignedNames: string = '';
   ) {}
 
 ngOnInit() {
-  this.authService.currentUser$.subscribe((user: any) => {
+  this.userSub = this.authService.currentUser$.subscribe((user:any)=>{
     this.currentUser = user;
     console.log('👤 Current user set:', user?.fullname, '| dept:', user?.department, '| branch:', user?.branch_id);
     
     // DIRECT FETCH - bypass the service
     if (user) {
       this.fetchTicketsDirectly(user);
+       console.count('fetchTicketsDirectly called');
     }
   });
 
-  this.ticketService.ticketUpdate$.subscribe((updatedTicket: Ticket) => {
+  this.ticketUpdateSub = this.ticketService.ticketUpdate$.subscribe((updatedTicket: Ticket)=>{
     if (updatedTicket) {
       const index = this.tickets.findIndex(t => t.id === updatedTicket.id);
       if (index !== -1) {
@@ -598,11 +600,21 @@ fetchTicketsDirectly(user: any) {
 }
 
 ngOnDestroy() {
+
   if (this.pollingInterval) {
     clearInterval(this.pollingInterval);
   }
+
   if (this.newTicketSub) {
     this.newTicketSub.unsubscribe();
+  }
+
+  if (this.userSub) {
+    this.userSub.unsubscribe();
+  }
+
+  if (this.ticketUpdateSub) {
+    this.ticketUpdateSub.unsubscribe();
   }
 }
 /**

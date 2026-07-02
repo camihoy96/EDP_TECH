@@ -40,6 +40,9 @@ import { Subscription } from 'rxjs';
   <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
     📥 Accepted <span class="tab-count approved-count">{{ getStatusCount('approved') }}</span>
   </button>
+    <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+  📤 Forwarded <span class="tab-count forwarded-count">{{ getStatusCount('forwarded') }}</span>
+</button>
   <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
     ⚙️ On Process <span class="tab-count processing-count">{{ getStatusCount('processing') }}</span>
   </button>
@@ -92,8 +95,8 @@ import { Subscription } from 'rxjs';
   <span>Branch: <strong>{{ userBranch?.name || 'All' }}</strong></span>
   <span class="status-sep">|</span>
   <span>Dept: <strong>{{ currentUser?.department || currentUser?.department_name || 'All' }}</strong></span>
-  <!-- Bulk Action Buttons -->
-  <ng-container *ngIf="activeTab === 'approved' || activeTab === 'processing'">
+<!-- Bulk Action Buttons -->
+<ng-container *ngIf="activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected'">
     <span class="status-sep">|</span>
     <label class="select-all-label">
       <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
@@ -102,11 +105,20 @@ import { Subscription } from 'rxjs';
             (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 10px; padding: 3px 10px;">
       ⚙️ Process ({{ selectedReqIds.length }})
     </button>
+    <button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
+            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 10px; padding: 3px 10px;">
+      ⚙️ Process ({{ selectedReqIds.length }})
+    </button>
+    <!-- Delete for forwarded, released, rejected -->
+    <button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
+            (click)="bulkDeleteForwarded()" style="font-size: 10px; padding: 3px 10px;">
+      🗑️ Delete ({{ selectedReqIds.length }})
+    </button>
     <button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
             (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 10px; padding: 3px 10px;">
       📦 Release ({{ selectedReqIds.length }})
     </button>
-  </ng-container>
+</ng-container>
 </div>
 
       <!-- Requisitions Table -->
@@ -114,11 +126,12 @@ import { Subscription } from 'rxjs';
         <table class="classic-table">
        <thead>
   <tr>
-    <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing')" style="width:30px;">
-      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
-    </th>  <!-- ✅ This was missing -->
+   <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" style="width:30px;">
+  <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
+</th>
     <th>REQ Code</th>
     <th>Date</th>
+    <th>{{ viewMode === 'our' ? 'Forwarded To' : 'Forwarded From' }}</th>
     <th *ngIf="viewMode === 'incoming'">Request From</th>
     <th *ngIf="viewMode === 'our'">{{ isEDPUser() ? 'Department' : 'Recipient' }}</th>
     <th>ATTN</th>
@@ -133,17 +146,38 @@ import { Subscription } from 'rxjs';
       class="clickable-row" (click)="openViewModal(req)">
     
     <!-- Checkbox cell for Accepted/Processing tabs -->
-    <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing')" 
+   <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" 
     (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
-      <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
-    </td>
+  <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
+</td>
     <td class="req-num">
       <code>{{ req.requisition_number || 'N/A' }}</code>
-      <div class="creator-info" *ngIf="isEDPUser() && req.prepared_name">
+      <div class="creator-info" *ngIf="req.prepared_name">
         <span class="creator-label">by: {{ req.prepared_name }}</span>
       </div>
     </td>
     <td class="date-cell">{{ formatDate(req.date) }}</td>
+   <td class="forward-cell">
+  <!-- If forwarded: show details -->
+  <div class="forward-info" *ngIf="req.is_forwarded">
+    <!-- "Our Requests" - shows where WE forwarded it TO -->
+    <ng-container *ngIf="viewMode === 'our'">
+      <span class="forward-label">📤 To: {{ getBranchName(req.forwarded_to_branch_id) || '—' }}</span>
+      <span class="forward-dept">{{ getDepartmentName(req.forwarded_to_department_id) || '—' }}</span>
+      <span class="forward-company">{{ getBranchCompany(req.forwarded_to_branch_id) }}</span>
+      <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
+    </ng-container>
+    <!-- "Request Management" - shows who forwarded it FROM (to us) -->
+    <ng-container *ngIf="viewMode === 'incoming'">
+      <span class="forward-label">{{ getBranchName(req.branch_id) || '—' }}</span>
+      <span class="forward-dept">{{ getDepartmentName(req.department_id) || '—' }}</span>
+      <span class="forward-company">{{ getBranchCompany(req.branch_id) }}</span>
+      <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
+    </ng-container>
+  </div>
+  <!-- If not forwarded: show dash -->
+  <span class="not-forwarded" *ngIf="!req.is_forwarded">—</span>
+</td>
     <!-- ✅ Request From - visible for incoming view -->
 <td *ngIf="viewMode === 'incoming'">
   <span class="dept-name-small" [class]="'type-' + (req.request_from || '').toLowerCase()">
@@ -152,6 +186,7 @@ import { Subscription } from 'rxjs';
   <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
     🏢 {{ getBranchName(req.branch_id) }}
   </span>
+  <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
 </td>
 
 <!-- ✅ Recipient/Department - visible for our requests -->
@@ -161,7 +196,8 @@ import { Subscription } from 'rxjs';
     <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
       🏢 {{ getBranchName(req.branch_id) }}
     </span>
-    <span class="direction-tag outgoing">📤 Sent by you</span>
+    <span class="direction-tag outgoing" *ngIf="req.submitted_by === currentUser?.id">📤 Sent by you</span>
+<span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 Sent by colleague</span>
   </div>
 </td>
     <td class="attn-cell">
@@ -175,35 +211,66 @@ import { Subscription } from 'rxjs';
     <td class="items-cell">{{ req.items?.length || 0 }} item(s)</td>
     <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
     <td class="status-cell">
-      <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-        {{ getStatusLabel(req.status) }}
-      </span>
-      <div class="status-worker" *ngIf="req.status === 'approved' && req.items_prepared_name">
-        <span class="worker-label">Accepted by: {{ req.items_prepared_name }}</span>
-      </div>
-      <div class="status-worker" *ngIf="req.status === 'released' && req.released_name">
-        <span class="worker-label">Released by: {{ req.released_name }}</span>
-      </div>
-      <div class="status-worker" *ngIf="req.approved_name && req.status === 'approved'">
-        <span class="worker-label">Approved by: {{ req.approved_name }}</span>
-      </div>
-    </td>
-    <td class="action-cell" (click)="$event.stopPropagation()">
+  <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
+    {{ getStatusLabel(req.status) }}
+  </span>
+  <!-- Show sub-status for forwarded requests that are processing/released at recipient -->
+  <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
+    ↳ {{ getStatusLabel(req.forwarded_status) }}
+  </div>
+  <div class="status-worker" *ngIf="req.status === 'approved' && req.items_prepared_name">
+    <span class="worker-label">Accepted by: {{ req.items_prepared_name }}</span>
+  </div>
+  <div class="status-worker" *ngIf="req.status === 'released' && req.released_name">
+    <span class="worker-label">Released by: {{ req.released_name }}</span>
+  </div>
+  <div class="status-worker" *ngIf="req.approved_name && req.status === 'approved'">
+    <span class="worker-label">Approved by: {{ req.approved_name }}</span>
+  </div>
+<td class="action-cell" (click)="$event.stopPropagation()">
       <!-- Creator can edit their own pending -->
       <button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
+      
+      <!-- Forward button for accepted requests -->
+      <button class="action-btn forward-btn" 
+        *ngIf="req.status === 'approved' && canForward(req)" 
+        (click)="openForwardModal(req)" 
+        title="Forward">📤</button>
+      
       <!-- Recipient can Accept/Reject pending -->
       <button class="action-btn accept-btn" *ngIf="canAcceptReject(req)" (click)="acceptRequisition(req)" title="Accept">✅</button>
       <button class="action-btn reject-btn" *ngIf="canAcceptReject(req)" (click)="rejectRequisition(req)" title="Reject">❌</button>
-      <!-- Recipient can Process accepted -->
-      <button class="action-btn process-btn" *ngIf="canProcess(req)" (click)="processRequisition(req)" title="Process">⚙️</button>
-      <!-- Recipient can Release on-process -->
-      <button class="action-btn release-btn" *ngIf="canRelease(req)" (click)="releaseRequisition(req)" title="Release">📦</button>
+
+      <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
+      <button class="action-btn process-btn" 
+        *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+        (click)="processRequisition(req)" 
+        title="Process Forwarded">⚙️</button>
+        
+      <!-- 🔑 Release button for FORWARDED requests in incoming view (after processing) -->
+      <button class="action-btn release-btn" 
+        *ngIf="viewMode === 'incoming' && req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+        (click)="releaseRequisition(req)" 
+        title="Release Forwarded">📦</button>
+        
+      <!-- 🔑 Release button for NORMAL requests in incoming view -->
+      <button class="action-btn release-btn" 
+        *ngIf="viewMode === 'incoming' && !req.is_forwarded && canRelease(req)" 
+        (click)="releaseRequisition(req)" 
+        title="Release">📦</button>
+
+      <!-- 🔑 Forwarding dept FINAL Release - only when forwarded_status is 'released' -->
+      <button class="action-btn release-btn" 
+        *ngIf="viewMode === 'our' && req.is_forwarded && canReleaseForwarded(req)" 
+        (click)="releaseForwardedRequisition(req)" 
+        title="Final Release">📦✓</button>
+      
       <button class="action-btn print-btn" (click)="printRequisition(req)" title="Print">🖨️</button>
       <button class="action-btn view-btn" (click)="openViewModal(req)" title="View Details">📋</button>
-      <!-- Delete always visible for recipient/admin, only pending for creator -->
+      
+      <!-- Delete button -->
       <button class="action-btn delete-btn" *ngIf="canDelete(req)" (click)="deleteRequisition(req)" title="Delete">🗑️</button>
     </td>
-  </tr>
   
 <tr *ngIf="filteredRequisitions.length === 0">
   <td [attr.colspan]="getEmptyColspan()" class="empty-row">
@@ -220,13 +287,15 @@ import { Subscription } from 'rxjs';
     </div>
 
     <!-- View Requisition Details Modal -->
-    <div class="modal-overlay" *ngIf="showViewModal" (click)="closeViewModal()">
-      <div class="modal-window view-modal" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar">
-          <span>📋 Requisition Details</span>
-          <button type="button" (click)="closeViewModal()" class="modal-close">✕</button>
-        </div>
-        <div class="modal-body view-body">
+<div class="modal-overlay" *ngIf="showViewModal" (click)="closeViewModal()">
+  <div class="modal-window view-modal" 
+       id="viewReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'viewReqModal')">
+    <div class="modal-titlebar">
+      <span>📋 Requisition Details</span>
+      <button type="button" (click)="closeViewModal()" class="modal-close">✕</button>
+    </div>        <div class="modal-body view-body">
           <div class="view-details" *ngIf="viewReq">
             <!-- Header Info -->
             <div class="view-header-info">
@@ -264,7 +333,32 @@ import { Subscription } from 'rxjs';
                 <span>{{ viewReq.attn || '—' }}</span>
               </div>
             </div>
-
+            <!-- Forwarded Information - only show if forwarded -->
+<div class="view-section" *ngIf="viewReq.is_forwarded">
+  <h4>📤 Forward Information</h4>
+  <div class="view-grid">
+    <div class="view-field">
+      <label>Forwarded To Branch:</label>
+      <span>🏢 {{ getBranchName(viewReq.forwarded_to_branch_id) || '—' }}</span>
+    </div>
+    <div class="view-field">
+      <label>Forwarded To Department:</label>
+      <span>{{ getDepartmentName(viewReq.forwarded_to_department_id) || '—' }}</span>
+    </div>
+    <div class="view-field">
+      <label>Forwarded By:</label>
+      <span>{{ viewReq.forwarded_by_name || '—' }}</span>
+    </div>
+    <div class="view-field">
+      <label>Forwarded Date:</label>
+      <span>{{ formatDate(viewReq.forwarded_date) }}</span>
+    </div>
+    <div class="view-field full-width">
+      <label>Forwarded To Company:</label>
+      <span>{{ getBranchCompany(viewReq.forwarded_to_branch_id) || '—' }}</span>
+    </div>
+  </div>
+</div>
             <!-- Remarks -->
             <div class="view-section">
               <h4>📝 Remarks / Reason</h4>
@@ -303,7 +397,7 @@ import { Subscription } from 'rxjs';
               <h4>✍️ Signatures</h4>
               <div class="view-signatures">
                 <div class="view-sig-block">
-                  <h5>Form Prepared By</h5>
+                  <h5>Form Requested By</h5>
                   <div class="view-sig-image" *ngIf="viewReq.prepared_signature">
                     <img [src]="viewReq.prepared_signature" alt="Prepared Signature">
                   </div>
@@ -319,7 +413,7 @@ import { Subscription } from 'rxjs';
                   <div class="view-sig-date">{{ formatDate(viewReq.approved_date) }}</div>
                 </div>
                 <div class="view-sig-block">
-                  <h5>Items Prepared By</h5>
+                  <h5>Form Received By</h5>
                   <div class="view-sig-image" *ngIf="viewReq.items_prepared_signature">
                     <img [src]="viewReq.items_prepared_signature" alt="Items Prepared Signature">
                   </div>
@@ -361,12 +455,15 @@ import { Subscription } from 'rxjs';
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar danger">
-          <span>🗑️ Delete Requisition</span>
-          <button type="button" (click)="cancelDelete()" class="modal-close">✕</button>
-        </div>
+   <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
+  <div class="modal-window" 
+       id="deleteConfirmModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'deleteConfirmModal')">
+    <div class="modal-titlebar danger">
+      <span>🗑️ Delete Requisition</span>
+      <button type="button" (click)="cancelDelete()" class="modal-close">✕</button>
+    </div>
         <div class="modal-body">
           <div class="warning-content">
             <span class="warning-icon">⚠️</span>
@@ -390,7 +487,10 @@ import { Subscription } from 'rxjs';
 </div>
 <!-- Process Confirmation Modal -->
 <div class="modal-overlay" *ngIf="showProcessConfirmModal" (click)="cancelProcess()">
-  <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="processConfirmModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'processConfirmModal')">
     <div class="modal-titlebar" style="background: #cc6600;">
       <span>⚙️ Process Requisition</span>
       <button type="button" (click)="cancelProcess()" class="modal-close">✕</button>
@@ -416,11 +516,15 @@ import { Subscription } from 'rxjs';
 </div>
 <!-- Release Confirmation Modal -->
 <div class="modal-overlay" *ngIf="showReleaseConfirm" (click)="cancelRelease()">
-  <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="releaseConfirmModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'releaseConfirmModal')">
     <div class="modal-titlebar" style="background: #0066cc;">
       <span>📦 Release Requisition</span>
       <button type="button" (click)="cancelRelease()" class="modal-close">✕</button>
     </div>
+
     <div class="modal-body">
       <div class="warning-content">
         <span class="warning-icon">📦</span>
@@ -442,7 +546,10 @@ import { Subscription } from 'rxjs';
 </div>
 <!-- Bulk Process Confirmation Modal -->
 <div class="modal-overlay" *ngIf="showBulkProcessConfirm" (click)="cancelBulkProcess()">
-  <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="bulkProcessModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'bulkProcessModal')">
     <div class="modal-titlebar" style="background: #cc6600;">
       <span>⚙️ Bulk Process</span>
       <button type="button" (click)="cancelBulkProcess()" class="modal-close">✕</button>
@@ -467,7 +574,10 @@ import { Subscription } from 'rxjs';
 
 <!-- Bulk Release Confirmation Modal -->
 <div class="modal-overlay" *ngIf="showBulkReleaseConfirm" (click)="cancelBulkRelease()">
-  <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="bulkReleaseModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'bulkReleaseModal')">
     <div class="modal-titlebar" style="background: #0066cc;">
       <span>📦 Bulk Release</span>
       <button type="button" (click)="cancelBulkRelease()" class="modal-close">✕</button>
@@ -485,6 +595,124 @@ import { Subscription } from 'rxjs';
       <div class="modal-actions">
         <button class="classic-btn" (click)="cancelBulkRelease()">Cancel</button>
         <button class="classic-btn primary" style="background: #0066cc; border-color: #0066cc;" (click)="confirmBulkRelease()">📦 Release All</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Reject Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showRejectModal" (click)="cancelReject()">
+  <div class="modal-window" 
+       id="rejectConfirmModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'rejectConfirmModal')">
+    <div class="modal-titlebar danger">
+      <span>❌ Reject Requisition</span>
+      <button type="button" (click)="cancelReject()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-message">
+          <h3>Reject this requisition?</h3>
+          <p>Requisition: <strong>#{{ rejectTargetReq?.requisition_number }}</strong></p>
+          <p class="resolve-title">"{{ rejectTargetReq?.prepared_name || 'Unknown' }} - {{ rejectTargetReq?.request_from || 'N/A' }}"</p>
+        </div>
+      </div>
+      <div style="margin-top: 16px;">
+        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Reason for rejection:</label>
+        <textarea [(ngModel)]="rejectReason" 
+                  class="classic-input" 
+                  rows="3" 
+                  placeholder="Enter reason for rejection..."
+                  style="width: 100%; resize: vertical; padding: 8px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="classic-btn" (click)="cancelReject()">Cancel</button>
+        <button class="classic-btn danger" (click)="confirmReject()">❌ Reject</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Forward Modal -->
+<div class="modal-overlay" *ngIf="showForwardModal" (click)="cancelForward()">
+  <div class="modal-window" 
+       id="forwardModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'forwardModal')">
+    <div class="modal-titlebar" style="background: #0a3a8c;">
+      <span>📤 Forward Requisition</span>
+      <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 11px; margin-bottom: 12px;">
+        Forwarding: <strong>#{{ forwardTargetReq?.requisition_number }}</strong>
+      </p>
+      <p style="font-size: 10px; color: #666; margin-bottom: 4px;">
+        <strong>From:</strong> {{ forwardTargetReq?.request_from || '—' }} — 
+        {{ getBranchName(forwardTargetReq?.branch_id) }} / {{ getDepartmentName(forwardTargetReq?.department_id) }}
+      </p>
+      
+      <!-- 🔑 Warning about original department -->
+      <div style="font-size: 9px; color: #cc6600; background: #fff8e8; padding: 6px 8px; border: 1px solid #e6d88a; border-radius: 3px; margin-bottom: 10px;">
+        ⚠️ Note: The original department ({{ getDepartmentName(forwardTargetReq?.department_id) }}) is excluded from forwarding options.
+      </div>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
+        <select [(ngModel)]="forwardBranchId" class="classic-select" style="width: 100%;" (change)="onForwardBranchChange()">
+          <option value="">— Select Branch —</option>
+          <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+            🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+          </option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
+        <select [(ngModel)]="forwardDepartmentId" class="classic-select" style="width: 100%;" [disabled]="!forwardBranchId">
+          <option value="">— Select Department —</option>
+          <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
+            {{ dept.displayName || dept.name }}
+          </option>
+        </select>
+        <!-- Show message if no departments available -->
+        <div *ngIf="forwardBranchId && forwardFilteredDepartments.length === 0" 
+             style="font-size: 9px; color: #cc0000; margin-top: 4px;">
+          ⚠️ No other departments available in this branch.
+        </div>
+      </div>
+      
+      <div class="modal-actions">
+        <button class="classic-btn" (click)="cancelForward()">Cancel</button>
+        <button class="classic-btn primary" (click)="confirmForward()" 
+                [disabled]="!forwardBranchId || !forwardDepartmentId">
+          📤 Forward
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Bulk Delete Forwarded Modal -->
+<div class="modal-overlay" *ngIf="showBulkDeleteForwardedModal" (click)="cancelBulkDeleteForwarded()">
+  <div class="modal-window" 
+       id="bulkDeleteForwardedModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'bulkDeleteForwardedModal')">
+    <div class="modal-titlebar danger">
+      <span>🗑️ Bulk Delete Forwarded</span>
+      <button type="button" (click)="cancelBulkDeleteForwarded()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-message">
+          <h3>Delete {{ bulkDeleteForwardedCount }} forwarded requisition(s)?</h3>
+          <p class="warning-hint danger-text">This action cannot be undone. All items and signatures will be permanently removed.</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="classic-btn" (click)="cancelBulkDeleteForwarded()">Cancel</button>
+        <button class="classic-btn danger" (click)="confirmBulkDeleteForwarded()">🗑️ Yes, Delete All</button>
       </div>
     </div>
   </div>
@@ -544,7 +772,41 @@ import { Subscription } from 'rxjs';
     .status-worker { margin-top: 2px; }
     .worker-label { font-size: 9px; color: #666; display: block; font-style: italic; }
     .creator-info { font-size: 9px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
-    .creator-label { color: #555; }
+   .creator-info { 
+  font-size: 9px; 
+  color: #666; 
+  margin-top: 3px; 
+  border-top: 1px dotted #c0c0c0; 
+  padding-top: 3px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+.creator-label { 
+  color: #0a3a8c; 
+  font-weight: 600;
+  font-size: 9px;
+  background: #f0f4ff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid #b8c8e8;
+  white-space: nowrap;
+}
+.creator-label::before {
+  font-size: 8px;
+}
+  .company-tag-tiny {
+  font-size: 8px;
+  background: #fff8e8;
+  color: #886600;
+  padding: 1px 4px;
+  border-radius: 2px;
+  border: 1px solid #e6d88a;
+  white-space: nowrap;
+  display: block;
+  margin-top: 1px;
+}
     .action-cell { white-space: nowrap; display: flex; gap: 2px; justify-content: center; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 2px; }
     .action-btn:hover { background: #e8f0fe; border-color: #a0a0a0; }
@@ -611,6 +873,26 @@ import { Subscription } from 'rxjs';
   margin-top: 1px;
   font-style: italic;
 }
+  .modal-titlebar {
+  cursor: grab;
+  user-select: none;
+}
+.modal-titlebar:active {
+  cursor: grabbing;
+}
+  .forward-company { 
+  color: #888; 
+  font-size: 10px; 
+  white-space: nowrap; 
+  font-style: italic; 
+}
+.forward-by { 
+  font-size: 8px; 
+  color: #0a3a8c; 
+  font-style: italic; 
+  font-weight: 600;
+  margin-top: 1px;
+}
   .select-all-label {
   font-size: 10px;
   color: #333;
@@ -621,6 +903,13 @@ import { Subscription } from 'rxjs';
 }
 .select-all-label input[type="checkbox"] {
   cursor: pointer;
+}
+  .classic-input {
+  padding: 3px 6px;
+  border: 1px solid #a0a0a0;
+  font-size: 10px;
+  background: white;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
   .process-btn { color: #cc6600; }
 .process-btn:hover { background: #fff8e8; border-color: #cc6600; color: #cc6600; }
@@ -639,6 +928,14 @@ import { Subscription } from 'rxjs';
   .attn-cell { 
   max-width: 120px; 
 }
+  .forward-btn { color: #0a3a8c; }
+.forward-btn:hover { background: #e8f0ff; border-color: #0a3a8c; color: #0a3a8c; }
+.forward-cell { max-width: 120px; font-size: 9px; }
+.forward-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
+.forward-label { font-weight: 600; color: #0a3a8c; font-size: 9px; }
+.forward-dept { color: #666; font-size: 8px; }
+.tab-count.forwarded-count { background: #0a3a8c; }
+.status-forwarded { background: #e8f0ff; color: #0a3a8c; }
 .attn-info { 
   display: flex; 
   flex-direction: column; 
@@ -688,6 +985,14 @@ import { Subscription } from 'rxjs';
   color: white;
   border-color: #0a246a;
 }
+  .status-forwarded-sub { 
+  font-size: 8px; 
+  font-style: italic; 
+  color: #666; 
+  margin-top: 2px;
+  border-top: 1px dotted #ccc;
+  padding-top: 2px;
+}
 .toast-notification.success { background: #008800; }
 .toast-notification.error { background: #cc0000; }
 .toast-notification.warning { background: #cc6600; }
@@ -709,6 +1014,12 @@ export class ClientRequisitionListComponent implements OnInit, OnDestroy {
     departmentId: '',
     branchId: ''
   };
+  showBulkDeleteForwardedModal = false;
+bulkDeleteForwardedCount = 0;
+ private isDragging = false;
+private dragOffsetX = 0;
+private dragOffsetY = 0;
+private currentDragModal: HTMLElement | null = null;
   showBulkProcessConfirm = false;
 showBulkReleaseConfirm = false;
 bulkProcessCount = 0;
@@ -735,9 +1046,15 @@ processTargetReq: any = null;
 releaseTargetReq: any = null;
   private pollingInterval: any;
   private routerSub: Subscription | null = null;
-  
+  showRejectModal = false;
+rejectTargetReq: any = null;
+rejectReason = '';
   mainBranchIds = [1, 5];
-
+showForwardModal = false;
+forwardTargetReq: any = null;
+forwardBranchId: number | null = null;
+forwardDepartmentId: number | null = null;
+forwardFilteredDepartments: any[] = [];
   constructor(
     private http: HttpClient, 
     private router: Router, 
@@ -760,12 +1077,51 @@ releaseTargetReq: any = null;
         this.loadRequisitions();
       }
     });
-
+document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
     this.pollingInterval = setInterval(() => {
       this.loadRequisitions();
     }, 30000);
   }
+  startDrag(event: MouseEvent, modalId: string) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.modal-titlebar')) return;
+  
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  this.isDragging = true;
+  this.currentDragModal = modal;
+  
+  const rect = modal.getBoundingClientRect();
+  this.dragOffsetX = event.clientX - rect.left;
+  this.dragOffsetY = event.clientY - rect.top;
+  
+  modal.style.cursor = 'grabbing';
+  modal.style.transition = 'none';
+  modal.style.position = 'fixed';
+  
+  event.preventDefault();
+}
+onDragMove(event: MouseEvent) {
+  if (!this.isDragging || !this.currentDragModal) return;
+  
+  const x = event.clientX - this.dragOffsetX;
+  const y = event.clientY - this.dragOffsetY;
+  
+  this.currentDragModal.style.left = x + 'px';
+  this.currentDragModal.style.top = y + 'px';
+  this.currentDragModal.style.transform = 'none';
+}
 
+onDragEnd() {
+  if (this.currentDragModal) {
+    this.currentDragModal.style.cursor = '';
+    this.currentDragModal.style.transition = '';
+  }
+  this.isDragging = false;
+  this.currentDragModal = null;
+}
   ngOnDestroy() {
      if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.pollingInterval) clearInterval(this.pollingInterval);
@@ -806,14 +1162,8 @@ canAcceptReject(req: any): boolean {
   // Must be sent to my department (recipient)
   if (!this.isSentToMyDepartment(req)) return false;
   
-  // Must be the ATTN person (Head/Manager or Supervisor of the department)
-  const attnName = req.attn || '';
-  const currentUserName = this.currentUser.fullname || this.currentUser.username || '';
-  
-  // Check if current user is the ATTN person
-  if (attnName !== currentUserName) return false;
-  
-  // Must be Head/Manager or Supervisor
+  // ✅ Head/Manager or Supervisor of the receiving department can accept/reject
+  // (removed the ATTN check - any head/supervisor in the dept can manage requests)
   return this.isHeadOrSupervisor();
 }
 setViewMode(mode: string) {
@@ -832,10 +1182,26 @@ acceptRequisition(req: any) {
   });
 }
 
-// Reject requisition
+// Reject requisition - opens modal
 rejectRequisition(req: any) {
-  const reason = prompt(`Reject requisition #${req.requisition_number}. Enter reason:`);
-  if (reason === null) return; // Cancelled
+  this.rejectTargetReq = req;
+  this.rejectReason = '';
+  this.showRejectModal = true;
+}
+
+// Cancel reject
+cancelReject() {
+  this.showRejectModal = false;
+  this.rejectTargetReq = null;
+  this.rejectReason = '';
+}
+
+// Confirm reject
+confirmReject() {
+  if (!this.rejectTargetReq) return;
+  
+  const req = this.rejectTargetReq;
+  const reason = this.rejectReason.trim() || 'No reason provided';
   
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -850,14 +1216,15 @@ rejectRequisition(req: any) {
   this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
     next: () => {
       this.showToastMsg('❌ Requisition rejected!', 'warning');
+      this.cancelReject();
       this.loadRequisitions();
     },
     error: (err) => {
       console.error('Failed to reject requisition:', err);
-      // Optimistic update
       req.status = 'rejected';
       req.remarks = payload.remarks;
       this.applyFilters();
+      this.cancelReject();
       this.showToastMsg('⚠️ Failed to reject, updated locally', 'warning');
     }
   });
@@ -1126,49 +1493,127 @@ setActiveTab(tab: string) {
 }
 applyFilters() {
     let filtered = [...this.requisitions];
+    
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    console.log('🔍 ViewMode:', this.viewMode);
+    console.log('🔍 User:', { id: userId, branch: userBranchId, dept: userDeptId });
+    
     if (this.viewMode === 'our') {
-      // Show requests made by our department (creator)
-      filtered = filtered.filter(r => r.submitted_by === this.currentUser?.id);
+        // "Our Requests" = Requests that BELONG to our department
+        // This includes:
+        // 1. My own requests
+        // 2. Colleagues' requests (same creator branch+dept)
+        // 3. Requests that were SENT to our department and forwarded BY us
+        //    (they belong to us because we handled them)
+        filtered = filtered.filter(r => {
+            // My own request
+            if (r.submitted_by == userId) {
+                console.log(`✅ OUR: #${r.requisition_number} - mine`);
+                return true;
+            }
+            
+            // Colleague's request (same creator branch+dept)
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            if (creatorBranch != null && creatorDept != null) {
+                if (creatorBranch == userBranchId && creatorDept == userDeptId) {
+                    console.log(`✅ OUR: #${r.requisition_number} - colleague`);
+                    return true;
+                }
+            }
+            
+            // 🔑 KEY FIX: Request was sent TO our department AND forwarded
+            // This means our department handled it, so it's "ours"
+            if (r.is_forwarded && 
+                r.branch_id == userBranchId && 
+                r.department_id == userDeptId) {
+                console.log(`✅ OUR: #${r.requisition_number} - forwarded FROM our dept (we handled it)`);
+                return true;
+            }
+            
+            // 🔑 ALSO: Request was forwarded BY someone in our department
+            // Check if the forwarder is in our department
+            // (This covers cases where forwarded_by_name is set)
+            if (r.is_forwarded && r.forwarded_by_name) {
+                // We could check if forwarder is in our dept, but for now
+                // if it was sent to our dept and forwarded, it's ours
+                if (r.branch_id == userBranchId && r.department_id == userDeptId) {
+                    console.log(`✅ OUR: #${r.requisition_number} - handled by our dept`);
+                    return true;
+                }
+            }
+            
+            console.log(`❌ OUR: #${r.requisition_number} - excluded`);
+            return false;
+        });
     } else if (this.viewMode === 'incoming') {
-      // Show requests from other departments sent to us
-      filtered = filtered.filter(r => this.isSentToMyDepartment(r));
+        // "Request Management" = Requests RECEIVED by our department
+        // that we HAVEN'T forwarded yet
+        filtered = filtered.filter(r => {
+            // Check if from our own department
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) 
+                                  || r.submitted_by == userId;
+            
+            // If forwarded TO us from another department
+            if (r.is_forwarded && 
+                r.forwarded_to_branch_id == userBranchId && 
+                r.forwarded_to_department_id == userDeptId &&
+                !isFromOurDept) {
+                console.log(`✅ INCOMING: #${r.requisition_number} - forwarded TO us`);
+                return true;
+            }
+            
+            // 🔑 KEY: If forwarded FROM our department, exclude from incoming
+            // (it's already been handled, so it should be in "Our Requests")
+            if (r.is_forwarded && 
+                r.branch_id == userBranchId && 
+                r.department_id == userDeptId) {
+                console.log(`❌ INCOMING: #${r.requisition_number} - we already forwarded this`);
+                return false;
+            }
+            
+            // Original destination is our department AND not from us
+            if (!r.is_forwarded && 
+                r.branch_id == userBranchId && 
+                r.department_id == userDeptId && 
+                r.submitted_by != userId &&
+                !isFromOurDept) {
+                console.log(`✅ INCOMING: #${r.requisition_number} - sent to us`);
+                return true;
+            }
+            
+            console.log(`❌ INCOMING: #${r.requisition_number} - excluded`);
+            return false;
+        });
     }
-    // Filter by status tab
+    
+    // Status tab filter
     if (this.activeTab !== 'all') {
-      filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
+        filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
     }
-  
-    // Filter by branch
+    
+    // Other filters
     if (this.filters.branchId) {
-      filtered = filtered.filter(r => r.branch_id == this.filters.branchId);
+        filtered = filtered.filter(r => r.branch_id == this.filters.branchId);
     }
     
-    // Filter by department
-    if (this.filters.requestFromDept) {
-  filtered = filtered.filter(r => 
-    (r.request_from || '').toLowerCase() === this.filters.requestFromDept.toLowerCase()
-  );
-}
-    // Filter by request type
-    if (this.filters.requestFrom) {
-      filtered = filtered.filter(r => r.request_from === this.filters.requestFrom);
-    }
-    
-    // Search term
     if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(r => 
-        r.requisition_number?.toLowerCase().includes(term) ||
-        r.attn?.toLowerCase().includes(term) ||
-        r.prepared_name?.toLowerCase().includes(term) ||
-        r.approved_name?.toLowerCase().includes(term) ||
-        r.items_prepared_name?.toLowerCase().includes(term) ||
-        r.request_from?.toLowerCase().includes(term)
-      );
+        const term = this.searchTerm.toLowerCase();
+        filtered = filtered.filter(r => 
+            r.requisition_number?.toLowerCase().includes(term) ||
+            r.attn?.toLowerCase().includes(term) ||
+            r.prepared_name?.toLowerCase().includes(term)
+        );
     }
     
+    console.log('🔍 FINAL filtered:', filtered.length, filtered.map(r => `#${r.requisition_number}`));
     this.filteredRequisitions = filtered;
-  }
+}
   clearFilters() { 
     this.activeTab = 'all'; 
     this.filters = { requestFrom: '',  requestFromDept: '', departmentId: '', branchId: '' }; 
@@ -1176,53 +1621,171 @@ applyFilters() {
     this.filteredFilterDepartments = [];  // ✅ Reset to empty
     this.applyFilters(); 
   }
-  getStatusCount(status: string): number { 
+getStatusCount(status: string): number { 
     if (!this.requisitions) return 0;
-    return this.requisitions.filter(r => (r.status || 'pending') === status).length; 
-  }
-
+    
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    let filtered = [...this.requisitions];
+    
+    if (this.viewMode === 'our') {
+        filtered = filtered.filter(r => {
+            if (r.submitted_by == userId) return true;
+            
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            if (creatorBranch != null && creatorDept != null) {
+                if (creatorBranch == userBranchId && creatorDept == userDeptId) return true;
+            }
+            
+            // Forwarded FROM our department
+            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) {
+                return true;
+            }
+            
+            return false;
+        });
+    } else if (this.viewMode === 'incoming') {
+        filtered = filtered.filter(r => {
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) 
+                                 || r.submitted_by == userId;
+            
+            if (r.is_forwarded) {
+                // Forwarded TO us from other dept
+                return r.forwarded_to_branch_id == userBranchId && 
+                       r.forwarded_to_department_id == userDeptId &&
+                       !isFromOurDept;
+            }
+            
+            // Sent to us from other dept
+            return r.branch_id == userBranchId && 
+                   r.department_id == userDeptId && 
+                   r.submitted_by != userId &&
+                   !isFromOurDept;
+        });
+    }
+    
+    if (status === 'all') return filtered.length;
+    return filtered.filter(r => (r.status || 'pending') === status).length; 
+}
 getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
         'pending': 'Pending', 
         'approved': 'Accepted',
+        'forwarded': 'Forwarded',
         'processing': 'On Process',
         'released': 'Released', 
         'rejected': 'Rejected'
     };
     return labels[status] || status || 'Pending';
 }
-// Check if recipient can Process (status is accepted/approved)
+// Check if recipient can Process (status is accepted/approved OR forwarded)
 canProcess(req: any): boolean {
-  if (!this.currentUser) return false;
-  if ((req.status || 'pending') !== 'approved') return false;
-  if (!this.isSentToMyDepartment(req)) return false;
+  if (!this.currentUser) {
+    console.log('❌ canProcess: no currentUser');
+    return false;
+  }
+  if (this.viewMode !== 'incoming') {
+    console.log('❌ canProcess: not incoming view');
+    return false;
+  }
+  
+  const status = req.status || 'pending';
+  console.log(`🔍 canProcess check - REQ #${req.requisition_number}:`, {
+    status,
+    is_forwarded: req.is_forwarded,
+    forwarded_to_branch_id: req.forwarded_to_branch_id,
+    forwarded_to_department_id: req.forwarded_to_department_id,
+    userBranchId: this.currentUser.branch_id,
+    userDeptId: this.currentUser.department_id
+  });
+  
+  // Can process if status is 'approved' (normal) OR 'forwarded' (forwarded to us)
+  if (status !== 'approved' && status !== 'forwarded') {
+    console.log(`❌ canProcess: status ${status} not allowed`);
+    return false;
+  }
+  
+  // For forwarded requests, check if it was forwarded TO us
+  if (req.is_forwarded) {
+    const forwardedToMe = req.forwarded_to_branch_id == this.currentUser.branch_id && 
+                          req.forwarded_to_department_id == this.currentUser.department_id;
+    console.log(`🔍 canProcess forwarded check: forwardedToMe=${forwardedToMe}`);
+    if (!forwardedToMe) {
+      console.log('❌ canProcess: forwarded but not to me');
+      return false;
+    }
+    console.log('✅ canProcess: forwarded to me!');
+    return this.isHeadOrSupervisor();
+  }
+  
+  // For normal requests, check if sent to my department
+  const sentToMe = req.branch_id == this.currentUser.branch_id && 
+                   req.department_id == this.currentUser.department_id && 
+                   req.submitted_by !== this.currentUser.id;
+  console.log(`🔍 canProcess normal check: sentToMe=${sentToMe}`);
+  if (!sentToMe) {
+    console.log('❌ canProcess: not sent to me');
+    return false;
+  }
+  
+  console.log('✅ canProcess: normal request sent to me!');
   return this.isHeadOrSupervisor();
 }
 
 // Check if recipient can Release (status is processing)
 canRelease(req: any): boolean {
   if (!this.currentUser) return false;
+  if (this.viewMode !== 'incoming') return false;
+  
+  // For forwarded requests, check forwarded_status instead of status
+  if (req.is_forwarded) {
+    // Check if forwarded_status is 'processing' (recipient has processed)
+    if (req.forwarded_status !== 'processing') return false;
+    
+    // Check if it was forwarded TO us
+    const forwardedToMe = req.forwarded_to_branch_id == this.currentUser.branch_id && 
+                          req.forwarded_to_department_id == this.currentUser.department_id;
+    if (!forwardedToMe) return false;
+    return this.isHeadOrSupervisor();
+  }
+  
+  // For normal requests, check status
   if ((req.status || 'pending') !== 'processing') return false;
-  if (!this.isSentToMyDepartment(req)) return false;
+  
+  // For normal requests
+  if (req.branch_id !== this.currentUser.branch_id || 
+      req.department_id !== this.currentUser.department_id) return false;
+  
   return this.isHeadOrSupervisor();
 }
 
-// Check if user can delete
-canDelete(req: any): boolean {
-  if (!this.currentUser) return false;
-  
-  // Recipient (Head/Manager/Supervisor) can always delete
-  if (this.isSentToMyDepartment(req) && this.isHeadOrSupervisor()) return true;
-  
-  // Creator can only delete pending
-  if (req.submitted_by === this.currentUser.id && (req.status || 'pending') === 'pending') return true;
-  
-  // EDP admin can always delete
-  if (this.isEDPUser() && this.isHeadOrSupervisor()) return true;
-  
-  return false;
+// Simplified isSentToMyDepartment
+isSentToMyDepartment(req: any): boolean {
+    if (!this.currentUser) return false;
+    
+    const userBranchId = this.currentUser.branch_id;
+    const userDeptId = this.currentUser.department_id;
+    
+    // Check if forwarded TO my department
+    if (req.is_forwarded && req.forwarded_to_branch_id && req.forwarded_to_department_id) {
+      const forwardedToMe = req.forwarded_to_branch_id == userBranchId && 
+                           req.forwarded_to_department_id == userDeptId;
+      console.log(`🔍 isSentToMyDepartment forwarded check: #${req.requisition_number} forwardedToMe=${forwardedToMe}`);
+      return forwardedToMe;
+    }
+    
+    // Check if originally sent to my department (not forwarded, not mine)
+    const sentToMe = req.branch_id == userBranchId && 
+                     req.department_id == userDeptId && 
+                     req.submitted_by !== this.currentUser.id;
+    console.log(`🔍 isSentToMyDepartment normal check: #${req.requisition_number} sentToMe=${sentToMe}`);
+    return sentToMe;
 }
-
 // Process requisition (move from accepted to processing)
 openProcessConfirm(req: any) {
   this.processTargetReq = req;
@@ -1270,7 +1833,205 @@ releaseRequisition(req: any) {
   this.releaseTargetReq = req;
   this.showReleaseConfirm = true;
 }
+// Check if user can forward this request
+canForward(req: any): boolean {
+  if (!this.currentUser) return false;
+  if ((req.status || 'pending') !== 'approved') return false;
+  return this.isHeadOrSupervisor();
+}
 
+// Open forward modal
+openForwardModal(req: any) {
+  this.forwardTargetReq = req;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+  this.forwardFilteredDepartments = [];
+  
+  // 🔑 Exclude the original branch/department from the forward options
+  // Get the original branch and department IDs
+  const originalBranchId = req.branch_id;
+  const originalDeptId = req.department_id;
+  
+  // Filter branches to exclude the original branch
+  // (But still allow forwarding to other departments in the same branch if needed)
+  // Actually, we should exclude the combination of original branch+department
+  
+  console.log('📤 Forward modal opened - Original:', { 
+    branchId: originalBranchId, 
+    deptId: originalDeptId,
+    branchName: this.getBranchName(originalBranchId),
+    deptName: this.getDepartmentName(originalDeptId)
+  });
+  
+  this.showForwardModal = true;
+}
+// Cancel forward
+cancelForward() {
+  this.showForwardModal = false;
+  this.forwardTargetReq = null;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+  this.forwardFilteredDepartments = [];
+}
+
+// When branch changes, filter departments
+onForwardBranchChange() {
+  if (this.forwardBranchId) {
+    const originalBranchId = this.forwardTargetReq?.branch_id;
+    const originalDeptId = this.forwardTargetReq?.department_id;
+    
+    // Filter departments for the selected branch
+    this.forwardFilteredDepartments = this.departments.filter(d => {
+      const matchesBranch = d.branch_id == this.forwardBranchId;
+      
+      // 🔑 Exclude the original department if we're in the same branch
+      if (this.forwardBranchId == originalBranchId && d.id == originalDeptId) {
+        console.log('🚫 Excluded original department:', d.name);
+        return false; // Exclude the original department
+      }
+      
+      return matchesBranch;
+    });
+    
+    console.log('📤 Available departments to forward:', 
+      this.forwardFilteredDepartments.map(d => d.name));
+  } else {
+    this.forwardFilteredDepartments = [];
+  }
+  this.forwardDepartmentId = null;
+}
+
+// Confirm forward
+confirmForward() {
+  if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
+  
+  const originalBranchId = this.forwardTargetReq.branch_id;
+  const originalDeptId = this.forwardTargetReq.department_id;
+  
+  // 🔑 Prevent forwarding to the original department
+  if (this.forwardBranchId == originalBranchId && this.forwardDepartmentId == originalDeptId) {
+    this.showToastMsg('⚠️ Cannot forward to the original department!', 'warning');
+    return;
+  }
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  
+  const payload = {
+    forwarded_to_branch_id: this.forwardBranchId,
+    forwarded_to_department_id: this.forwardDepartmentId,
+    forwarded_by_name: this.currentUser.fullname || this.currentUser.username
+  };
+  
+  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
+    next: () => {
+      this.showToastMsg('📤 Requisition forwarded!', 'success');
+      this.cancelForward();
+      this.loadRequisitions();
+    },
+    error: (err) => {
+      console.error('Forward failed:', err);
+      this.cancelForward();
+      this.showToastMsg('⚠️ Failed to forward', 'warning');
+    }
+  });
+}
+// Bulk delete forwarded requisitions - opens modal
+bulkDeleteForwarded() {
+  if (this.selectedReqIds.length === 0) return;
+  this.bulkDeleteForwardedCount = this.selectedReqIds.length;
+  this.showBulkDeleteForwardedModal = true;
+}
+
+// Cancel bulk delete
+cancelBulkDeleteForwarded() {
+  this.showBulkDeleteForwardedModal = false;
+  this.bulkDeleteForwardedCount = 0;
+}
+
+// Confirm bulk delete
+confirmBulkDeleteForwarded() {
+  this.showBulkDeleteForwardedModal = false;
+  if (this.bulkDeleteForwardedCount === 0) return;
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  let completed = 0;
+  const total = this.bulkDeleteForwardedCount;
+  const ids = [...this.selectedReqIds];
+  
+  ids.forEach(id => {
+    this.http.delete(`${environment.apiUrl}/api/requisitions/${id}`, { headers }).subscribe({
+      next: () => {
+        completed++;
+        if (completed === total) {
+          this.showToastMsg(`🗑️ ${total} requisition(s) deleted!`, 'success');
+          this.selectedReqIds = [];
+          this.bulkDeleteForwardedCount = 0;
+          this.loadRequisitions();
+        }
+      },
+      error: () => {
+        completed++;
+        this.requisitions = this.requisitions.filter(r => !ids.includes(r.id));
+        if (completed === total) {
+          this.applyFilters();
+          this.selectedReqIds = [];
+          this.bulkDeleteForwardedCount = 0;
+          this.showToastMsg('⚠️ Some deletions may have failed', 'warning');
+        }
+      }
+    });
+  });
+}
+canReleaseForwarded(req: any): boolean {
+  console.log('🔍 canReleaseForwarded check:', {
+    requisition_number: req.requisition_number,
+    viewMode: this.viewMode,
+    status: req.status,
+    forwarded_status: req.forwarded_status,
+    is_forwarded: req.is_forwarded,
+    branch_id: req.branch_id,
+    userBranchId: this.currentUser?.branch_id,
+    department_id: req.department_id,
+    userDeptId: this.currentUser?.department_id
+  });
+  
+  if (!this.currentUser) {
+    console.log('❌ canReleaseForwarded: no currentUser');
+    return false;
+  }
+  
+  if (this.viewMode !== 'our') {
+    console.log('❌ canReleaseForwarded: not our view');
+    return false;
+  }
+  
+  if ((req.status || 'pending') !== 'forwarded') {
+    console.log('❌ canReleaseForwarded: status not forwarded');
+    return false;
+  }
+  
+  if (req.forwarded_status !== 'released') {
+    console.log('❌ canReleaseForwarded: forwarded_status not released (is: ' + req.forwarded_status + ')');
+    return false;
+  }
+  
+  if (req.branch_id !== this.currentUser.branch_id || 
+      req.department_id !== this.currentUser.department_id) {
+    console.log('❌ canReleaseForwarded: not our department');
+    return false;
+  }
+  
+  console.log('✅ canReleaseForwarded: SHOWING RELEASE BUTTON');
+  return this.isHeadOrSupervisor();
+}
+// Release a forwarded requisition (from the forwarding department's side)
+releaseForwardedRequisition(req: any) {
+  this.releaseTargetReq = req;
+  this.showReleaseConfirm = true;
+}
 confirmRelease() {
   if (!this.releaseTargetReq) return;
   const req = this.releaseTargetReq;
@@ -1278,11 +2039,21 @@ confirmRelease() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
   
-  const payload = {
-    status: 'released',
+  // Check if this is a forwarded request being released by the forwarding dept
+  const isForwardedRelease = req.is_forwarded && req.status === 'forwarded';
+  
+  const payload: any = {
     released_name: this.currentUser.fullname || this.currentUser.username,
     released_date: new Date().toISOString().split('T')[0]
   };
+  
+  if (isForwardedRelease) {
+    // For forwarded requests, change status to released directly
+    payload.status = 'released';
+  } else {
+    // Normal release from processing
+    payload.status = 'released';
+  }
   
   this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
     next: () => {
@@ -1315,9 +2086,9 @@ showRecipientColumn(): boolean {
 
 // Calculate colspan for empty row
 getEmptyColspan(): number {
-  let cols = 8; // Base columns: REQ Code, Date, ATTN, Items, Total, Status, Actions + (Request From OR Recipient)
-  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'processing')) cols++; // Checkbox
-  cols++; // For the conditional column (Request From or Recipient)
+  let cols = 9; // Base columns
+  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'forwarded' || this.activeTab === 'processing' || this.activeTab === 'released' || this.activeTab === 'rejected')) cols++; // Checkbox
+  cols++; // For the conditional column
   return cols;
 }
 cancelRelease() {
@@ -1355,35 +2126,37 @@ canModify(req: any): boolean {
     // Is this sent to my department? (recipient)
     const isSentToMyDept = this.isSentToMyDepartment(req);
     
-    // ✅ Creator can modify their OWN pending requisitions
+    // ✅ ONLY creator can edit their OWN pending requisitions
     if (isMyRequisition && isPending) return true;
     
-    // ✅ Recipient can modify pending requisitions sent to their department
-    if (isSentToMyDept && isPending) return true;
+    // ✅ Head/Manager or Supervisor recipient can also edit pending requests sent to them
+    if (isSentToMyDept && isPending && this.isHeadOrSupervisor()) return true;
     
     // EDP users with head/manager or supervisor role can modify any pending
     if (this.isEDPUser() && this.isHeadOrSupervisor() && isPending) return true;
     
     return false;
-  }
-
-  // ✅ NEW METHOD: Check if requisition is sent to current user's department
-  isSentToMyDepartment(req: any): boolean {
+}
+getBranchCompany(branchId: number): string {
+  if (!branchId) return '';
+  const branch = this.branches.find(b => b.id == branchId);
+  return branch?.company_name || branch?.name || '';
+}
+canDelete(req: any): boolean {
     if (!this.currentUser) return false;
     
-    const userBranchId = this.currentUser.branch_id;
-    const userDeptId = this.currentUser.department_id;
+    // ✅ ONLY creator can delete their OWN pending requests
+    if (req.submitted_by === this.currentUser.id && (req.status || 'pending') === 'pending') return true;
     
-    // Must match both branch AND department
-    const matchBranch = userBranchId ? req.branch_id == userBranchId : false;
-    const matchDept = userDeptId ? req.department_id == userDeptId : false;
+    // ✅ Head/Manager/Supervisor recipient can delete any request sent to their department
+    if (this.isSentToMyDepartment(req) && this.isHeadOrSupervisor()) return true;
     
-    // Not my own requisition
-    const notMyRequisition = req.submitted_by !== this.currentUser.id;
+    // EDP users with head/manager or supervisor role can delete any
+    if (this.isEDPUser() && this.isHeadOrSupervisor()) return true;
     
-    return matchBranch && matchDept && notMyRequisition;
-  }
-
+    // ❌ Staff, Supervisor (non-head), and other colleagues CANNOT delete
+    return false;
+}
   // ✅ NEW METHOD: Check if current user is the recipient
   isRecipient(req: any): boolean {
     return this.isSentToMyDepartment(req);

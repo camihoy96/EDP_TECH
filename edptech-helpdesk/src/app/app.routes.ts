@@ -29,6 +29,7 @@ import { AdminUpdatesComponent } from './components/admin/admin-panel/updates.co
 import { AdminSupportComponent } from './components/admin/admin-panel/support.component';
 import { AuthCallbackComponent } from './components/auth-callback/auth-callback.component';
 import { ClientFeaturesComponent } from './components/client/features/features.component';
+import { AdminRequisitionFormComponent } from './components/admin/admin-panel/requisition-form.component';
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
    { path: 'signup', component: SignupPageComponent },
@@ -41,12 +42,16 @@ export const routes: Routes = [
   
   { path: 'auth/callback', component: AuthCallbackComponent },
   // Admin/IT routes with Dashboard layout
-  {
-    path: '',
-    component: DashboardComponent,
-    canActivate: [AuthGuard, RoleGuard],
-    data: { role: ['admin', 'Technician', 'Head/Manager','Staff'] },
-    children: [
+ {
+  path: '',
+  canActivate: [AuthGuard],
+  children: [
+    {
+      path: '',
+      component: DashboardComponent,
+      canActivate: [RoleGuard],
+      data: { role: ['admin', 'Technician', 'Head/Manager','Staff'] },
+      children: [
       { path: 'dashboard', component: TicketListComponent },
       { path: 'tickets', component: TicketListComponent },
       { path: 'tickets/new', component: TicketFormComponent },
@@ -57,7 +62,8 @@ export const routes: Routes = [
       { path: 'knowledge-base', component: KnowledgeBaseComponent },
       { path: 'knowledge-base/create', component: KnowledgeBaseAdminComponent },
       { path: 'knowledge-base/edit', component: KnowledgeBaseAdminComponent },
-      
+       { path: 'requisitions/new', loadComponent: () => import('./components/admin/admin-panel/requisition-form.component').then(m => m.AdminRequisitionFormComponent) },
+    { path: 'requisitions/edit', loadComponent: () => import('./components/admin/admin-panel/requisition-form.component').then(m => m.AdminRequisitionFormComponent) },
       { path: 'profile', component: ProfileComponent },
       
       // ❌ REMOVE THIS - It's now at the root level
@@ -88,10 +94,10 @@ export const routes: Routes = [
             path: 'job-orders/approve',
             loadComponent: () => import('./components/client-tickets/client-job-order-form.component').then(m => m.ClientJobOrderFormComponent)
           },
-          { 
-            path: 'requisitions/approve', 
-            loadComponent: () => import('./components/client-tickets/client-requisition-form.component').then(m => m.ClientRequisitionFormComponent) 
-          },
+        { 
+          path: 'requisitions/approve', 
+          loadComponent: () => import('./components/admin/admin-panel/requisition-form.component').then(m => m.AdminRequisitionFormComponent) 
+        },
           {
             path: 'requisitions',
             loadComponent: () => import('./components/admin/admin-panel/requisitions-management.component').then(m => m.RequisitionsManagementComponent)
@@ -161,13 +167,15 @@ export const routes: Routes = [
   path: 'admin/support',
   component: AdminSupportComponent
 },
-      { path: '', redirectTo: 'dashboard', pathMatch: 'full' }
-    ]
-  },
-   
+{ path: '', redirectTo: 'dashboard', pathMatch: 'full' }
+      ]
+    }
+  ]
+},   
   // Client/Employee routes
   {
     path: 'client',
+  
     component: ClientDashboardComponent,
     canActivate: [AuthGuard],
     children: [
@@ -194,6 +202,6 @@ export const routes: Routes = [
       { path: 'client/request/approve', component: ClientRequisitionFormComponent },
     ]
   },
-  
+
   { path: '**', redirectTo: '/login' }
 ];

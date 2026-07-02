@@ -14,13 +14,16 @@ import { environment } from '../../../environments/environment';
   imports: [CommonModule, FormsModule],
   template: `
     <div class="req-container">
-      <div class="req-header">
-        <div class="header-left">
-          <h1>{{ approvalMode ? '✅ Accept Requisition' : editMode ? '✏️ Edit Requisition' : '📩 Requisition Form' }}</h1>
-          <span class="header-sub">{{ approvalMode ? 'Fill in items prepared by details and signature' : editMode ? 'Update your requisition request' : 'Submit a requisition for items/equipment' }}</span>
-        </div>
-        <button class="print-btn" (click)="printForm()">🖨️ Print</button>
-      </div>
+     <div class="req-header">
+    <div class="header-left">
+      <h1>{{ approvalMode ? '✅ Accept Requisition' : editMode ? '✏️ Edit Requisition' : '📩 Requisition Form' }}</h1>
+      <span class="header-sub">{{ approvalMode ? 'Fill in items Requested by details and signature' : editMode ? 'Update your requisition request' : 'Submit a requisition for items/equipment' }}</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button class="print-btn" (click)="printForm()">🖨️ Print</button>
+      <button class="close-btn" (click)="cancel()" title="Close">✕</button>
+    </div>
+</div>
 
       <div class="req-form" id="print-section">
        <div class="req-form-header">
@@ -38,15 +41,15 @@ import { environment } from '../../../environments/environment';
     <input type="text" [(ngModel)]="reqData.request_from" class="req-input" readonly>
   </div>
   
- <!-- Branch Selection - readonly for recipient edit -->
-<div class="field-row" *ngIf="!isMainBranch">
+ <!-- Branch Selection -->
+<div class="field-row">
   <label>Recipient:</label>
   <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()" [disabled]="isRecipientEdit">
     <option value="">— Select Branch —</option>
     <option [value]="userBranch?.id" *ngIf="userBranch">
       🏢 {{ userBranch?.name }} <small>({{ userBranch?.company_name }})</small> - Your Branch
     </option>
-    <option *ngFor="let branch of mainBranches" [value]="branch.id">
+    <option *ngFor="let branch of availableRecipientBranches" [value]="branch.id">
       🏛️ {{ branch.name }} <small>({{ branch.company_name }})</small>
     </option>
   </select>
@@ -116,10 +119,9 @@ import { environment } from '../../../environments/environment';
         </div>
 <!-- Signatures -->
 <div class="req-signatures">
-
-  <!-- Form Prepared By - Client: fillable, Admin: readonly -->
+  <!-- Form Requested By - Client: fillable, Admin: readonly -->
   <div class="sig-block" [class.readonly]="approvalMode">
-    <h5>Form Prepared By:</h5>
+    <h5>Form Requested By:</h5>
     <div class="sig-field">
       <label>Name:</label>
       <input type="text" [(ngModel)]="reqData.prepared_name" class="req-input-sm" placeholder="Your name" [readonly]="approvalMode">
@@ -127,14 +129,12 @@ import { environment } from '../../../environments/environment';
     <div class="sig-field">
       <label>Date:</label>
       <input type="date" [(ngModel)]="reqData.prepared_date" class="req-input-sm" [readonly]="approvalMode">
-    </div>
-    
+    </div>   
     <ng-container *ngIf="!approvalMode">
       <div class="sig-options">
         <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'draw'" (click)="setSigMode('prepared', 'draw')">✍️ Draw</button>
         <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'upload'" (click)="setSigMode('prepared', 'upload')">📁 Upload</button>
-      </div>
-      
+      </div> 
       <!-- Draw Mode - Opens Modal -->
       <div class="sig-draw-area" *ngIf="sigMode['prepared'] === 'draw'">
         <button type="button" class="sig-draw-trigger" (click)="openSigModal('prepared')">
@@ -142,7 +142,6 @@ import { environment } from '../../../environments/environment';
           <span>Click to Draw Signature</span>
         </button>
       </div>
-      
       <!-- Upload Mode -->
       <div class="sig-upload" *ngIf="sigMode['prepared'] === 'upload'"
            [class.has-file]="preparedSignature"
@@ -163,7 +162,6 @@ import { environment } from '../../../environments/environment';
         </ng-template>
       </div>
     </ng-container>
-    
     <!-- Saved Signature Preview -->
     <div class="sig-saved-preview" *ngIf="preparedSignature && sigSaved['prepared']">
       <img [src]="preparedSignature" alt="Signature" class="sig-image-small">
@@ -227,9 +225,9 @@ import { environment } from '../../../environments/environment';
     </div>
   </div>
 
-  <!-- Items Prepared By - Client: readonly, Admin: fillable -->
+  <!-- Form Received By - Client: readonly, Admin: fillable -->
   <div class="sig-block" [class.readonly]="!approvalMode">
-    <h5>Items Prepared By:</h5>
+    <h5>Form Received By:</h5>
     <div class="sig-field">
       <label>Name:</label>
       <input type="text" [(ngModel)]="reqData.items_prepared_name" class="req-input-sm" placeholder="Name" [readonly]="!approvalMode">
@@ -400,6 +398,21 @@ import { environment } from '../../../environments/environment';
     .sig-upload.has-file {
   border-style: solid;
   border-color: #008800;
+}
+  .close-btn { 
+  background: rgba(255,255,255,0.2); 
+  border: 1px solid rgba(255,255,255,0.4); 
+  color: white; 
+  cursor: pointer; 
+  padding: 4px 10px; 
+  font-size: 14px; 
+  font-weight: bold;
+  border-radius: 0px;
+  line-height: 1;
+}
+.close-btn:hover { 
+  background: rgba(255,0,0,0.7); 
+  border-color: rgba(255,255,255,0.6);
 }
   .sig-draw-trigger {
   display: flex;
@@ -698,7 +711,7 @@ showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     this.toastTimer = setTimeout(() => this.showToast = false, 3000);
 }
 get isMainBranch(): boolean {
-  const user: any = this.authService.getCurrentUser();  // ✅ Cast to any
+  const user: any = this.authService.getCurrentUser();
   return !!(user && this.mainBranchIds.includes(Number(user.branch_id)));
 }
 get companyName(): string {
@@ -1033,13 +1046,35 @@ if (currentUser && data.submitted_by !== currentUser.id) {
     }
   }
 
-  generateReqNumber(): string {
+ generateReqNumber(): string {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+    
+    // Get RECIPIENT branch code (selected branch, not user's branch)
+    let branchCode = 'BRC';
+    if (this.selectedBranchId) {
+        const selectedBranch = this.branches.find(b => b.id == this.selectedBranchId);
+        if (selectedBranch?.name) {
+            branchCode = selectedBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+        }
+    } else if (this.userBranch?.name) {
+        // Fallback to user's branch if no recipient selected yet
+        branchCode = this.userBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+    }
+    
+    // Get department code from selected department
+    let deptCode = 'DEPT';
+    if (this.reqData.department_id) {
+        const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
+        if (selectedDept?.name) {
+            deptCode = selectedDept.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+        }
+    }
+    
     const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-    return `REQ-${datePart}-${random}`;
-  }
-
+    
+    return `REQ-${branchCode}-${deptCode}-${datePart}-${random}`;
+}
   get grandTotal(): number {
     return this.items.reduce((sum, item) => sum + ((item.qty || 0) * (item.unit_price || 0)), 0);
   }
@@ -1076,7 +1111,18 @@ if (currentUser && data.submitted_by !== currentUser.id) {
       this.processSigFile(files[0], target);
     }
   }
-
+get availableRecipientBranches(): any[] {
+  const user: any = this.authService.getCurrentUser();
+  const userBranchId = Number(user?.branch_id);
+  
+  // If user is in a main branch, show the OTHER main branch(es) + non-main branches
+  if (this.mainBranchIds.includes(userBranchId)) {
+    return this.mainBranches.filter(b => b.id !== userBranchId);
+  }
+  
+  // For non-main branch users, show main branches (existing behavior)
+  return this.mainBranches;
+}
   processSigFile(file: File, target: string) {
     if (!file.type.startsWith('image/')) {
       this.showToastMsg('Please upload an image file for the signature.', 'warning');
@@ -1227,11 +1273,11 @@ getStatusLabel(status: string): string {
     // Approval mode - only validate items prepared by
     if (this.approvalMode) {
   if (!this.reqData.items_prepared_name) {
-    this.showToastMsg('Please fill in Items Prepared By name.', 'warning');
+    this.showToastMsg('Please fill in Items Requested By name.', 'warning');
     return;
   }
   if (!this.itemsPreparedSignature) {
-    alert('Please provide Items Prepared By signature.');
+    alert('Please provide Items Requested By signature.');
     return;
   }
   
@@ -1260,7 +1306,7 @@ getStatusLabel(status: string): string {
       this.notificationService.addBellNotification({
         type: 'success',
         title: '📥 Requisition Accepted',
-        message: `Requisition #${this.reqNumber} items prepared by ${this.reqData.items_prepared_name}`,
+        message: `Requisition #${this.reqNumber} items requested by ${this.reqData.items_prepared_name}`,
         ticketNumber: this.reqNumber,
         targetUserId: null,
         countInBadge: true,
@@ -1603,7 +1649,7 @@ getStatusLabel(status: string): string {
           <div class="signatures">
             <div class="sig-row">
               <div class="sig-block">
-                <div class="sig-label">Form Prepared By</div>
+                <div class="sig-label">Form Requested By</div>
                 <div class="sig-image-area">
                   ${this.preparedSignature ? `<img src="${this.preparedSignature}" alt="Signature">` : '<span class="no-sig">No signature</span>'}
                 </div>
@@ -1619,7 +1665,7 @@ getStatusLabel(status: string): string {
                 <div class="sig-date">${fmtDate(this.reqData.approved_date)}</div>
               </div>
               <div class="sig-block">
-                <div class="sig-label">Items Prepared By</div>
+                <div class="sig-label">Items Received By</div>
                 <div class="sig-image-area">
                   ${this.itemsPreparedSignature ? `<img src="${this.itemsPreparedSignature}" alt="Signature">` : '<span class="no-sig">No signature</span>'}
                 </div>
@@ -1665,11 +1711,8 @@ getStatusLabel(status: string): string {
     printWindow.document.write(printContent);
     printWindow.document.close();
   }
-  cancel() {
-    if (this.approvalMode) {
-      this.router.navigate(['/admin/requisitions']);
-    } else {
-      this.router.navigate(['/client/request']);
-    }
-  }
+ cancel() {
+    // ✅ Always go to client request list for client users
+    this.router.navigate(['/client/request']);
+}
 }

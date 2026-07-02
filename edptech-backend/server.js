@@ -3784,10 +3784,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         
         const reqData = existing[0];
         
-        // ✅ Check access - Allow if:
-        // 1. Admin/Technician
-        // 2. Original recipient (branch_id + department_id match)
-        // 3. Forwarded-to recipient (forwarded_to_branch_id + forwarded_to_department_id match)
+        // ✅ Check access
         const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
         const isOriginalRecipient = userBranchId && userDeptId &&
                                     reqData.branch_id == userBranchId && 
@@ -3806,7 +3803,9 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
             reqDeptId: reqData.department_id,
             forwardedToBranch: reqData.forwarded_to_branch_id,
             forwardedToDept: reqData.forwarded_to_department_id,
-            isForwarded: reqData.is_forwarded
+            isForwarded: reqData.is_forwarded,
+            currentStatus: reqData.status,
+            forwardedStatus: reqData.forwarded_status
         });
         
         if (!isAdmin && !isOriginalRecipient && !isForwardedRecipient) {
@@ -3822,41 +3821,59 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         
         // ✅ Handle forwarded request status updates
         if (reqData.is_forwarded) {
-            if (status === 'processing' || status === 'released') {
-                // Recipient is processing/releasing a forwarded request
-                const updates = ['status = ?', 'forwarded_status = ?'];
-                const values = [status, status];
+            
+            if (status === 'processing') {
+                // 🔑 Recipient processing - keep status as 'forwarded', only update forwarded_status
+                const updates = ['forwarded_status = ?'];
+                const values = ['processing'];
                 
-                if (released_name !== undefined) { 
-                    updates.push('released_name = COALESCE(?, released_name)'); 
-                    values.push(released_name); 
-                }
-                if (released_date !== undefined) { 
-                    updates.push('released_date = COALESCE(?, released_date)'); 
-                    values.push(released_date); 
-                }
+                if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
+                if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
                 
                 values.push(id);
                 await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                console.log('✅ Forwarded request status update:', id, '→', status);
+                console.log('✅ Forwarded request processing (status stays forwarded):', id);
                 
-            } else if (reqData.status === 'forwarded' && status === 'released') {
-                // Forwarding department releasing - clear forwarded_status
-                const updates = ['status = ?', 'forwarded_status = NULL'];
+            } else if (status === 'released') {
+                
+                // 🔑 Check WHO is releasing
+                if (isForwardedRecipient && !isOriginalRecipient) {
+                    // RECIPIENT releasing - keep status as 'forwarded', set forwarded_status to 'released'
+                    const updates = ['forwarded_status = ?'];
+                    const values = ['released'];
+                    
+                    if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+                    if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
+                    
+                    values.push(id);
+                    await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                    console.log('✅ Forwarded request released by recipient (status stays forwarded):', id);
+                    
+                } else if (isOriginalRecipient || isAdmin) {
+                    // FORWARDING DEPT releasing - FINAL release, change status to 'released'
+                    const updates = ['status = ?', 'forwarded_status = NULL'];
+                    const values = ['released'];
+                    
+                    if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+                    if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
+                    
+                    values.push(id);
+                    await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                    console.log('✅ Forwarding dept FINAL release:', id, '→ released');
+                }
+                
+            } else {
+                // Other status updates (approve, reject, etc.)
+                const updates = ['status = ?'];
                 const values = [status];
                 
-                if (released_name !== undefined) { 
-                    updates.push('released_name = COALESCE(?, released_name)'); 
-                    values.push(released_name); 
-                }
-                if (released_date !== undefined) { 
-                    updates.push('released_date = COALESCE(?, released_date)'); 
-                    values.push(released_date); 
-                }
+                if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
+                if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
+                if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
                 
                 values.push(id);
                 await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                console.log('✅ Forwarding dept released:', id, '→ released');
+                console.log('✅ Forwarded request other update:', id, '→', status);
             }
             
         } else {

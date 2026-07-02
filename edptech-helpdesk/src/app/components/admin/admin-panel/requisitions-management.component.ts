@@ -7,11 +7,11 @@ import { Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { NotificationService } from '../../../services/notification.service';
 import { environment } from '../../../../environments/environment';
-
+import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-requisitions-management',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   template: `
     <div class="req-list-container">
       <!-- Header -->
@@ -24,9 +24,9 @@ import { environment } from '../../../../environments/environment';
     <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
       📥 Request Management
     </button>
-    <button class="classic-btn primary" routerLink="/client/request/new">
-      <span>➕</span> New Requisition
-    </button>
+    <button class="classic-btn primary" (click)="newRequisition()">
+  <span>➕</span> New Requisition
+</button>
   </div>
 </div>
 
@@ -34,6 +34,9 @@ import { environment } from '../../../../environments/environment';
   <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">📋 All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span></button>
   <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">⏳ Pending <span class="tab-count">{{ getFilteredStatusCount('pending') }}</span></button>
   <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">📥 Accepted <span class="tab-count">{{ getFilteredStatusCount('approved') }}</span></button>
+  <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+  📤 Forwarded <span class="tab-count forwarded-count">{{ getFilteredStatusCount('forwarded') }}</span>
+</button>
   <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">⚙️ Processing <span class="tab-count">{{ getFilteredStatusCount('processing') }}</span></button>
   <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">📦 Released <span class="tab-count">{{ getFilteredStatusCount('released') }}</span></button>
   <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">❌ Rejected <span class="tab-count">{{ getFilteredStatusCount('rejected') }}</span></button>
@@ -76,31 +79,35 @@ import { environment } from '../../../../environments/environment';
   <span class="status-sep">|</span>
   <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
   <!-- Bulk Actions -->
-  <ng-container *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing')">
+  <ng-container *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
     <span class="status-sep">|</span>
     <label class="select-all-label">
       <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
     </label>
-    <button class="btn btn-process" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" (click)="bulkProcess()">
+    <button class="btn btn-process" *ngIf="(activeTab === 'approved' || activeTab === 'forwarded') && selectedReqIds.length > 0" (click)="bulkProcess()">
       ⚙️ Process ({{ selectedReqIds.length }})
     </button>
     <button class="btn btn-release" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" (click)="bulkRelease()">
       📦 Release ({{ selectedReqIds.length }})
     </button>
-  </ng-container>
+    <button class="btn btn-delete" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" (click)="bulkDelete()" style="background: #cc0000; color: white; border-color: #cc0000;">
+      🗑️ Delete ({{ selectedReqIds.length }})
+    </button>
+</ng-container>
 </div>
 
       <div class="table-container">
         <table class="data-table">
       <thead>
   <tr>
-    <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing' || activeTab === 'all')" style="width:30px;">
-      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
-    </th>
+    <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" style="width:30px;">
+  <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
+</th>
     <th>REQ Code</th>
     <th>Date</th>
+    <th>{{ viewMode === 'our' ? 'Forwarded To' : 'Forwarded From' }}</th>
     <th *ngIf="viewMode === 'incoming'">Request From</th>
-    <th *ngIf="viewMode === 'our'">{{ isEDPUser() ? 'Department' : 'Recipient' }}</th>
+    <th *ngIf="viewMode === 'our'">Recipient</th>
     <th>ATTN</th>
     <th>Items</th>
     <th>Total</th>
@@ -111,10 +118,10 @@ import { environment } from '../../../../environments/environment';
 
 <tbody>
   <tr *ngFor="let req of filteredReqs" class="clickable-row" (click)="viewDetail(req)">
-    <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'processing' || activeTab === 'all')" 
-        (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
-      <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
-    </td>
+  <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" 
+    (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
+  <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
+</td>
     <td>
       <code>{{ req.requisition_number || 'N/A' }}</code>
       <div class="creator-info" *ngIf="req.prepared_name">
@@ -122,14 +129,34 @@ import { environment } from '../../../../environments/environment';
       </div>
     </td>
     <td>{{ formatDate(req.date) }}</td>
-    <td *ngIf="viewMode === 'incoming'">
-      <span class="dept-name-small">{{ req.request_from || '—' }}</span>
-      <span class="branch-tag-tiny" *ngIf="req.branch_id">🏢 {{ getBranchName(req.branch_id) }}</span>
-    </td>
+ <td class="forward-cell">
+  <div class="forward-info" *ngIf="req.is_forwarded">
+    <!-- "Our Requests" - shows where WE forwarded it TO -->
+    <ng-container *ngIf="viewMode === 'our'">
+      <span class="forward-label">📤 To: {{ getBranchName(req.forwarded_to_branch_id) || '—' }}</span>
+      <span class="forward-dept">{{ getDepartmentName(req.forwarded_to_department_id) || '—' }}</span>
+      <span class="forward-company">{{ getBranchCompany(req.forwarded_to_branch_id) }}</span>
+    </ng-container>
+    <!-- "Request Management" - shows who forwarded it FROM (to us) -->
+    <ng-container *ngIf="viewMode === 'incoming'">
+      <span class="forward-label">{{ getBranchName(req.branch_id) || '—' }}</span>
+      <span class="forward-dept">{{ getDepartmentName(req.department_id) || '—' }}</span>
+      <span class="forward-company">{{ getBranchCompany(req.branch_id) }}</span>
+      <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
+    </ng-container>
+  </div>
+  <span class="not-forwarded" *ngIf="!req.is_forwarded">—</span>
+</td>
+   <td *ngIf="viewMode === 'incoming'">
+  <span class="dept-name-small">{{ req.request_from || '—' }}</span>
+  <span class="branch-tag-tiny" *ngIf="req.branch_id">🏢 {{ getBranchName(req.branch_id) }}</span>
+  <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
+</td>
     <td *ngIf="viewMode === 'our'">
       <span class="dept-name-small">{{ getDepartmentName(req.department_id) || '—' }}</span>
       <span class="branch-tag-tiny" *ngIf="req.branch_id">🏢 {{ getBranchName(req.branch_id) }}</span>
-      <span class="direction-tag outgoing">📤 Sent by you</span>
+      <span class="direction-tag outgoing" *ngIf="req.submitted_by === currentUser?.id">📤 Sent by you</span>
+<span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 by: {{ req.prepared_name }}</span>
     </td>
     <td class="attn-cell">
   <div class="attn-info">
@@ -141,22 +168,50 @@ import { environment } from '../../../../environments/environment';
 </td>
     <td>{{ req.items?.length || 0 }} item(s)</td>
     <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
-    <td>
-      <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-        {{ getStatusLabel(req.status) }}
-      </span>
-      <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">by: {{ req.items_prepared_name }}</div>
-      <div class="received-by" *ngIf="req.status === 'released' && req.released_name">by: {{ req.released_name }}</div>
-    </td>
+<td>
+  <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
+    {{ getStatusLabel(req.status) }}
+  </span>
+  <!-- Show sub-status for forwarded requests -->
+  <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
+    ↳ {{ getStatusLabel(req.forwarded_status) }}
+  </div>
+  <div class="received-by" *ngIf="req.status === 'approved' && req.items_prepared_name">by: {{ req.items_prepared_name }}</div>
+  <div class="received-by" *ngIf="req.status === 'released' && req.released_name">by: {{ req.released_name }}</div>
+</td>
     <td (click)="$event.stopPropagation()">
-      <button class="action-btn view" (click)="viewDetail(req)" title="View">👁️</button>
-      <button class="action-btn print" (click)="printReq(req)" title="Print">🖨️</button>
-      <button class="action-btn approve" *ngIf="req.status === 'pending'" (click)="receiveReq(req)" title="Accept">✅</button>
-      <button class="action-btn process" *ngIf="req.status === 'approved' && viewMode === 'incoming'" (click)="processReq(req)" title="Process">⚙️</button>
-      <button class="action-btn release-btn" *ngIf="req.status === 'processing' && viewMode === 'incoming'" (click)="releaseReq(req)" title="Release">📦</button>
-      <button class="action-btn reject" *ngIf="req.status === 'pending'" (click)="updateStatus(req, 'rejected')" title="Reject">❌</button>
-      <button class="action-btn delete" *ngIf="canDelete(req)" (click)="deleteReq(req)" title="Delete">🗑️</button>
-    </td>
+  <button class="action-btn view" (click)="viewDetail(req)" title="View">👁️</button>
+  <button class="action-btn print" (click)="printReq(req)" title="Print">🖨️</button>
+  
+  <!-- "Our Requests" actions -->
+  <ng-container *ngIf="viewMode === 'our'">
+    <button class="action-btn edit-btn" *ngIf="req.submitted_by === currentUser?.id && req.status === 'pending'" (click)="editReq(req)" title="Edit">✏️</button>
+    <button class="action-btn delete" *ngIf="canDelete(req)" (click)="deleteReq(req)" title="Delete">🗑️</button>
+    
+    <!-- Final Release for forwarded requests -->
+    <button class="action-btn release" *ngIf="req.is_forwarded && canReleaseForwarded(req)" (click)="releaseForwardedRequisition(req)" title="Final Release">📦✓</button>
+  </ng-container>
+  
+  <!-- "Request Management" actions -->
+  <ng-container *ngIf="viewMode === 'incoming'">
+    <button class="action-btn approve" *ngIf="req.status === 'pending'" (click)="receiveReq(req)" title="Accept">✅</button>
+    <button class="action-btn forward-btn" *ngIf="req.status === 'approved' && viewMode === 'incoming' && isHeadOrSupervisor()" (click)="openForwardModal(req)" title="Forward">📤</button>
+    
+    <!-- Process for approved -->
+    <button class="action-btn process" *ngIf="req.status === 'approved' && !req.is_forwarded" (click)="processReq(req)" title="Process">⚙️</button>
+    
+    <!-- Process for forwarded (only when not yet processed) -->
+    <button class="action-btn process" *ngIf="req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" (click)="processReq(req)" title="Process Forwarded">⚙️</button>
+    
+    <!-- Release for forwarded (after processing) -->
+    <button class="action-btn release-btn" *ngIf="req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" (click)="releaseReq(req)" title="Release Forwarded">📦</button>
+    
+    <!-- Release for normal requests -->
+    <button class="action-btn release-btn" *ngIf="!req.is_forwarded && req.status === 'processing'" (click)="releaseReq(req)" title="Release">📦</button>
+    
+    <button class="action-btn reject" *ngIf="req.status === 'pending'" (click)="updateStatus(req, 'rejected')" title="Reject">❌</button>
+  </ng-container>
+</td>
   </tr>
   <tr *ngIf="filteredReqs.length === 0">
     <td [attr.colspan]="getColspan()" class="empty-row">No requisitions found</td>
@@ -168,11 +223,14 @@ import { environment } from '../../../../environments/environment';
 
     <!-- Detail Modal -->
     <div class="modal-overlay" *ngIf="selectedReq" (click)="closeModal()">
-      <div class="modal-content" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>📋 Requisition Details</h3>
-          <button class="modal-close" (click)="closeModal()">✕</button>
-        </div>
+  <div class="modal-content" 
+       id="detailReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'detailReqModal')">
+    <div class="modal-header">
+      <h3>📋 Requisition Details</h3>
+      <button class="modal-close" (click)="closeModal()">✕</button>
+    </div>
         <div class="modal-body" *ngIf="selectedReq">
          <div class="detail-section">
   <div class="detail-row">
@@ -297,11 +355,14 @@ import { environment } from '../../../../environments/environment';
     </div>
        <!-- Confirmation Modal -->
     <div class="modal-overlay" *ngIf="showConfirmModal" (click)="cancelConfirm()">
-      <div class="confirm-modal" (click)="$event.stopPropagation()">
+  <div class="confirm-modal" 
+       id="confirmReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'confirmReqModal')">
         <div class="confirm-modal-header" [class]="'confirm-' + confirmModalType">
-          <span class="confirm-icon">
-            {{ confirmModalType === 'receive' ? '📥' : confirmModalType === 'reject' ? '❌' : confirmModalType === 'release' ? '📦' : '🗑️' }}
-          </span>
+         <span class="confirm-icon">
+  {{ confirmModalType === 'receive' ? '📥' : confirmModalType === 'reject' ? '❌' : confirmModalType === 'release' ? '📦' : confirmModalType === 'bulkdelete' ? '🗑️' : '🗑️' }}
+</span>
           <h3>{{ confirmModalTitle }}</h3>
         </div>
         <div class="confirm-modal-body">
@@ -324,14 +385,17 @@ import { environment } from '../../../../environments/environment';
         <div class="confirm-modal-footer">
           <button class="btn btn-cancel" (click)="cancelConfirm()">Cancel</button>
           <button class="btn" [class]="'btn-confirm btn-' + confirmModalType" (click)="confirmAction()">
-            {{ confirmModalType === 'receive' ? '📥 Receive' : confirmModalType === 'reject' ? '❌ Reject' : confirmModalType === 'release' ? '📦 Release' : '🗑️ Delete' }}
-          </button>
+  {{ confirmModalType === 'receive' ? '📥 Receive' : confirmModalType === 'reject' ? '❌ Reject' : confirmModalType === 'release' ? '📦 Release' : confirmModalType === 'bulkdelete' ? '🗑️ Delete All' : '🗑️ Delete' }}
+</button>
         </div>
       </div>
     </div>
       <!-- Bulk Process Modal -->
     <div class="modal-overlay" *ngIf="showBulkProcessConfirm" (click)="cancelBulkProcess()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="bulkProcessReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'bulkProcessReqModal')">
         <div class="modal-titlebar" style="background: #cc6600;">
           <span>⚙️ Bulk Process</span>
           <button type="button" (click)="cancelBulkProcess()" class="modal-close">✕</button>
@@ -356,7 +420,10 @@ import { environment } from '../../../../environments/environment';
 
     <!-- Bulk Release Modal -->
     <div class="modal-overlay" *ngIf="showBulkReleaseConfirm" (click)="cancelBulkRelease()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
+  <div class="modal-window" 
+       id="bulkReleaseReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'bulkReleaseReqModal')">
         <div class="modal-titlebar" style="background: #0066cc;">
           <span>📦 Bulk Release</span>
           <button type="button" (click)="cancelBulkRelease()" class="modal-close">✕</button>
@@ -378,6 +445,47 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
     </div>
+    <!-- Forward Modal -->
+<div class="modal-overlay" *ngIf="showForwardModal" (click)="cancelForward()">
+  <div class="modal-window" 
+       id="forwardReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'forwardReqModal')">
+    <div class="modal-titlebar" style="background: #0a3a8c;">
+      <span>📤 Forward Requisition</span>
+      <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size: 11px; margin-bottom: 12px;">
+        Forwarding: <strong>#{{ forwardTargetReq?.requisition_number }}</strong>
+      </p>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
+        <select [(ngModel)]="forwardBranchId" class="classic-select" style="width: 100%;" (change)="onForwardBranchChange()">
+          <option value="">— Select Branch —</option>
+          <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+            🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+          </option>
+        </select>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
+        <select [(ngModel)]="forwardDepartmentId" class="classic-select" style="width: 100%;" [disabled]="!forwardBranchId">
+          <option value="">— Select Department —</option>
+          <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
+            {{ dept.displayName || dept.name }}
+          </option>
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" (click)="cancelForward()">Cancel</button>
+        <button class="btn btn-process" style="background: #0a3a8c; color: white;" (click)="confirmForward()" [disabled]="!forwardBranchId || !forwardDepartmentId">
+          📤 Forward
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
     .admin-container { padding: 20px; font-family: 'Segoe UI', sans-serif; font-size: 11px; }
@@ -425,8 +533,11 @@ import { environment } from '../../../../environments/environment';
     .action-btn.release { color: #0066cc; }
     .action-btn.release:hover { background: #e8f0ff; border-color: #0066cc; }
     .confirm-modal-header.confirm-release { background: linear-gradient(135deg, #0066cc, #3388ee); }
+    .confirm-modal-header.confirm-bulkdelete { background: linear-gradient(135deg, #cc0000, #ee3333); }
     .btn-confirm.btn-release { background: #0066cc; }
     .btn-confirm.btn-release:hover { background: #0044aa; }
+    .btn-confirm.btn-bulkdelete { background: #cc0000; }
+.btn-confirm.btn-bulkdelete:hover { background: #aa0000; }
     .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; }
 .branch-tag-tiny { font-size: 8px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
 .direction-tag { font-size: 7px; padding: 1px 4px; border-radius: 2px; margin-top: 1px; font-style: italic; }
@@ -438,7 +549,45 @@ import { environment } from '../../../../environments/environment';
 .action-btn.approve:hover { background: #eeffee; border-color: #008800; }
 .total-cell { font-weight: bold; color: #0a3a8c; font-family: monospace; text-align: right; }
 .creator-info { font-size: 9px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
-.creator-label { color: #555; }
+.creator-info { 
+  font-size: 9px; 
+  color: #666; 
+  margin-top: 3px; 
+  border-top: 1px dotted #c0c0c0; 
+  padding-top: 3px; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+  .status-forwarded-sub { 
+  font-size: 8px; 
+  font-style: italic; 
+  color: #666; 
+  margin-top: 2px;
+  border-top: 1px dotted #ccc;
+  padding-top: 2px;
+}
+.creator-label { 
+  color: #0a3a8c; 
+  font-weight: 600;
+  font-size: 9px;
+  background: #f0f4ff;
+  padding: 1px 6px;
+  border-radius: 3px;
+  border: 1px solid #b8c8e8;
+  white-space: nowrap;
+}
+.creator-label::before {
+  font-size: 8px;
+}
+.modal-header, .modal-titlebar, .confirm-modal-header {
+  cursor: grab;
+  user-select: none;
+}
+.modal-header:active, .modal-titlebar:active, .confirm-modal-header:active {
+  cursor: grabbing;
+}
     /* Modal Styles */
     .modal-overlay {
       position: fixed;
@@ -452,7 +601,6 @@ import { environment } from '../../../../environments/environment';
     }
     .modal-content {
       background: white;
-      border-radius: 10px;
       width: 100%;
       max-width: 700px;
       max-height: 90vh;
@@ -466,7 +614,6 @@ import { environment } from '../../../../environments/environment';
       padding: 16px 20px;
       border-bottom: 1px solid #e0e0e0;
       background: #f8f9fa;
-      border-radius: 10px 10px 0 0;
     }
     .modal-header h3 { margin: 0; color: #0a246a; font-size: 16px; }
     .modal-close {
@@ -476,7 +623,6 @@ import { environment } from '../../../../environments/environment';
       cursor: pointer;
       color: #888;
       padding: 4px 8px;
-      border-radius: 4px;
     }
     .modal-close:hover { background: #e0e0e0; color: #333; }
     .modal-body { padding: 20px; }
@@ -487,7 +633,6 @@ import { environment } from '../../../../environments/environment';
       padding: 16px 20px;
       border-top: 1px solid #e0e0e0;
       background: #f8f9fa;
-      border-radius: 0 0 10px 10px;
     }
     .btn-close { background: #0a246a; color: white; border-color: #0a246a; }
     .btn-close:hover { background: #0a3a8c; }
@@ -512,7 +657,39 @@ import { environment } from '../../../../environments/environment';
       color: #555;
       flex-shrink: 0;
     }
-
+      .forward-company { 
+  color: #888; 
+  font-size: 7px; 
+  white-space: nowrap; 
+  font-style: italic; 
+}
+.forward-by { 
+  font-size: 7px; 
+  color: #0a3a8c; 
+  font-style: italic; 
+  font-weight: 600;
+  margin-top: 1px;
+}
+.forward-btn { color: #0a3a8c; }
+.forward-btn:hover { background: #e8f0ff; border-color: #0a3a8c; }
+.forward-cell { max-width: 120px; font-size: 9px; }
+.forward-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
+.forward-label { font-weight: 600; color: #0a3a8c; font-size: 9px; }
+.forward-dept { color: #666; font-size: 8px; }
+.not-forwarded { color: #ccc; font-size: 11px; }
+.tab-count.forwarded-count { background: #0a3a8c; }
+.status-forwarded { background: #e8f0ff; color: #0a3a8c; }
+.company-tag-tiny {
+  font-size: 7px;
+  background: #fff8e8;
+  color: #886600;
+  padding: 1px 4px;
+  border-radius: 2px;
+  border: 1px solid #e6d88a;
+  white-space: nowrap;
+  display: block;
+  margin-top: 1px;
+}
     .detail-value { font-size: 11px; color: #333; }
     .remarks-text { font-size: 11px; color: #333; background: #f9f9f9; padding: 10px; border-radius: 4px; white-space: pre-wrap; margin: 0; }
     
@@ -547,7 +724,6 @@ import { environment } from '../../../../environments/environment';
       /* Confirm Modal Styles */
 .confirm-modal {
   background: white;
-  border-radius: 12px;
   width: 100%;
   max-width: 420px;
   overflow: hidden;
@@ -574,7 +750,6 @@ import { environment } from '../../../../environments/environment';
 .confirm-modal-body p { margin: 0 0 16px 0; font-size: 13px; color: #444; line-height: 1.5; }
 .confirm-modal-info {
   background: #f8f9fa;
-  border-radius: 8px;
   padding: 12px 16px;
 }
 .confirm-info-row {
@@ -675,9 +850,23 @@ import { environment } from '../../../../environments/environment';
     .btn-release { background: #0066cc; color: white; border-color: #0066cc; }
     .btn-release:hover { background: #0044aa; }
     
-    .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 450px; border-radius: 2px; }
+    .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 450px;  }
     .modal-titlebar { background: #0a246a; color: white; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: bold; }
-    .modal-close { background: none; border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; padding: 3px 8px; font-size: 14px; border-radius: 2px; }
+    .modal-close { 
+  background: rgba(0,0,0,0.3); 
+  border: 1px solid rgba(255,255,255,0.6); 
+  color: white; 
+  cursor: pointer; 
+  padding: 4px 10px; 
+  font-size: 14px; 
+  font-weight: bold;
+  border-radius: 0px;
+}
+.modal-close:hover { 
+  background: rgba(255,0,0,0.7); 
+  color: white;
+}
+  .toast-notification.warning { background: #cc6600; }
     .warning-content { display: flex; gap: 14px; align-items: flex-start; }
     .warning-icon { font-size: 36px; flex-shrink: 0; }
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
@@ -692,17 +881,20 @@ export class RequisitionsManagementComponent implements OnInit {
   activeTab = 'pending';
   viewMode: string = 'our';
   selectedReqIds: number[] = [];
-  
+  private isDragging = false;
+private dragOffsetX = 0;
+private dragOffsetY = 0;
+private currentDragModal: HTMLElement | null = null;
   showToast = false;
   toastMessage = '';
-  toastType: 'success' | 'error' = 'success';
+  toastType: 'success' | 'error' | 'warning' = 'success';
   private toastTimer: any;
   currentUser: any;
   selectedReq: any = null;
   showConfirmModal = false;
   confirmModalTitle = '';
   confirmModalMessage = '';
-  confirmModalType: 'receive' | 'reject' | 'release' | 'delete' = 'receive';
+ confirmModalType: 'receive' | 'reject' | 'release' | 'delete' | 'bulkdelete' = 'receive';
   confirmTargetReq: any = null;
   branches: any[] = [];
   showBulkProcessConfirm = false;
@@ -714,6 +906,11 @@ filters = {
   departmentId: '',
   branchId: ''
 };
+showForwardModal = false;
+forwardTargetReq: any = null;
+forwardBranchId: number | null = null;
+forwardDepartmentId: number | null = null;
+forwardFilteredDepartments: any[] = [];
 filteredBranches: any[] = [];
 filteredFilterDepartments: any[] = [];
 departments: any[] = [];
@@ -734,12 +931,52 @@ mainBranchIds = [1, 5];
   }
 
  ngOnInit() {
+   console.log('🔴🔴🔴 ADMIN FORM LOADED - URL:', this.router.url);
   this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
   this.loadBranchesAndDepartments(); 
    this.loadUserRoles();
   this.loadAll();
+   document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
+startDrag(event: MouseEvent, modalId: string) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.modal-titlebar') && !target.closest('.modal-header') && !target.closest('.confirm-modal-header')) return;
+  
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  this.isDragging = true;
+  this.currentDragModal = modal;
+  
+  const rect = modal.getBoundingClientRect();
+  this.dragOffsetX = event.clientX - rect.left;
+  this.dragOffsetY = event.clientY - rect.top;
+  
+  modal.style.position = 'fixed';
+  modal.style.cursor = 'grabbing';
+  modal.style.transition = 'none';
+  event.preventDefault();
 }
 
+onDragMove(event: MouseEvent) {
+  if (!this.isDragging || !this.currentDragModal) return;
+  
+  const x = event.clientX - this.dragOffsetX;
+  const y = event.clientY - this.dragOffsetY;
+  
+  this.currentDragModal.style.left = x + 'px';
+  this.currentDragModal.style.top = y + 'px';
+  this.currentDragModal.style.transform = 'none';
+}
+
+onDragEnd() {
+  if (this.currentDragModal) {
+    this.currentDragModal.style.cursor = '';
+  }
+  this.isDragging = false;
+  this.currentDragModal = null;
+}
   private getAuthHeaders() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     return { 'Authorization': `Bearer ${token}` };
@@ -758,42 +995,67 @@ mainBranchIds = [1, 5];
     this.selectedReqIds = [];
     this.applyFilters();
   }
-
- applyFilters() {
+applyFilters() {
     let filtered = [...this.allReqs];
     
-    // Filter by view mode
     const userBranchId = this.currentUser?.branch_id;
     const userDeptId = this.currentUser?.department_id;
     const userId = this.currentUser?.id;
     
     if (this.viewMode === 'our') {
-      // Show requests created by current user (our own requests)
-      filtered = filtered.filter(r => r.submitted_by == userId);
+        filtered = filtered.filter(r => {
+            // My own request
+            if (r.submitted_by == userId) return true;
+            
+            // Colleague's request (same creator branch+dept)
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            if (creatorBranch != null && creatorDept != null) {
+                if (creatorBranch == userBranchId && creatorDept == userDeptId) return true;
+            }
+            
+            // Forwarded FROM our department
+            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return true;
+            
+            return false;
+        });
     } else if (this.viewMode === 'incoming') {
-      // Show requests sent TO our branch/department (from others)
-      filtered = filtered.filter(r => 
-        r.branch_id == userBranchId && 
-        r.department_id == userDeptId && 
-        r.submitted_by != userId  // Not our own
-      );
+        filtered = filtered.filter(r => {
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+            
+            // Forwarded TO us from another department
+            if (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) return true;
+            
+            // If forwarded FROM our department, exclude from incoming
+            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return false;
+            
+            // Original destination is our department AND not from us
+            if (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept) return true;
+            
+            return false;
+        });
     }
     
-    // Filter by status
     if (this.activeTab !== 'all') {
-      filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
+        filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
+    }
+    
+    if (this.filters.branchId) {
+        filtered = filtered.filter(r => r.branch_id == this.filters.branchId);
     }
     
     if (this.searchTerm.trim()) {
-      const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(r =>
-        r.requisition_number?.toLowerCase().includes(term) ||
-        r.prepared_name?.toLowerCase().includes(term) ||
-        r.request_from?.toLowerCase().includes(term)
-      );
+        const term = this.searchTerm.toLowerCase();
+        filtered = filtered.filter(r =>
+            r.requisition_number?.toLowerCase().includes(term) ||
+            r.prepared_name?.toLowerCase().includes(term) ||
+            r.request_from?.toLowerCase().includes(term)
+        );
     }
     this.filteredReqs = filtered;
-  }
+}
 onFilterBranchChange() {
   if (this.filters.branchId) {
     this.filteredFilterDepartments = this.departments.filter(d => {
@@ -823,25 +1085,52 @@ clearFilters() {
   const userId = this.currentUser?.id;
   
   if (this.viewMode === 'our') {
-    filtered = filtered.filter(r => r.submitted_by == userId);
+    filtered = filtered.filter(r => {
+      if (r.submitted_by == userId) return true;
+      const creatorBranch = r.creator_branch_id;
+      const creatorDept = r.creator_dept_id;
+      if (creatorBranch != null && creatorDept != null && creatorBranch == userBranchId && creatorDept == userDeptId) return true;
+      if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return true;
+      return false;
+    });
   } else if (this.viewMode === 'incoming') {
-    filtered = filtered.filter(r => 
-      r.branch_id == userBranchId && 
-      r.department_id == userDeptId && 
-      r.submitted_by != userId
-    );
+    filtered = filtered.filter(r => {
+      const creatorBranch = r.creator_branch_id;
+      const creatorDept = r.creator_dept_id;
+      const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+      if (r.is_forwarded) return r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept;
+      return r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept;
+    });
   }
   
   if (status === 'all') return filtered.length;
   return filtered.filter(r => (r.status || 'pending') === status).length;
 }
-  getStatusLabel(status: string): string {
+// Check if current user can release a forwarded request (from the forwarding dept)
+canReleaseForwarded(req: any): boolean {
+  if (!this.currentUser) return false;
+  if (this.viewMode !== 'our') return false;
+  if ((req.status || 'pending') !== 'forwarded') return false;
+  if (req.forwarded_status !== 'released') return false;
+  if (req.branch_id !== this.currentUser.branch_id || req.department_id !== this.currentUser.department_id) return false;
+  return this.isHeadOrSupervisor();
+}
+
+// Release a forwarded requisition (from the forwarding department's side)
+releaseForwardedRequisition(req: any) {
+  this.confirmTargetReq = req;
+  this.confirmModalTitle = 'Final Release';
+  this.confirmModalMessage = `Are you sure you want to do the final release for Requisition #${req.requisition_number}?`;
+  this.confirmModalType = 'release';
+  this.showConfirmModal = true;
+}
+getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
-      'pending': 'Pending', 'approved': 'Accepted', 'processing': 'On Process',
-      'released': 'Released', 'rejected': 'Rejected'
+      'pending': 'Pending', 'approved': 'Accepted', 'forwarded': 'Forwarded',
+      'processing': 'On Process', 'released': 'Released', 'rejected': 'Rejected'
     };
     return labels[status] || status || 'Pending';
-  }
+}
 private userRolesMap: Map<string, string> = new Map();
 getBranchCompany(branchId: number): string {
   if (!branchId) return '';
@@ -863,6 +1152,7 @@ loadUserRoles() {
     }
   });
 }
+
 getAttnRole(attnName: string): string {
   if (!attnName) return '';
   return this.userRolesMap.get(attnName) || '';
@@ -932,34 +1222,75 @@ getDepartmentName(deptId: number): string {
   }
   cancelBulkRelease() { this.showBulkReleaseConfirm = false; this.bulkCount = 0; }
 
-  canDelete(req: any): boolean {
-    if (this.currentUser?.role === 'admin') return true;
-    return (req.status === 'pending' || req.status === 'rejected');
-  }
+canDelete(req: any): boolean {
+    if (!this.currentUser) return false;
+    
+    // ✅ Admin can always delete
+    const role = (this.currentUser?.role || '').toLowerCase();
+    if (role === 'admin') return true;
+    
+    // ✅ ONLY creator can delete their OWN pending requests
+    if (req.submitted_by === this.currentUser.id && (req.status || 'pending') === 'pending') return true;
+    
+    // ✅ Head/Manager recipient can delete any request sent to their department
+    if (this.isHeadOrSupervisor()) return true;
+    
+    // ❌ Staff, Supervisor, Technician, and other colleagues CANNOT delete
+    return false;
+}
 
-  processReq(req: any) {
+isHeadOrSupervisor(): boolean {
+    if (!this.currentUser) return false;
+    const role = (this.currentUser.role || '').toLowerCase();
+    return role === 'head/manager' || role === 'branch manager';
+}
+
+processReq(req: any) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    // For forwarded requests, the backend already handles keeping status as 'forwarded'
+    // when it receives status: 'processing' and reqData.is_forwarded is true
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'processing' }, { headers }).subscribe({
-      next: () => { req.status = 'processing'; this.applyFilters(); this.showToastMsg('⚙️ Processing!', 'success'); },
-      error: () => { req.status = 'processing'; this.applyFilters(); }
+      next: () => { 
+        // For forwarded requests, don't change the main status locally
+        if (req.is_forwarded) {
+          req.forwarded_status = 'processing';
+          // Keep req.status as 'forwarded'
+        } else {
+          req.status = 'processing';
+        }
+        this.applyFilters(); 
+        this.showToastMsg('⚙️ Processing!', 'success'); 
+      },
+      error: () => { 
+        if (req.is_forwarded) {
+          req.forwarded_status = 'processing';
+        } else {
+          req.status = 'processing';
+        }
+        this.applyFilters(); 
+      }
     });
-  }
-
-  getColspan(): number {
-  let cols = 9; // Base: REQ#, Date, ATTN, Items, Total, Status, Actions + Request From/Recipient
-  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'processing' || this.activeTab === 'all')) cols++; // Checkbox
+}
+getColspan(): number {
+  let cols = 10; // Base columns (added forwarded column)
+  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'forwarded' || this.activeTab === 'processing' || this.activeTab === 'released' || this.activeTab === 'rejected' || this.activeTab === 'all')) cols++;
   return cols;
 }
 
   viewDetail(req: any) { this.selectedReq = req; }
   closeModal() { this.selectedReq = null; }
 
-  receiveReq(req: any) {
-    this.router.navigate(['/admin/requisitions/approve'], { queryParams: { id: req.id } });
-  }
-
-  // ✅ NEW: Release requisition
+receiveReq(req: any) {
+  this.router.navigate(['/admin/requisitions/approve'], { 
+    queryParams: { id: req.id, mode: 'approve' } 
+  });
+}
+newRequisition() {
+  // ✅ Remove /admin prefix - use the path that works
+  this.router.navigate(['/requisitions/new']);
+}
   releaseReq(req: any) {
     this.confirmModalTitle = 'Release Items';
     this.confirmModalMessage = `Are you sure you want to mark Requisition #${req.requisition_number} as released? The items have been given to the requester.`;
@@ -1015,17 +1346,123 @@ loadBranchesAndDepartments() {
     }
   });
 }
-  confirmAction() {
-    if (!this.confirmTargetReq) return;
+canForward(req: any): boolean {
+  if (!this.currentUser) return false;
+  if ((req.status || 'pending') !== 'approved') return false;
+  return this.isHeadOrSupervisor();
+}
+
+openForwardModal(req: any) {
+  this.forwardTargetReq = req;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+  this.forwardFilteredDepartments = [];
+  this.showForwardModal = true;
+}
+
+cancelForward() {
+  this.showForwardModal = false;
+  this.forwardTargetReq = null;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+}
+
+onForwardBranchChange() {
+  if (this.forwardBranchId) {
+    const originalBranchId = this.forwardTargetReq?.branch_id;
+    const originalDeptId = this.forwardTargetReq?.department_id;
+    this.forwardFilteredDepartments = this.departments.filter(d => {
+      const matchesBranch = d.branch_id == this.forwardBranchId;
+      if (this.forwardBranchId == originalBranchId && d.id == originalDeptId) return false;
+      return matchesBranch;
+    });
+  } else {
+    this.forwardFilteredDepartments = [];
+  }
+  this.forwardDepartmentId = null;
+}
+confirmForward() {
+  if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
+  const originalBranchId = this.forwardTargetReq.branch_id;
+  const originalDeptId = this.forwardTargetReq.department_id;
+  if (this.forwardBranchId == originalBranchId && this.forwardDepartmentId == originalDeptId) {
+    this.showToastMsg('⚠️ Cannot forward to the original department!', 'warning');
+    return;
+  }
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  
+  const payload = {
+    forwarded_to_branch_id: this.forwardBranchId,
+    forwarded_to_department_id: this.forwardDepartmentId,
+    forwarded_by_name: this.currentUser.fullname || this.currentUser.username
+  };
+  
+  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
+    next: () => {
+      this.showToastMsg('📤 Requisition forwarded!', 'success');
+      this.cancelForward();
+      this.loadAll();
+    },
+    error: (err) => {
+      console.error('Forward failed:', err);
+      this.cancelForward();
+      this.showToastMsg('⚠️ Failed to forward', 'warning');
+    }
+  });
+}
+
+bulkDelete() {
+  if (this.selectedReqIds.length === 0) return;
+  this.bulkCount = this.selectedReqIds.length;
+  // Reuse the delete confirmation modal or create a new one
+  this.confirmModalTitle = 'Bulk Delete';
+  this.confirmModalMessage = `Are you sure you want to delete ${this.selectedReqIds.length} requisition(s)? This cannot be undone.`;
+  this.confirmModalType = 'bulkdelete';
+  this.showConfirmModal = true;
+}
+ confirmAction() {
+    if (!this.confirmTargetReq && this.confirmModalType !== 'bulkdelete') return;
     const req = this.confirmTargetReq;
     switch (this.confirmModalType) {
       case 'receive': this.processReceive(req); break;
       case 'reject': this.processReject(req); break;
-      case 'release': this.processRelease(req); break;  // ✅ NEW
+      case 'release': this.processRelease(req); break;
       case 'delete': this.processDelete(req); break;
+      case 'bulkdelete': this.processBulkDelete(); break;
     }
     this.closeConfirmModal();
-  }
+}
+
+processBulkDelete() {
+  if (this.selectedReqIds.length === 0) return;
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  let completed = 0;
+  const total = this.selectedReqIds.length;
+  const ids = [...this.selectedReqIds];
+  
+  ids.forEach(id => {
+    this.http.delete(`${environment.apiUrl}/api/admin/requisitions/${id}`, { headers }).subscribe({
+      next: () => {
+        completed++;
+        if (completed === total) {
+          this.showToastMsg(`🗑️ ${total} deleted!`, 'success');
+          this.selectedReqIds = [];
+          this.loadAll();
+        }
+      },
+      error: () => {
+        completed++;
+        this.allReqs = this.allReqs.filter(r => !ids.includes(r.id));
+        if (completed === total) {
+          this.applyFilters();
+          this.selectedReqIds = [];
+        }
+      }
+    });
+  });
+}
 
   cancelConfirm() { this.closeConfirmModal(); }
   closeConfirmModal() { this.showConfirmModal = false; this.confirmTargetReq = null; }
@@ -1054,10 +1491,14 @@ loadBranchesAndDepartments() {
       error: () => { req.status = 'approved'; this.applyFilters(); this.showToastMsg('⚠️ Updated locally', 'error'); }
     });
   }
-
+editReq(req: any) {
+  this.router.navigate(['/requisitions/edit'], { 
+    queryParams: { id: req.id } 
+  });
+}
   // ✅ NEW: Process release
-  processRelease(req: any) {
-    const payload = {
+ processRelease(req: any) {
+    const payload: any = {
       status: 'released',
       released_name: this.authService.getCurrentUser()?.fullname || 'Admin',
       released_date: new Date().toISOString().split('T')[0]
@@ -1066,15 +1507,29 @@ loadBranchesAndDepartments() {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
       next: () => {
-        req.status = 'released';
+        // For forwarded requests, keep status as 'forwarded' and set forwarded_status to 'released'
+        if (req.is_forwarded) {
+          req.forwarded_status = 'released';
+          // Keep req.status as 'forwarded'
+        } else {
+          req.status = 'released';
+        }
         req.released_name = payload.released_name;
         req.released_date = payload.released_date;
         this.applyFilters();
         this.showToastMsg('📦 Requisition released!', 'success');
       },
-      error: () => { req.status = 'released'; this.applyFilters(); this.showToastMsg('⚠️ Updated locally', 'error'); }
+      error: () => { 
+        if (req.is_forwarded) {
+          req.forwarded_status = 'released';
+        } else {
+          req.status = 'released';
+        }
+        this.applyFilters(); 
+        this.showToastMsg('⚠️ Updated locally', 'error'); 
+      }
     });
-  }
+}
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
   const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
@@ -1237,9 +1692,9 @@ getBranchName(branchId: number): string {
   catch { return String(val); }
 }
 
-  showToastMsg(msg: string, type: 'success' | 'error') {
+showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     this.toastMessage = msg; this.toastType = type; this.showToast = true;
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastTimer = setTimeout(() => this.showToast = false, 3000);
-  }
+}
 }
