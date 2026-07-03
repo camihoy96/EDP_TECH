@@ -71,8 +71,31 @@ import { ClientNotificationService } from '../../../services/client-notification
   </button>
 </div>
 
-<!-- Filter bar (simplified) -->
+<!-- Filter bar -->
 <div class="retro-filter-bar">
+  <!-- Branch Filter -->
+  <div class="filter-group">
+    <label>Branch:</label>
+    <select class="retro-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
+      <option value="">All Branches</option>
+      <option *ngFor="let branch of filterBranches" [value]="branch.id">
+        🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+      </option>
+    </select>
+  </div>
+  
+  <!-- Department Filter -->
+  <div class="filter-group">
+    <label>Dept:</label>
+    <select class="retro-select" [(ngModel)]="filters.departmentId" (change)="applyFilters()">
+      <option value="">All Departments</option>
+      <option *ngFor="let dept of filterDepartments" [value]="dept.id">
+        {{ dept.displayName || dept.name }}
+      </option>
+    </select>
+  </div>
+  
+  <!-- Priority Filter -->
   <div class="filter-group">
     <label>Priority:</label>
     <select class="retro-select" [(ngModel)]="filters.priority" (change)="applyFilters()">
@@ -94,7 +117,6 @@ import { ClientNotificationService } from '../../../services/client-notification
     <span>🔄</span> Clear
   </button>
 </div>
-
 <!-- Status bar info -->
 <div class="retro-status-bar">
   <span>Showing: {{ paginatedTickets.length }} of {{ filteredTickets.length }} tickets</span>
@@ -108,6 +130,13 @@ import { ClientNotificationService } from '../../../services/client-notification
   <button class="view-btn" [class.active]="viewMode === 'list'" (click)="setView('list')" title="List View">📋</button>
   <button class="view-btn" [class.active]="viewMode === 'grid'" (click)="setView('grid')" title="Grid View">🔲</button>
   <button class="view-btn" [class.active]="viewMode === 'kanban'" (click)="setView('kanban')" title="Kanban View">📊</button>
+  
+  <!-- Bulk Delete Button -->
+  <div style="margin-left: auto;" *ngIf="selectedTicketIds.length > 0">
+    <button class="retro-btn danger" (click)="bulkDeleteTickets()" style="background: #cc0000; color: white; border-color: #cc0000;">
+      🗑️ Delete ({{ selectedTicketIds.length }})
+    </button>
+  </div>
 </div>
 
 <!-- LIST VIEW -->
@@ -115,6 +144,10 @@ import { ClientNotificationService } from '../../../services/client-notification
   <table class="retro-table">
  <thead>
   <tr>
+    <!-- Add checkbox column header -->
+    <th style="width:30px;">
+      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
+    </th>
     <th>Ticket Code</th>
     <th>Origin Branch</th>
     <th>Origin Department</th>
@@ -127,6 +160,10 @@ import { ClientNotificationService } from '../../../services/client-notification
 </thead>
 <tbody>
   <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket.id)">
+    <!-- Checkbox cell -->
+    <td (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
+      <input type="checkbox" [checked]="isSelected(ticket)" (change)="toggleSelect(ticket)">
+    </td>
     <td class="ticket-cell">
       <div class="ticket-code">{{ ticket.ticket_number }}</div>
       <div class="ticket-creator">from: {{ ticket.created_by_name || 'Unknown' }}</div>
@@ -178,7 +215,7 @@ import { ClientNotificationService } from '../../../services/client-notification
     </td>
   </tr>
   <tr *ngIf="filteredTickets.length === 0">
-    <td colspan="8" class="empty-row">
+    <td colspan="9" class="empty-row">
       <div class="empty-state">
         <span class="empty-icon">📭</span>
         <p>No tickets found</p>
@@ -254,7 +291,7 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- Assign Ticket Modal -->
 <div class="modal-overlay" *ngIf="showAssignModal" (click)="closeAssignModal()">
   <div class="modal-window" (click)="$event.stopPropagation()">
-    <div class="modal-titlebar">
+    <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
       <span>{{ assignTicketData?.assigned_to ? '🔄 Reassign' : '👤 Assign' }} Ticket: {{ assignTicketData?.ticket_number }}</span>
       <button type="button" (click)="closeAssignModal()" class="modal-close">✕</button>
     </div>
@@ -343,7 +380,7 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- Assign Success Modal -->
 <div class="modal-overlay" *ngIf="showAssignSuccess" (click)="closeAssignSuccess()">
   <div class="modal-window" (click)="$event.stopPropagation()">
-    <div class="modal-titlebar success">
+    <div class="modal-titlebar success" (mousedown)="startDrag($event)" style="cursor: grab;">
       <span>✅ Ticket Assigned</span>
       <button type="button" (click)="closeAssignSuccess()" class="modal-close">✕</button>
     </div>
@@ -369,7 +406,7 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- Resolve Ticket Modal -->
 <div class="modal-overlay" *ngIf="showResolveModal" (click)="closeResolveModal()">
   <div class="modal-window" (click)="$event.stopPropagation()">
-    <div class="modal-titlebar resolve">
+    <div class="modal-titlebar resolve" (mousedown)="startDrag($event)" style="cursor: grab;">
       <span>✅ Resolve Ticket</span>
       <button type="button" (click)="closeResolveModal()" class="modal-close">✕</button>
     </div>
@@ -396,7 +433,7 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- Delete Ticket From List Modal -->
 <div class="modal-overlay" *ngIf="showDeleteListModal" (click)="closeDeleteListModal()">
   <div class="modal-window" (click)="$event.stopPropagation()">
-    <div class="modal-titlebar danger">
+    <div class="modal-titlebar danger" (mousedown)="startDrag($event)" style="cursor: grab;">
       <span>🗑️ Delete Ticket</span>
       <button type="button" (click)="closeDeleteListModal()" class="modal-close">✕</button>
     </div>
@@ -413,6 +450,30 @@ import { ClientNotificationService } from '../../../services/client-notification
       <div class="modal-actions">
         <button class="retro-btn" (click)="closeDeleteListModal()">Cancel</button>
         <button class="retro-btn danger" (click)="confirmDeleteFromList()">🗑️ Yes, Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Bulk Delete Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showBulkDeleteModal" (click)="cancelBulkDelete()">
+  <div class="modal-window" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar danger" (mousedown)="startDrag($event)" style="cursor: grab;">
+      <span>🗑️ Bulk Delete Tickets</span>
+      <button type="button" (click)="cancelBulkDelete()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-message">
+          <h3>Delete {{ bulkDeleteCount }} selected ticket(s)?</h3>
+          <p class="warning-hint danger-text">This action cannot be undone. All data including comments and attachments will be permanently removed.</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="retro-btn" (click)="cancelBulkDelete()">Cancel</button>
+        <button class="retro-btn danger" (click)="confirmBulkDelete()" style="background: #cc0000; color: white; border-color: #cc0000;">
+          🗑️ Yes, Delete {{ bulkDeleteCount }} Tickets
+        </button>
       </div>
     </div>
   </div>
@@ -611,7 +672,12 @@ export class TicketListComponent implements OnInit {
   currentUser: any;
   apiUrl = environment.apiUrl;
   activeTab = 'all';
-  filters = { priority: '' };
+  filters = { 
+  priority: '', 
+  branchId: '', 
+  departmentId: '' 
+};
+selectedTicketIds: number[] = [];
   viewMode: string = 'list';
   successTicketNumber: string = '';
   successTicketTitle: string = '';
@@ -626,7 +692,16 @@ export class TicketListComponent implements OnInit {
   resolveTicketData: Ticket | null = null;
   showDeleteListModal = false;
   deleteListData: Ticket | null = null;
+  filterBranches: any[] = [];
+filterDepartments: any[] = [];
+allDepartments: any[] = [];
 private updateTimeout: any;
+private isDragging = false;
+private dragOffsetX = 0;
+private dragOffsetY = 0;
+private currentDragModal: HTMLElement | null = null;
+showBulkDeleteModal = false;
+bulkDeleteCount = 0;
   constructor(
     private ticketService: TicketService,
     private router: Router,
@@ -637,7 +712,7 @@ private updateTimeout: any;
     private clientNotificationService: ClientNotificationService
   ) {}
 
-  ngOnInit() {
+ngOnInit() {
     this.authService.currentUser$.subscribe(user => { this.currentUser = user; });
     this.route.queryParams.subscribe(params => {
       if (params['search']) this.searchTerm = params['search'];
@@ -645,17 +720,50 @@ private updateTimeout: any;
     });
     const savedView = localStorage.getItem('viewMode');
     if (savedView) this.viewMode = savedView;
+      document.addEventListener('mousemove', this.onDragMove.bind(this));
+    document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    // ✅ Load filter data
+    this.loadFilterBranchesAndDepartments();
+    
     this.loadTickets();
     this.ticketService.tickets$.subscribe(tickets => {
       this.tickets = tickets;
+      this.debugTicketFields();
       this.applyFilters();
     });
     this.ticketService.fetchTickets();
+}
+
+  loadTickets() { 
+  this.ticketService.fetchTickets(); 
+}
+
+// Add this temporary debug method
+private debugTicketFields() {
+  if (this.tickets.length > 0) {
+    const sample = this.tickets[0];
+    console.log('🔍 Ticket fields available:', {
+      id: sample.id,
+      ticket_number: sample.ticket_number,
+      // Branch-related fields
+      branch_id: (sample as any).branch_id,
+      creator_branch_id: (sample as any).creator_branch_id,
+      origin_branch_id: (sample as any).origin_branch_id,
+      creator_branch_name: (sample as any).creator_branch_name,
+      // Department-related fields
+      department_id: (sample as any).department_id,
+      creator_department_id: (sample as any).creator_department_id,
+      department: (sample as any).department,
+      department_name: (sample as any).department_name,
+      creator_department: (sample as any).creator_department,
+    });
   }
-
-  loadTickets() { this.ticketService.fetchTickets(); }
-  setActiveTab(tab: string) { this.activeTab = tab; this.applyFilters(); }
-
+}
+setActiveTab(tab: string) { 
+  this.activeTab = tab; 
+  this.selectedTicketIds = []; // ✅ Clear selection
+  this.applyFilters(); 
+}
   @HostListener('contextmenu', ['$event'])
   onRightClick(event: MouseEvent) {
     const target = event.target as HTMLElement;
@@ -663,16 +771,40 @@ private updateTimeout: any;
     return true;
   }
 
-  applyFilters() {
-  // ✅ Debounce filter updates to prevent flickering
+applyFilters() {
   if (this.updateTimeout) {
     clearTimeout(this.updateTimeout);
   }
   
   this.updateTimeout = setTimeout(() => {
     let filtered = [...this.tickets];
+    
+    // Status filter
     if (this.activeTab !== 'all') filtered = filtered.filter(t => t.status === this.activeTab);
+    
+    // Branch filter - check multiple possible fields
+    if (this.filters.branchId) {
+      filtered = filtered.filter(t => {
+        const branchId = (t as any).creator_branch_id || (t as any).branch_id || (t as any).origin_branch_id;
+        return branchId == this.filters.branchId;
+      });
+    }
+    
+    // Department filter - check multiple possible fields
+    if (this.filters.departmentId) {
+      const selectedDept = this.filterDepartments.find(d => d.id == this.filters.departmentId);
+      filtered = filtered.filter(t => {
+        const deptId = (t as any).creator_department_id || (t as any).department_id;
+        const deptName = t.creator_department || (t as any).department_name || (t as any).department;
+        return deptId == this.filters.departmentId || 
+               (selectedDept && deptName === selectedDept.name);
+      });
+    }
+    
+    // Priority filter
     if (this.filters.priority) filtered = filtered.filter(t => t.priority === this.filters.priority);
+    
+    // Search filter
     if (this.searchTerm && this.searchTerm.trim()) {
       const term = this.searchTerm.toLowerCase().trim();
       filtered = filtered.filter(t => 
@@ -683,6 +815,7 @@ private updateTimeout: any;
         t.priority?.toLowerCase().includes(term)
       );
     }
+    
     this.filteredTickets = filtered;
     this.totalPages = Math.ceil(filtered.length / this.pageSize);
     this.currentPage = 1;
@@ -768,7 +901,55 @@ private updateTimeout: any;
       }
     });
   }
+// Load branches and departments for filtering
+loadFilterBranchesAndDepartments() {
+  const headers = this.getHeaders();
+  
+  // Load branches
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`, { headers }).subscribe({
+    next: (branches) => {
+      this.filterBranches = (branches || []).map(b => ({
+        ...b,
+        company_name: b.company_name || b.name
+      }));
+    },
+    error: () => {
+      this.filterBranches = [];
+    }
+  });
+  
+  // Load departments
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`, { headers }).subscribe({
+    next: (depts) => {
+      this.allDepartments = (depts || []).map(d => {
+        const branch = this.filterBranches.find(b => b.id == d.branch_id);
+        return {
+          ...d,
+          displayName: `${d.name} — ${branch?.name || 'Unknown'}`,
+          branch_id: d.branch_id
+        };
+      });
+      this.filterDepartments = [...this.allDepartments];
+    },
+    error: () => {
+      this.allDepartments = [];
+      this.filterDepartments = [];
+    }
+  });
+}
 
+// When branch filter changes, update department dropdown
+onFilterBranchChange() {
+  if (this.filters.branchId) {
+    this.filterDepartments = this.allDepartments.filter(d => 
+      d.branch_id == this.filters.branchId
+    );
+  } else {
+    this.filterDepartments = [...this.allDepartments];
+  }
+  this.filters.departmentId = '';
+  this.applyFilters();
+}
   getTicketsByStatus(status: string): Ticket[] { 
     return this.filteredTickets.filter(t => t.status === status); 
   }
@@ -788,14 +969,15 @@ private updateTimeout: any;
   nextPage() { this.goToPage(this.currentPage + 1); }
   prevPage() { this.goToPage(this.currentPage - 1); }
 
-  clearFilters() {
+clearFilters() {
     this.activeTab = 'all'; 
-    this.filters = { priority: '' }; 
+    this.filters = { priority: '', branchId: '', departmentId: '' }; 
     this.searchTerm = '';
+    this.selectedTicketIds = []; // ✅ Clear selection
+    this.filterDepartments = [...this.allDepartments];
     this.applyFilters(); 
     this.router.navigate(['/tickets']);
-  }
-
+}
   isEDPUser(): boolean { 
     return this.currentUser?.user_table === 'users'; 
   }
@@ -941,7 +1123,108 @@ loadAvailableAgents() {
     }
   });
 }
+// Draggable modal methods
+startDrag(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.modal-titlebar')) return;
+  
+  const modal = target.closest('.modal-window') as HTMLElement;
+  if (!modal) return;
+  
+  this.isDragging = true;
+  this.currentDragModal = modal;
+  
+  const rect = modal.getBoundingClientRect();
+  this.dragOffsetX = event.clientX - rect.left;
+  this.dragOffsetY = event.clientY - rect.top;
+  
+  modal.style.position = 'fixed';
+  modal.style.cursor = 'grabbing';
+  modal.style.transition = 'none';
+  modal.style.left = rect.left + 'px';
+  modal.style.top = rect.top + 'px';
+  modal.style.transform = 'none';
+  event.preventDefault();
+}
 
+onDragMove(event: MouseEvent) {
+  if (!this.isDragging || !this.currentDragModal) return;
+  
+  const x = event.clientX - this.dragOffsetX;
+  const y = event.clientY - this.dragOffsetY;
+  
+  this.currentDragModal.style.left = x + 'px';
+  this.currentDragModal.style.top = y + 'px';
+}
+
+onDragEnd() {
+  if (this.currentDragModal) {
+    this.currentDragModal.style.cursor = '';
+  }
+  this.isDragging = false;
+  this.currentDragModal = null;
+}
+isSelected(ticket: Ticket): boolean {
+  return this.selectedTicketIds.includes(ticket.id);
+}
+toggleSelect(ticket: Ticket) {
+  const index = this.selectedTicketIds.indexOf(ticket.id);
+  if (index === -1) {
+    this.selectedTicketIds.push(ticket.id);
+  } else {
+    this.selectedTicketIds.splice(index, 1);
+  }
+}
+isAllSelected(): boolean {
+  return this.filteredTickets.length > 0 && 
+         this.filteredTickets.every(t => this.selectedTicketIds.includes(t.id));
+}
+toggleSelectAll() {
+  if (this.isAllSelected()) {
+    this.selectedTicketIds = [];
+  } else {
+    this.selectedTicketIds = this.filteredTickets.map(t => t.id);
+  }
+}
+bulkDeleteTickets() {
+  if (this.selectedTicketIds.length === 0) return;
+  this.bulkDeleteCount = this.selectedTicketIds.length;
+  this.showBulkDeleteModal = true;
+}
+
+cancelBulkDelete() {
+  this.showBulkDeleteModal = false;
+  this.bulkDeleteCount = 0;
+}
+
+confirmBulkDelete() {
+  this.showBulkDeleteModal = false;
+  if (this.bulkDeleteCount === 0) return;
+  
+  const ids = [...this.selectedTicketIds];
+  let completed = 0;
+  
+  ids.forEach(id => {
+    this.ticketService.deleteTicket(id).subscribe({
+      next: () => {
+        completed++;
+        if (completed === ids.length) {
+          this.tickets = this.tickets.filter(t => !ids.includes(t.id));
+          this.selectedTicketIds = [];
+          this.applyFilters();
+        }
+      },
+      error: (err) => {
+        completed++;
+        this.tickets = this.tickets.filter(t => !ids.includes(t.id));
+        if (completed === ids.length) {
+          this.selectedTicketIds = [];
+          this.applyFilters();
+        }
+      }
+    });
+  });
+}
 // Fallback method: load agents from tickets
 private loadAgentsFromTickets() {
   const assignedUserIds = new Set<number>();

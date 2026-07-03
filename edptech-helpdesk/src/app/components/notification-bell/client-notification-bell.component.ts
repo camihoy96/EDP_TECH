@@ -191,13 +191,12 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
   activeFilter: 'all' | 'unread' | 'error' = 'all';
   visibleLimit = 20;
   wiggling = false;
-  
   private clickOutsideHandler: ((e: MouseEvent) => void) | null = null;
   private isBrowser: boolean;
   private previousUnreadCount = 0;
 
   constructor(
-     private clientNotificationService: ClientNotificationService, 
+     private clientNotificationService: ClientNotificationService,
     private router: Router,
     private authService: AuthService,
     @Inject(PLATFORM_ID) private platformId: Object
@@ -205,18 +204,18 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
     this.isBrowser = isPlatformBrowser(this.platformId);
   }
 
-ngOnInit() {
-  this.clientNotificationService.notifications$.subscribe(notifications => {
-    const unread = notifications.filter(n => !n.read);
-    const newUnread = unread.length;
-    
-    if (newUnread > this.previousUnreadCount && this.previousUnreadCount >= 0) {
-      this.triggerWiggle();
-    }
-    this.previousUnreadCount = newUnread;
-    this.notifications = notifications;
-    this.unreadCount = newUnread;
-  });
+  ngOnInit() {
+    this.clientNotificationService.notifications$.subscribe(notifications => {
+      const unread = notifications.filter(n => !n.read);
+      const newUnread = unread.length;
+
+      if (newUnread > this.previousUnreadCount && this.previousUnreadCount >= 0) {
+        this.triggerWiggle();
+      }
+      this.previousUnreadCount = newUnread;
+      this.notifications = notifications;
+      this.unreadCount = newUnread;
+    });
     if (this.isBrowser) {
       this.clickOutsideHandler = (e: MouseEvent) => {
         const target = e.target as HTMLElement;
@@ -226,12 +225,12 @@ ngOnInit() {
     }
   }
 
-get filteredNotifications(): ClientNotification[] {
-  let list = this.notifications;
-  if (this.activeFilter === 'unread') list = list.filter(n => !n.read);
-  if (this.activeFilter === 'error') list = list.filter(n => n.type === 'error' || n.type === 'warning');
-  return list.slice(0, this.visibleLimit);
-}
+  get filteredNotifications(): ClientNotification[] {
+    let list = this.notifications;
+    if (this.activeFilter === 'unread') list = list.filter(n => !n.read);
+    if (this.activeFilter === 'error') list = list.filter(n => n.type === 'error' || n.type === 'warning');
+    return list.slice(0, this.visibleLimit);
+  }
 
   ngOnDestroy() {
     if (this.isBrowser && this.clickOutsideHandler) {
@@ -240,7 +239,7 @@ get filteredNotifications(): ClientNotification[] {
   }
 
   @Output() viewAll = new EventEmitter<void>();
-  
+
   @HostListener('document:keydown.escape')
   onEscape() { this.showDropdown = false; }
 
@@ -258,32 +257,31 @@ get filteredNotifications(): ClientNotification[] {
     setTimeout(() => { this.wiggling = false; }, 600);
   }
 
-markAllRead() { this.clientNotificationService.markAllAsRead(); }
+  markAllRead() { this.clientNotificationService.markAllAsRead(); }
 
- clearAll() {
-  if (confirm('Clear all notifications?')) {
-    this.clientNotificationService.clearAll();
-    // Also clear ticket notifications from localStorage
-    localStorage.removeItem('client_ticket_notifications');
-    this.showDropdown = false;
+  clearAll() {
+    if (confirm('Clear all notifications?')) {
+      this.clientNotificationService.clearAll();
+      localStorage.removeItem('client_ticket_notifications');
+      this.showDropdown = false;
+    }
   }
-}
 
   dismissNotification(event: MouseEvent, id: string) {
     event.stopPropagation();
     this.clientNotificationService.dismissNotification(id);
   }
 
- onNotificationClick(notification: ClientNotification) {
+  onNotificationClick(notification: ClientNotification) {
     this.clientNotificationService.markAsRead(notification.id);
     if (notification.ticketId) {
       this.router.navigate(['/client/tickets', notification.ticketId]);
     } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
-      // Navigate to requisitions page for requisition notifications
       this.router.navigate(['/client/request']);
     }
     this.showDropdown = false;
-}
+  }
+
   showMore() { this.visibleLimit += 20; }
 
   getIcon(type: string): string {
