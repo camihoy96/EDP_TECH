@@ -17,12 +17,14 @@ import { RouterLink } from '@angular/router';
       <!-- Header -->
       <div class="view-header">
   <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
-  <div class="header-actions">
+ <div class="header-actions">
     <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
       📤 Our Requests
+      <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
     </button>
     <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
       📥 Request Management
+      <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
     </button>
     <button class="classic-btn primary" (click)="newRequisition()">
   <span>➕</span> New Requisition
@@ -185,7 +187,9 @@ import { RouterLink } from '@angular/router';
   
   <!-- "Our Requests" actions -->
   <ng-container *ngIf="viewMode === 'our'">
-    <button class="action-btn edit-btn" *ngIf="req.submitted_by === currentUser?.id && req.status === 'pending'" (click)="editReq(req)" title="Edit">✏️</button>
+    <button class="action-btn edit-btn" 
+    *ngIf="canEdit(req)" 
+    (click)="editReq(req)" title="Edit">✏️</button>
     <button class="action-btn delete" *ngIf="canDelete(req)" (click)="deleteReq(req)" title="Delete">🗑️</button>
     
     <!-- Final Release for forwarded requests -->
@@ -210,6 +214,7 @@ import { RouterLink } from '@angular/router';
     <button class="action-btn release-btn" *ngIf="!req.is_forwarded && req.status === 'processing'" (click)="releaseReq(req)" title="Release">📦</button>
     
     <button class="action-btn reject" *ngIf="req.status === 'pending'" (click)="updateStatus(req, 'rejected')" title="Reject">❌</button>
+     <button class="action-btn delete" *ngIf="isHeadOrSupervisor()" (click)="deleteReq(req)" title="Delete">🗑️</button>
   </ng-container>
 </td>
   </tr>
@@ -636,7 +641,28 @@ import { RouterLink } from '@angular/router';
     }
     .btn-close { background: #0a246a; color: white; border-color: #0a246a; }
     .btn-close:hover { background: #0a3a8c; }
-    
+    /* Add these to your styles array */
+.notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  margin-left: 4px;
+  line-height: 1;
+}
+.notif-badge.our {
+  background: #008800;
+  color: white;
+}
+.notif-badge.incoming {
+  background: #cc6600;
+  color: white;
+}
     /* Detail Styles */
     .detail-section {
       margin-bottom: 16px;
@@ -906,6 +932,27 @@ filters = {
   departmentId: '',
   branchId: ''
 };
+// ✅ Persist seen IDs to localStorage so they survive page reloads
+private get seenReqIds(): Set<number> {
+  const stored = localStorage.getItem('reqMgmt_seenIds');
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch { return new Set(); }
+  }
+  return new Set();
+}
+
+private set seenReqIds(ids: Set<number>) {
+  localStorage.setItem('reqMgmt_seenIds', JSON.stringify([...ids]));
+}
+
+// Add a method to add IDs to the set
+private addSeenReqIds(ids: number[]): void {
+  const current = this.seenReqIds;
+  ids.forEach(id => current.add(id));
+  this.seenReqIds = current;
+}
 showForwardModal = false;
 forwardTargetReq: any = null;
 forwardBranchId: number | null = null;
@@ -982,19 +1029,53 @@ onDragEnd() {
     return { 'Authorization': `Bearer ${token}` };
   }
 
-  loadAll() {
+ loadAll() {
+    // ✅ Don't clear seenReqIds here - only clear when switching views
     this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { headers: this.getAuthHeaders() }).subscribe({
       next: (data) => { this.allReqs = Array.isArray(data) ? data : []; this.applyFilters(); },
       error: () => this.showToastMsg('Failed to load requisitions', 'error')
     });
-  }
-
-  setViewMode(mode: string) {
+}
+// setViewMode method
+setViewMode(mode: string) {
     this.viewMode = mode;
     this.activeTab = 'pending';
     this.selectedReqIds = [];
+    
+    // ✅ Mark all current notifications as "seen" for this view (persisted to localStorage)
+    const idsToMark: number[] = [];
+    
+    if (mode === 'our') {
+      this.allReqs.forEach(r => {
+        const userBranchId = this.currentUser?.branch_id;
+        const userDeptId = this.currentUser?.department_id;
+        const userId = this.currentUser?.id;
+        const isOurRequest = 
+          r.submitted_by == userId ||
+          (r.creator_branch_id == userBranchId && r.creator_dept_id == userDeptId) ||
+          (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId);
+        if (isOurRequest) idsToMark.push(r.id);
+      });
+    } else if (mode === 'incoming') {
+      this.allReqs.forEach(r => {
+        const userBranchId = this.currentUser?.branch_id;
+        const userDeptId = this.currentUser?.department_id;
+        const userId = this.currentUser?.id;
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+        const isIncoming = 
+          (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+          (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+        if (isIncoming) idsToMark.push(r.id);
+      });
+    }
+    
+    // ✅ Persist to localStorage via the helper
+    this.addSeenReqIds(idsToMark);
+    
     this.applyFilters();
-  }
+}
 applyFilters() {
     let filtered = [...this.allReqs];
     
@@ -1244,21 +1325,100 @@ isHeadOrSupervisor(): boolean {
     const role = (this.currentUser.role || '').toLowerCase();
     return role === 'head/manager' || role === 'branch manager';
 }
+get ourNotificationCount(): number {
+  return this.allReqs.filter(r => {
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    // Skip if already seen
+    if (this.seenReqIds.has(r.id)) return false;
+    
+    const isOurRequest = 
+      r.submitted_by == userId ||
+      (r.creator_branch_id == userBranchId && r.creator_dept_id == userDeptId) ||
+      (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId);
+    
+    if (!isOurRequest) return false;
+    
+    // ✅ Accepted by recipient
+    if (r.status === 'approved') return true;
+    
+    // ✅ On process (normal)
+    if (!r.is_forwarded && r.status === 'processing') return true;
+    
+    // ✅ Forwarded
+    if (r.is_forwarded && r.status === 'forwarded' && !r.forwarded_status) return true;
+    
+    // ✅ Released
+    if (!r.is_forwarded && r.status === 'released') return true;
+    
+    // ✅ Forwarded on process
+    if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+    
+    // ✅ Forwarded released by recipient
+    if (r.is_forwarded && r.status === 'forwarded' && r.forwarded_status === 'released') return true;
+    
+    // ✅ Final released
+    if (r.is_forwarded && r.status === 'released') return true;
+    
+    return false;
+  }).length;
+}
 
+get incomingNotificationCount(): number {
+  return this.allReqs.filter(r => {
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    // Skip if already seen
+    if (this.seenReqIds.has(r.id)) return false;
+    
+    const creatorBranch = r.creator_branch_id;
+    const creatorDept = r.creator_dept_id;
+    const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+    
+    const isIncoming = 
+      (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+      (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+    
+    if (!isIncoming) return false;
+    
+    // ✅ 1. New pending requests
+    if (r.status === 'pending') return true;
+    
+    // ✅ 2. Forwarded requests on process
+    if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+    
+    // ✅ 3. Forwarded requests released by recipient
+    if (r.is_forwarded && r.forwarded_status === 'released') return true;
+    
+    return false;
+  }).length;
+}
 processReq(req: any) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    // For forwarded requests, the backend already handles keeping status as 'forwarded'
-    // when it receives status: 'processing' and reqData.is_forwarded is true
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'processing' }, { headers }).subscribe({
       next: () => { 
-        // For forwarded requests, don't change the main status locally
         if (req.is_forwarded) {
           req.forwarded_status = 'processing';
-          // Keep req.status as 'forwarded'
+          // ✅ Notify about forwarded requisition being processed
+          this.notificationService.handleRequisitionForwardedProcessed(
+            req,
+            this.currentUser?.fullname || 'Admin',
+            req.submitted_by
+          );
         } else {
           req.status = 'processing';
+          // ✅ Notify about normal requisition being processed
+          this.notificationService.handleRequisitionProcessed(
+            req,
+            this.currentUser?.fullname || 'Admin',
+            req.submitted_by
+          );
         }
         this.applyFilters(); 
         this.showToastMsg('⚙️ Processing!', 'success'); 
@@ -1314,6 +1474,29 @@ newRequisition() {
     this.confirmTargetReq = req;
     this.showConfirmModal = true;
   }
+  canEdit(req: any): boolean {
+    if (!this.currentUser) return false;
+    
+    // ✅ Only allow editing pending requests
+    if ((req.status || 'pending') !== 'pending') return false;
+    
+    // ✅ Creator can always edit their own
+    if (req.submitted_by == this.currentUser.id) return true;
+    
+    // ✅ Head/Manager/Supervisor/Branch Manager from same department can edit
+    const role = (this.currentUser.role || '').toLowerCase();
+    const isHeadOrSupervisor = role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+    const isSameDept = req.branch_id == this.currentUser.branch_id && 
+                       req.department_id == this.currentUser.department_id;
+    
+    if (isHeadOrSupervisor && isSameDept) return true;
+    
+    // ✅ Head/Manager/Supervisor can also edit if they're in the same branch (expanded permission)
+    const isSameBranch = req.branch_id == this.currentUser.branch_id;
+    if (isHeadOrSupervisor && isSameBranch) return true;
+    
+    return false;
+}
 loadBranchesAndDepartments() {
   this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
     next: (branches) => {
@@ -1400,6 +1583,15 @@ confirmForward() {
   
   this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
     next: () => {
+      const toBranchName = this.getBranchName(this.forwardBranchId!) || 'Unknown';
+      const toDeptName = this.getDepartmentName(this.forwardDepartmentId!) || 'Unknown';
+      this.notificationService.handleRequisitionForwarded(
+        this.forwardTargetReq,
+        this.currentUser.fullname || this.currentUser.username,
+        toBranchName,
+        toDeptName,
+        this.forwardTargetReq.submitted_by
+      );
       this.showToastMsg('📤 Requisition forwarded!', 'success');
       this.cancelForward();
       this.loadAll();
@@ -1482,15 +1674,19 @@ processBulkDelete() {
         req.approved_date = payload.approved_date;
         this.applyFilters();
         this.showToastMsg('✅ Requisition received!', 'success');
-        this.notificationService.handleRequisitionReceived(
-          { id: req.id, requisition_number: req.requisition_number },
-          payload.approved_name,
-          req.submitted_by
-        );
+        
+        // Safely call notification
+        if (this.notificationService.handleRequisitionReceived) {
+          this.notificationService.handleRequisitionReceived(
+            { id: req.id, requisition_number: req.requisition_number },
+            payload.approved_name,
+            req.submitted_by
+          );
+        }
       },
       error: () => { req.status = 'approved'; this.applyFilters(); this.showToastMsg('⚠️ Updated locally', 'error'); }
     });
-  }
+}
 editReq(req: any) {
   this.router.navigate(['/requisitions/edit'], { 
     queryParams: { id: req.id } 
@@ -1507,12 +1703,35 @@ editReq(req: any) {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
       next: () => {
-        // For forwarded requests, keep status as 'forwarded' and set forwarded_status to 'released'
         if (req.is_forwarded) {
-          req.forwarded_status = 'released';
-          // Keep req.status as 'forwarded'
+          // Check if this is the FINAL release (from forwarding dept) or recipient release
+          const isFinalRelease = req.forwarded_status === 'released';
+          
+          if (isFinalRelease) {
+            req.status = 'released';
+            // ✅ Notify - final release completed
+            this.notificationService.handleRequisitionFinalReleased(
+              req,
+              this.currentUser?.fullname || 'Admin',
+              req.submitted_by
+            );
+          } else {
+            req.forwarded_status = 'released';
+            // ✅ Notify - forwarded request released by recipient
+            this.notificationService.handleRequisitionForwardedReleased(
+              req,
+              this.currentUser?.fullname || 'Admin',
+              req.submitted_by
+            );
+          }
         } else {
           req.status = 'released';
+          // ✅ Notify - normal request released
+          this.notificationService.handleRequisitionReleased(
+            req,
+            this.currentUser?.fullname || 'Admin',
+            req.submitted_by
+          );
         }
         req.released_name = payload.released_name;
         req.released_date = payload.released_date;

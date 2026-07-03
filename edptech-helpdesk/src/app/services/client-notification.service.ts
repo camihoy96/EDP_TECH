@@ -801,4 +801,290 @@ clearAll(): void {
     this.toastContainer.id = 'client-toast-container';
     document.body.appendChild(this.toastContainer);
   }
+ 
+  // ── REQUISITION NOTIFICATIONS (TARGETED BY DEPARTMENT) ──
+
+/**
+ * Called when a new requisition is submitted
+ * Notifies: EDP/IT staff in the TARGET department (where the request was sent)
+ */
+handleNewRequisition(req: any, submittedByName: string, targetBranchId: number, targetDeptId: number): void {
+  const key = `requisition-new-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // ✅ Save to server for ALL EDP/IT users in the TARGET branch+department
+  this.saveRequisitionNotificationToServer(req, targetBranchId, targetDeptId, {
+    type: 'info',
+    title: '📩 New Requisition',
+    message: `${submittedByName} submitted requisition #${req.requisition_number}`,
+    excludeUserId: req.submitted_by
+  });
+}
+
+/**
+ * Called when a requisition is accepted/received
+ * Notifies: The original submitter + EDP/IT staff in the department
+ */
+handleRequisitionReceived(req: any, receivedByName: string, targetBranchId: number, targetDeptId: number): void {
+  const key = `requisition-received-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'success',
+      title: '📥 Requisition Received',
+      message: `${receivedByName} received your requisition #${req.requisition_number}`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+      this.showToastPopup('📥 Requisition Received', `${receivedByName} received your requisition #${req.requisition_number}`, undefined);
+    }
+  }
+
+  // Notify EDP/IT staff in the department
+  this.saveRequisitionNotificationToServer(req, targetBranchId, targetDeptId, {
+    type: 'success',
+    title: '📥 Requisition Received',
+    message: `${receivedByName} received requisition #${req.requisition_number}`,
+    excludeUserId: req.submitted_by
+  });
+}
+
+/**
+ * Called when a requisition is processed
+ * Notifies: The original submitter
+ */
+handleRequisitionProcessed(req: any, processedByName: string, targetBranchId: number, targetDeptId: number): void {
+  const key = `requisition-processed-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'info',
+      title: '⚙️ Requisition Processing',
+      message: `Your requisition #${req.requisition_number} is being processed by ${processedByName}`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+      this.showToastPopup('⚙️ Requisition Processing', `Your requisition #${req.requisition_number} is being processed`, undefined);
+    }
+  }
+}
+
+/**
+ * Called when a requisition is released
+ * Notifies: The original submitter
+ */
+handleRequisitionReleased(req: any, releasedByName: string): void {
+  const key = `requisition-released-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'success',
+      title: '📦 Requisition Released',
+      message: `Your requisition #${req.requisition_number} has been released by ${releasedByName}`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+      this.showToastPopup('📦 Requisition Released', `Your requisition #${req.requisition_number} has been released`, undefined);
+    }
+  }
+}
+
+/**
+ * Called when a requisition is rejected
+ * Notifies: The original submitter
+ */
+handleRequisitionRejected(req: any, rejectedByName: string): void {
+  const key = `requisition-rejected-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'warning',
+      title: '❌ Requisition Rejected',
+      message: `Your requisition #${req.requisition_number} was rejected by ${rejectedByName}`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+      this.showToastPopup('❌ Requisition Rejected', `Your requisition #${req.requisition_number} was rejected`, undefined);
+    }
+  }
+}
+
+/**
+ * Called when a requisition is forwarded
+ * Notifies: The original submitter + EDP/IT staff in the forwarded-to department
+ */
+handleRequisitionForwarded(req: any, forwardedByName: string, toBranchId: number, toDeptId: number, toBranchName: string, toDeptName: string): void {
+  const key = `requisition-forwarded-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'info',
+      title: '📤 Requisition Forwarded',
+      message: `Your requisition #${req.requisition_number} was forwarded to ${toBranchName} - ${toDeptName}`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+    }
+  }
+
+  // Notify EDP/IT staff in the FORWARDED-TO department
+  this.saveRequisitionNotificationToServer(req, toBranchId, toDeptId, {
+    type: 'info',
+    title: '📤 New Forwarded Requisition',
+    message: `${forwardedByName} forwarded requisition #${req.requisition_number} to your department from ${this.getBranchDeptName(req.branch_id, req.department_id)}`,
+    excludeUserId: req.submitted_by
+  });
+}
+
+/**
+ * Called when a forwarded requisition is processed by the recipient
+ * Notifies: The forwarding department's EDP/IT staff
+ */
+handleRequisitionForwardedProcessed(req: any, processedByName: string, forwardingBranchId: number, forwardingDeptId: number): void {
+  const key = `requisition-fwd-processed-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify EDP/IT staff in the FORWARDING department (original sender)
+  this.saveRequisitionNotificationToServer(req, forwardingBranchId, forwardingDeptId, {
+    type: 'info',
+    title: '⚙️ Forwarded Req Processing',
+    message: `${processedByName} is processing forwarded requisition #${req.requisition_number}`,
+    excludeUserId: req.submitted_by
+  });
+}
+
+/**
+ * Called when a forwarded requisition is released by the recipient
+ * Notifies: The forwarding department's EDP/IT staff (needs final release)
+ */
+handleRequisitionForwardedReleased(req: any, releasedByName: string, forwardingBranchId: number, forwardingDeptId: number): void {
+  const key = `requisition-fwd-released-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify EDP/IT staff in the FORWARDING department (needs final release)
+  this.saveRequisitionNotificationToServer(req, forwardingBranchId, forwardingDeptId, {
+    type: 'warning',
+    title: '📦 Forwarded Req Released - Action Needed',
+    message: `${releasedByName} released forwarded requisition #${req.requisition_number}. Final release needed.`,
+    excludeUserId: req.submitted_by
+  });
+}
+
+/**
+ * Called when a forwarded requisition gets final release
+ * Notifies: The original submitter
+ */
+handleRequisitionFinalReleased(req: any, releasedByName: string): void {
+  const key = `requisition-final-released-${req.id || req.requisition_number}`;
+  if (this.shownToastIds.has(key)) return;
+  this.shownToastIds.add(key);
+
+  // Notify the submitter
+  if (req.submitted_by && req.submitted_by !== this.currentUserId) {
+    const notif: ClientNotification = {
+      id: this.generateId(),
+      type: 'success',
+      title: '✅ Requisition Fully Released',
+      message: `Your requisition #${req.requisition_number} has been fully released`,
+      ticketNumber: req.requisition_number,
+      targetUserId: req.submitted_by,
+      timestamp: new Date(),
+      read: false,
+    };
+    this.saveToServer(notif);
+    if (this.currentUserId === req.submitted_by) {
+      this.addLocalNotification(notif);
+      this.showToastPopup('✅ Requisition Fully Released', `Your requisition #${req.requisition_number} has been fully released`, undefined);
+    }
+  }
+}
+
+// ── HELPER: Save requisition notification to server for branch+department ──
+private saveRequisitionNotificationToServer(
+  req: any, 
+  branchId: number, 
+  deptId: number, 
+  notificationData: { type: string; title: string; message: string; excludeUserId?: number }
+): void {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+
+  fetch(`${environment.apiUrl}/api/client-notifications/requisition`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      branch_id: branchId,
+      department_id: deptId,
+      type: notificationData.type,
+      title: notificationData.title,
+      message: notificationData.message,
+      ticket_number: req.requisition_number,
+      exclude_user_id: notificationData.excludeUserId || null,
+    }),
+  }).catch(err => console.log('⚠️ Failed to save requisition notification:', err));
+}
+
+// ── HELPER: Get branch+department name ──
+private branchDeptCache: Map<string, string> = new Map();
+
+private getBranchDeptName(branchId: number, deptId: number): string {
+  const cacheKey = `${branchId}_${deptId}`;
+  if (this.branchDeptCache.has(cacheKey)) {
+    return this.branchDeptCache.get(cacheKey)!;
+  }
+  // Return a placeholder - the actual names are filled by the caller
+  return `Branch #${branchId} / Dept #${deptId}`;
+}
+
 }

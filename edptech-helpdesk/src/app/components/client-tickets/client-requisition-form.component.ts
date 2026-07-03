@@ -283,13 +283,20 @@ import { environment } from '../../../environments/environment';
 
 <!-- Signature Drawing Modal -->
 <div class="modal-overlay" *ngIf="showSigModal" (click)="closeSigModal()">
-  <div class="sig-modal" (click)="$event.stopPropagation()">
-    <div class="sig-modal-header">
+  <div class="sig-modal" 
+       [ngStyle]="{'transform': 'translate(' + sigModalPosition.x + 'px, ' + sigModalPosition.y + 'px)'}"
+       (click)="$event.stopPropagation()">
+    <div class="sig-modal-header" 
+         (mousedown)="startSigModalDrag($event)"
+         (mousemove)="onSigModalDrag($event)"
+         (mouseup)="stopSigModalDrag()"
+         (mouseleave)="stopSigModalDrag()"
+         style="cursor: move;">
       <span>✍️ Draw Signature</span>
       <button type="button" class="sig-modal-close" (click)="closeSigModal()">✕</button>
     </div>
     <div class="sig-modal-body">
-      <canvas id="sigModalCanvas" width="600" height="200" class="sig-modal-canvas"
+      <canvas id="sigModalCanvas" class="sig-modal-canvas"
               (mousedown)="startSigDraw($event, sigModalTarget)"
               (mousemove)="drawSig($event, sigModalTarget)"
               (mouseup)="stopSigDraw()"
@@ -449,17 +456,19 @@ import { environment } from '../../../environments/environment';
   background: white;
   border: 2px solid #808080;
   box-shadow: 3px 4px 14px rgba(0,0,0,0.3);
-  width: 650px;
+  width: 800px;
   max-width: 95vw;
+  position: relative;
+  user-select: none;
 }
 .sig-modal-header {
   background: linear-gradient(180deg, #1c5fb5, #0a3a8c);
   color: white;
-  padding: 8px 14px;
+  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: bold;
 }
 .sig-modal-close {
@@ -467,41 +476,49 @@ import { environment } from '../../../environments/environment';
   border: 1px solid rgba(255,255,255,0.4);
   color: white;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 8px;
+  font-size: 16px;
+  padding: 4px 10px;
+  line-height: 1;
+}
+.sig-modal-close:hover {
+  background: rgba(255,0,0,0.7);
 }
 .sig-modal-body {
-  padding: 16px;
+  padding: 20px;
   background: #f5f5f5;
+  display: flex;
+  justify-content: center;
 }
 .sig-modal-canvas {
-  border: 1px solid #ccc;
+  border: 2px solid #ccc;
   background: white;
   cursor: crosshair;
   display: block;
-  width: 100%;
-  height: 200px;
+  width: 750px;
+  height: 300px;
   touch-action: none;
 }
 .sig-modal-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 12px 20px;
   border-top: 1px solid #ddd;
+  background: #fafafa;
 }
 .sig-modal-btn {
-  padding: 6px 16px;
+  padding: 8px 20px;
   border: 2px solid;
   border-color: #fff #808080 #808080 #fff;
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: bold;
   border-radius: 3px;
 }
 .sig-modal-btn.clear { background: #f0f0f0; color: #cc0000; }
 .sig-modal-btn.cancel { background: #f0f0f0; color: #000; }
 .sig-modal-btn.save { background: #008800; color: white; border-color: #00aa00 #006600 #006600 #00aa00; }
+.sig-modal-btn:hover { filter: brightness(0.95); }
   .req-input {
   flex: 1;
   padding: 4px 6px;
@@ -635,7 +652,9 @@ mainBranchIds = [1, 5];
     returned_date: ''
     
 };
-
+sigModalPosition = { x: 0, y: 0 };
+isDraggingSigModal = false;
+sigModalDragStart = { x: 0, y: 0 };
   items: any[] = [];
   
   preparedSignature: string | null = null;
@@ -687,12 +706,21 @@ ngOnInit() {
         this.loadRequisition(params['id']);
       } else {
         // Only generate new reqNumber for new requisitions
-        this.reqNumber = this.generateReqNumber();
+         this.reqNumber = this.generateReqNumber();
         this.loadBranchesAndDepartments();
         this.authService.currentUser$.subscribe((user: any) => {
           if (user) {
             this.reqData.prepared_name = user.fullname || '';
             this.reqData.request_from = user.department || user.dept || '';
+
+            // ✅ INSERT THE NEW CODE HERE
+            if (!this.editMode && !this.approvalMode) {
+              const role = (user.role || '').toLowerCase();
+              if (role === 'head/manager' || role === 'supervisor') {
+                this.reqData.approved_name = user.fullname || '';
+                this.reqData.approved_date = new Date().toISOString().split('T')[0];
+              }
+            }
           }
         });
       }
@@ -912,8 +940,6 @@ if (currentUser && data.submitted_by !== currentUser.id) {
         this.itemsPreparedSignature = data.items_prepared_signature || null;
         
         // ✅ Set branch AFTER loading departments are ready
-        // We need to wait for loadBranchesAndDepartments to complete
-        // Use a delayed approach to ensure departments are loaded
         this.loadBranchesAndDepartmentsForEdit(savedBranchId, savedDeptId);
         
         // Set sigSaved and switch to upload mode for existing signatures
@@ -930,14 +956,37 @@ if (currentUser && data.submitted_by !== currentUser.id) {
           this.sigMode['items_prepared'] = 'upload';
         }
         
-        // In approval mode, pre-fill admin info
-        if (this.approvalMode) {
+        // ✅ NEW: Auto-fill Approved By when Supervisor/Head/Manager edits pending request
+        if (!this.approvalMode && this.editMode) {
           const currentUser = this.authService.getCurrentUser();
           if (currentUser) {
-            this.reqData.items_prepared_name = this.reqData.items_prepared_name || currentUser.fullname || '';
-            this.reqData.items_prepared_date = this.reqData.items_prepared_date || new Date().toISOString().split('T')[0];
+            const role = (currentUser.role || '').toLowerCase();
+            if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
+              // Only auto-fill if the request is still pending (not yet approved)
+              if (!data.approved_name) {
+                this.reqData.approved_name = currentUser.fullname || '';
+                this.reqData.approved_date = new Date().toISOString().split('T')[0];
+              }
+            }
           }
         }
+        
+        // In approval mode, pre-fill admin info
+        if (this.approvalMode) {
+  const currentUser = this.authService.getCurrentUser();
+  if (currentUser) {
+    // Auto-fill "Items Received By" (already exists)
+    this.reqData.items_prepared_name = this.reqData.items_prepared_name || currentUser.fullname || '';
+    this.reqData.items_prepared_date = this.reqData.items_prepared_date || new Date().toISOString().split('T')[0];
+    
+    // ✅ NEW: Auto-fill "Form Approved By" for Supervisor/Head/Manager
+    const role = (currentUser.role || '').toLowerCase();
+    if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
+      this.reqData.approved_name = this.reqData.approved_name || currentUser.fullname || '';
+      this.reqData.approved_date = this.reqData.approved_date || new Date().toISOString().split('T')[0];
+    }
+  }
+}
       },
       error: (err) => {
         console.error('❌ API call failed:', err.status, err.message);
@@ -1225,6 +1274,8 @@ setSigMode(target: string, mode: 'draw' | 'upload') {
 openSigModal(target: string) {
   this.sigModalTarget = target;
   this.showSigModal = true;
+  this.sigModalPosition = { x: 0, y: 0 }; // Reset position when opening
+  
   setTimeout(() => {
     const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;
     if (canvas) {
@@ -1270,7 +1321,29 @@ getStatusLabel(status: string): string {
     };
     return labels[status] || status || 'Pending';
 }
- submitRequisition() {
+
+startSigModalDrag(event: MouseEvent) {
+  this.isDraggingSigModal = true;
+  this.sigModalDragStart = {
+    x: event.clientX - this.sigModalPosition.x,
+    y: event.clientY - this.sigModalPosition.y
+  };
+  event.preventDefault();
+}
+
+onSigModalDrag(event: MouseEvent) {
+  if (!this.isDraggingSigModal) return;
+  event.preventDefault();
+  this.sigModalPosition = {
+    x: event.clientX - this.sigModalDragStart.x,
+    y: event.clientY - this.sigModalDragStart.y
+  };
+}
+
+stopSigModalDrag() {
+  this.isDraggingSigModal = false;
+}
+submitRequisition() {
     // Approval mode - only validate items prepared by
     if (this.approvalMode) {
   if (!this.reqData.items_prepared_name) {
@@ -1350,14 +1423,21 @@ getStatusLabel(status: string): string {
       this.showToastMsg('Please add at least one item.', 'warning');
       return;
     }
-    if (!this.reqData.prepared_name || !this.preparedSignature) {
-      this.showToastMsg('Please fill in Prepared By name and signature.', 'warning');
-      return;
-    }
-    if (!this.reqData.approved_name || !this.approvedSignature) {
-      this.showToastMsg('Please fill in Approved By name and signature.', 'warning');
-      return;
-    }
+   if (!this.reqData.prepared_name || !this.preparedSignature) {
+  this.showToastMsg('Please fill in Prepared By name and signature.', 'warning');
+  return;
+}
+
+// ✅ Only require Approved By for Supervisor/Head/Manager/Branch Manager
+// Staff can submit without it (it will be filled by their supervisor later)
+const currentUser = this.authService.getCurrentUser();
+const role = (currentUser?.role || '').toLowerCase();
+const isHeadOrManager = role === 'head/manager' || role === 'branch manager';
+
+if (isHeadOrManager && (!this.reqData.approved_name || !this.approvedSignature)) {
+  this.showToastMsg('Please fill in Approved By name and signature.', 'warning');
+  return;
+}
 
     this.submitting = true;
 
@@ -1366,17 +1446,12 @@ getStatusLabel(status: string): string {
       requisition_number: this.reqNumber,
       items: this.items,
       branch_id: this.selectedBranchId,
+      department_id: this.reqData.department_id, // ✅ Explicitly include department_id
       prepared_signature: this.preparedSignature,
       approved_signature: this.approvedSignature,
       items_prepared_signature: this.itemsPreparedSignature,
+      submitted_by: this.authService.getCurrentUser()?.id || null, // ✅ ALWAYS include submitted_by
     };
-
-    // ✅ For new requisitions, set submitted_by to current user
-    // For edits (especially by recipient), preserve the original submitted_by
-    if (!this.editMode) {
-      payload.submitted_by = this.authService.getCurrentUser()?.id || null;
-    }
-    // ✅ Don't send submitted_by for edits - let backend keep the original
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -1385,37 +1460,66 @@ getStatusLabel(status: string): string {
       ? `${environment.apiUrl}/api/requisitions/${this.editReqId}`
       : `${environment.apiUrl}/api/requisitions`;
     
+    // ✅ ADD DEBUG LOGGING
+    console.log('📤 SUBMITTING REQUISITION:', {
+      editMode: this.editMode,
+      editReqId: this.editReqId,
+      url: url,
+      branch_id: payload.branch_id,
+      department_id: payload.department_id,
+      submitted_by: payload.submitted_by,
+      itemsCount: payload.items.length,
+      fullPayload: JSON.stringify(payload, null, 2)
+    });
+    
     const request = this.editMode 
       ? this.http.put(url, payload, { headers })
       : this.http.post(url, payload, { headers });
 
     request.subscribe({
-      next: () => {
+      next: (response: any) => {
+        console.log('✅ Success response:', response);
         this.submitting = false;
         this.notificationService.addBellNotification({
           type: 'info',
-          title: '📩 New Requisition',
-          message: `Requisition #${this.reqNumber} submitted by ${this.reqData.prepared_name}`,
+          title: this.editMode ? '✏️ Requisition Updated' : '📩 New Requisition',
+          message: `Requisition #${this.reqNumber} ${this.editMode ? 'updated' : 'submitted'} by ${this.reqData.prepared_name}`,
           ticketNumber: this.reqNumber,
           targetUserId: null,
           countInBadge: true,
         });
-        this.showToastMsg('✅ Requisition submitted!', 'success');
+        this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
         this.router.navigate(['/client/request']);
       },
-      error: () => {
+      error: (err) => {
         this.submitting = false;
-        // Save locally
-        const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
-        const existingIndex = saved.findIndex((r: any) => r.requisition_number === this.reqNumber);
-        if (existingIndex !== -1) {
-          saved[existingIndex] = payload;
-        } else {
-          saved.push(payload);
+        console.error('❌ Submit error details:', {
+          status: err.status,
+          statusText: err.statusText,
+          error: err.error,
+          message: err.message,
+          url: url
+        });
+        
+        // Show the actual error message from the server
+        const errorMsg = err.error?.error || err.message || 'Unknown error';
+        this.showToastMsg(`⚠️ Failed: ${errorMsg}`, 'error');
+        
+        // Only save locally if it's a network error (status 0 or 500)
+        if (err.status === 0 || err.status >= 500) {
+          const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
+          const existingIndex = saved.findIndex((r: any) => r.requisition_number === this.reqNumber);
+          if (existingIndex !== -1) {
+            saved[existingIndex] = payload;
+          } else {
+            saved.push(payload);
+          }
+          localStorage.setItem('requisitions', JSON.stringify(saved));
+          this.showToastMsg('📋 Saved locally due to server error', 'warning');
         }
-        localStorage.setItem('requisitions', JSON.stringify(saved));
-        this.showToastMsg('📋 Saved locally', 'warning');
-        this.router.navigate(['/client/request']);
+        
+        // ✅ Don't navigate away on error - let user retry
+        // this.router.navigate(['/client/request']);  // REMOVED
       }
     });
   }

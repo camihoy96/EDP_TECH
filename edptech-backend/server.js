@@ -3693,19 +3693,26 @@ app.get('/api/requisitions/:id', async (req, res) => {
         const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [requisition.id]);
         requisition.items = items;
         
-        // ✅ Get user's branch and department for recipient check
+        // ✅ Get user's branch, department, AND ROLE
         let userBranchId = null;
         let userDeptId = null;
+        let userRole = '';
         
-        const [userInfo] = await pool.query('SELECT branch_id, department_id FROM users WHERE id = ?', [decoded.id]);
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id, role FROM users WHERE id = ?', [decoded.id]
+        );
         if (userInfo.length > 0) {
             userBranchId = userInfo[0].branch_id;
             userDeptId = userInfo[0].department_id;
+            userRole = userInfo[0].role || '';
         } else {
-            const [newUserInfo] = await pool.query('SELECT branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]);
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id, role FROM new_user WHERE id = ?', [decoded.id]
+            );
             if (newUserInfo.length > 0) {
                 userBranchId = newUserInfo[0].branch_id;
                 userDeptId = newUserInfo[0].department_id;
+                userRole = newUserInfo[0].role || '';
             }
         }
         
@@ -3714,14 +3721,25 @@ app.get('/api/requisitions/:id', async (req, res) => {
                            requisition.branch_id == userBranchId && 
                            requisition.department_id == userDeptId;
         
+        // ✅ Check if user is Head/Manager or Supervisor from same department
+        const isHeadOrSupervisor = userRole === 'head/manager' || userRole === 'supervisor' || userRole === 'branch manager';
+        const isSameDept = userBranchId && userDeptId && 
+                          requisition.branch_id == userBranchId && 
+                          requisition.department_id == userDeptId;
+        
         // Allow access if:
         // 1. User is admin/Technician
         // 2. User is the creator (submitted_by)
         // 3. User is the recipient (same branch + department)
-        const hasAccess = decoded.role === 'admin' || 
+        // 4. User is Head/Manager or Supervisor from same department
+        const hasAccess = decoded.role === 'admin' ||
+                        decoded.role === 'Head/Manager' ||
+                        decoded.role === 'Branch Manager' || 
+                        decoded.role === 'supervisor' ||  
                          decoded.role === 'Technician' || 
                          requisition.submitted_by === decoded.id ||
-                         isRecipient;
+                         isRecipient ||
+                         (isHeadOrSupervisor && isSameDept);
         
         if (!hasAccess) {
             return res.status(403).json({ error: 'Access denied' });
@@ -3731,7 +3749,8 @@ app.get('/api/requisitions/:id', async (req, res) => {
             id: requisition.id,
             number: requisition.requisition_number,
             isCreator: requisition.submitted_by === decoded.id,
-            isRecipient: isRecipient
+            isRecipient: isRecipient,
+            isHeadOrSupervisor: isHeadOrSupervisor
         });
         
         res.json(requisition);
@@ -4030,9 +4049,86 @@ app.put('/api/requisitions/:id', async (req, res) => {
         
         const reqRecord = existing[0];
         
-        if (reqRecord.submitted_by !== decoded.id && decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied' });
+        // ✅ Get user role and department info for access check
+        let userBranchId = null;
+        let userDeptId = null;
+        let userRole = '';
+        let userId = decoded.id;
+        
+        const [userInfo] = await pool.query(
+            'SELECT id, branch_id, department_id, role FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+            userRole = userInfo[0].role || '';
+            userId = userInfo[0].id;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT id, branch_id, department_id, role FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+                userRole = newUserInfo[0].role || '';
+                userId = newUserInfo[0].id;
+            }
         }
+        
+        // ✅ Normalize role to lowercase for comparison
+        const normalizedRole = (userRole || '').toLowerCase();
+        
+        // ✅ Check access with expanded permissions
+        const isCreator = reqRecord.submitted_by == userId;
+        const isAdmin = decoded.role === 'admin' || normalizedRole === 'admin' || normalizedRole === 'technician';
+        
+        // ✅ Head/Manager, Supervisor, Branch Manager can edit if same BRANCH
+        const isHeadOrSupervisor = normalizedRole === 'head/manager' || 
+                                   normalizedRole === 'supervisor' || 
+                                   normalizedRole === 'branch manager';
+        const isSameBranch = reqRecord.branch_id == userBranchId;
+        
+        // ✅ Also allow if user is in the same department (regardless of role)
+        const isSameDept = reqRecord.branch_id == userBranchId && reqRecord.department_id == userDeptId;
+        
+        console.log('🔑 ACCESS CHECK:');
+        console.log('   userId:', userId, 'submitted_by:', reqRecord.submitted_by);
+        console.log('   isCreator:', isCreator);
+        console.log('   isAdmin:', isAdmin);
+        console.log('   isHeadOrSupervisor:', isHeadOrSupervisor);
+        console.log('   isSameBranch:', isSameBranch);
+        console.log('   isSameDept:', isSameDept);
+        console.log('   userBranchId:', userBranchId, 'reqBranchId:', reqRecord.branch_id);
+        console.log('   userDeptId:', userDeptId, 'reqDeptId:', reqRecord.department_id);
+        
+        // ✅ UPDATED ACCESS LOGIC:
+        // Allow if: Creator OR Admin OR (Head/Supervisor in same branch) OR Same department
+        const hasAccess = isCreator || 
+                         isAdmin || 
+                         (isHeadOrSupervisor && isSameBranch) || 
+                         isSameDept;
+        
+        console.log('   HAS ACCESS:', hasAccess);
+        
+        if (!hasAccess) {
+            console.log('❌ ACCESS DENIED');
+            return res.status(403).json({ 
+                error: 'Access denied. You can only edit your own requisitions or requisitions in your branch/department.',
+                debug: {
+                    isCreator,
+                    isAdmin,
+                    isHeadOrSupervisor,
+                    isSameBranch,
+                    isSameDept,
+                    yourBranch: userBranchId,
+                    yourDept: userDeptId,
+                    reqBranch: reqRecord.branch_id,
+                    reqDept: reqRecord.department_id
+                }
+            });
+        }
+        
+        console.log('✅ ACCESS GRANTED');
         
         const { request_from, attn, date, remarks, items,
                 prepared_name, prepared_signature, prepared_date,
@@ -4040,6 +4136,15 @@ app.put('/api/requisitions/:id', async (req, res) => {
                 items_prepared_name, items_prepared_signature, items_prepared_date,
                 returned_name, returned_signature, returned_date,
                 department_id, branch_id } = req.body;
+        
+        console.log('📝 Updating requisition with:', {
+            request_from,
+            attn,
+            department_id,
+            branch_id,
+            date,
+            items_count: items?.length || 0
+        });
         
         await pool.query(`UPDATE requisitions SET 
             request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, remarks = ?,
@@ -4065,11 +4170,11 @@ app.put('/api/requisitions/:id', async (req, res) => {
             }
         }
         
-        console.log('✅ Requisition updated:', reqRecord.id);
-        res.json({ success: true });
+        console.log('✅ Requisition updated successfully:', reqRecord.id);
+        res.json({ success: true, id: reqRecord.id });
     } catch (error) {
         console.error('PUT /api/requisitions/:id error:', error);
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message }); 
     }
 });
 // GET - Specific Users basing on the specific department of specific branch
@@ -4135,6 +4240,7 @@ app.delete('/api/requisitions/:id', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
+
 // ============================================
 // COMPUTER MONITORING - Optimized
 // ============================================
@@ -6014,22 +6120,94 @@ app.delete('/api/notifications/:id', async (req, res) => {
     }
 });
 // ============ CLIENT NOTIFICATION ROUTES ============
-
-// GET - Fetch notifications for a specific client user
+// POST - Save requisition notification for branch+department users
+app.post('/api/client-notifications/requisition', async (req, res) => {
+    try {
+        const { branch_id, department_id, type, title, message, ticket_number, exclude_user_id } = req.body;
+        
+        if (!branch_id || !department_id) {
+            return res.status(400).json({ error: 'branch_id and department_id are required' });
+        }
+        
+        // Build the query string
+        let userQuery = 'SELECT id FROM users WHERE branch_id = ? AND department_id = ? AND (role = ? OR role = ? OR role = ? OR role = ?)';
+        let userParams = [branch_id, department_id, 'head/manager', 'supervisor', 'admin', 'Technician'];
+        
+        if (exclude_user_id) {
+            userQuery += ' AND id != ?';
+            userParams.push(exclude_user_id);
+        }
+        
+        // Find all EDP/IT users in the target branch+department
+        const [users] = await pool.query(userQuery, userParams);
+        
+        // Also check new_user table
+        let newUserQuery = 'SELECT id FROM new_user WHERE branch_id = ? AND department_id = ?';
+        let newUserParams = [branch_id, department_id];
+        
+        if (exclude_user_id) {
+            newUserQuery += ' AND id != ?';
+            newUserParams.push(exclude_user_id);
+        }
+        
+        const [newUsers] = await pool.query(newUserQuery, newUserParams);
+        
+        const allUserIds = [...users.map((u) => u.id), ...newUsers.map((u) => u.id)];
+        
+        // Insert notification for each user
+        let insertCount = 0;
+        for (const userId of allUserIds) {
+            await pool.query(
+                'INSERT INTO client_notifications (user_id, type, title, message, ticket_number, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
+                [userId, type || 'info', title, message, ticket_number || null]
+            );
+            insertCount++;
+        }
+        
+        console.log('Saved ' + insertCount + ' requisition notifications for branch ' + branch_id + ', dept ' + department_id);
+        res.json({ success: true, count: insertCount });
+    } catch (error) {
+        console.error('POST /api/client-notifications/requisition error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET - Client notifications (filtered by user's branch+department)
 app.get('/api/client-notifications/:userId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key'); // Verify token is valid
+        const userId = parseInt(req.params.userId);
         
-        const [notifications] = await pool.query(
-            'SELECT * FROM client_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
-            [req.params.userId]
+        // Get user's branch and department
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id FROM users WHERE id = ?', [userId]
         );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id FROM new_user WHERE id = ?', [userId]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+            }
+        }
+        
+        // Get notifications for this specific user
+        const [notifications] = await pool.query(
+            `SELECT * FROM client_notifications 
+             WHERE user_id = ? 
+             ORDER BY created_at DESC 
+             LIMIT 50`,
+            [userId]
+        );
+        
         res.json(notifications);
     } catch (error) {
-        console.error('Error fetching client notifications:', error);
+        console.error('GET /api/client-notifications/:userId error:', error);
         res.status(500).json({ error: error.message });
     }
 });

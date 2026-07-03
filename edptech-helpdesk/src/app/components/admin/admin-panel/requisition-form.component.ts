@@ -6,6 +6,7 @@ import { AuthService } from '../../../services/auth.service';
 import { Router, ActivatedRoute } from '@angular/router';  
 import { NotificationService } from '../../../services/notification.service';
 import { environment } from '../../../../environments/environment';
+
 @Component({
   selector: 'app-admin-requisition-form',
   standalone: true,
@@ -252,13 +253,20 @@ import { environment } from '../../../../environments/environment';
         </div>
         <!-- Signature Drawing Modal -->
         <div class="modal-overlay" *ngIf="showSigModal" (click)="closeSigModal()">
-          <div class="sig-modal" (click)="$event.stopPropagation()">
-            <div class="sig-modal-header">
+          <div class="sig-modal" 
+               [ngStyle]="{'transform': 'translate(' + sigModalPosition.x + 'px, ' + sigModalPosition.y + 'px)'}"
+               (click)="$event.stopPropagation()">
+            <div class="sig-modal-header" 
+                 (mousedown)="startSigModalDrag($event)"
+                 (mousemove)="onSigModalDrag($event)"
+                 (mouseup)="stopSigModalDrag()"
+                 (mouseleave)="stopSigModalDrag()"
+                 style="cursor: move;">
               <span>✍️ Draw Signature</span>
               <button type="button" class="sig-modal-close" (click)="closeSigModal()">✕</button>
             </div>
             <div class="sig-modal-body">
-              <canvas id="sigModalCanvas" width="600" height="200" class="sig-modal-canvas"
+              <canvas id="sigModalCanvas" class="sig-modal-canvas"
                       (mousedown)="startSigDraw($event, sigModalTarget)"
                       (mousemove)="drawSig($event, sigModalTarget)"
                       (mouseup)="stopSigDraw()"
@@ -368,37 +376,26 @@ import { environment } from '../../../../environments/environment';
     .action-btn.submit { background: #0a3a8c; color: white; border-color: #1c5fb5 #042070 #042070 #1c5fb5; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 2000; }
-    .sig-modal { background: white; border: 2px solid #808080; box-shadow: 3px 4px 14px rgba(0,0,0,0.3); width: 650px; max-width: 95vw; }
-    .sig-modal-header { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: bold; }
-    .sig-modal-close { background: none; border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; font-size: 14px; padding: 2px 8px; }
-    .sig-modal-body { padding: 16px; background: #f5f5f5; }
-    .sig-modal-canvas { border: 1px solid #ccc; background: white; cursor: crosshair; display: block; width: 100%; height: 200px; touch-action: none; }
-    .sig-modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid #ddd; }
-    .sig-modal-btn { padding: 6px 16px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 10px; font-weight: bold; border-radius: 3px; }
+    .sig-modal { background: white; border: 2px solid #808080; box-shadow: 3px 4px 14px rgba(0,0,0,0.3); width: 800px; max-width: 95vw; position: relative; user-select: none; }
+    .sig-modal-header { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; }
+    .sig-modal-close { background: none; border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; font-size: 16px; padding: 4px 10px; line-height: 1; }
+    .sig-modal-close:hover { background: rgba(255,0,0,0.7); }
+    .sig-modal-body { padding: 20px; background: #f5f5f5; display: flex; justify-content: center; }
+    .sig-modal-canvas { border: 2px solid #ccc; background: white; cursor: crosshair; display: block; width: 750px; height: 300px; touch-action: none; }
+    .sig-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid #ddd; background: #fafafa; }
+    .sig-modal-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 3px; }
     .sig-modal-btn.clear { background: #f0f0f0; color: #cc0000; }
     .sig-modal-btn.cancel { background: #f0f0f0; color: #000; }
     .sig-modal-btn.save { background: #008800; color: white; border-color: #00aa00 #006600 #006600 #00aa00; }
+    .sig-modal-btn:hover { filter: brightness(0.95); }
     .req-input-sm { padding: 3px 5px; border: 1px solid #ccc; font-size: 10px; font-family: 'Courier New', monospace; }
     .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 10px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 3000; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .toast-notification.show { transform: translateY(0); opacity: 1; }
     .toast-notification.success { background: #008800; }
     .toast-notification.error { background: #cc0000; }
     .toast-notification.warning { background: #cc6600; }
-    .close-btn { 
-  background: rgba(255,255,255,0.2); 
-  border: 1px solid rgba(255,255,255,0.4); 
-  color: white; 
-  cursor: pointer; 
-  padding: 4px 10px; 
-  font-size: 14px; 
-  font-weight: bold;
-  border-radius: 0px;
-  line-height: 1;
-}
-.close-btn:hover { 
-  background: rgba(255,0,0,0.7); 
-  border-color: rgba(255,255,255,0.6);
-}
+    .close-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; padding: 4px 10px; font-size: 14px; font-weight: bold; border-radius: 0px; line-height: 1; }
+    .close-btn:hover { background: rgba(255,0,0,0.7); border-color: rgba(255,255,255,0.6); }
   `]
 })
 export class AdminRequisitionFormComponent implements OnInit {
@@ -423,6 +420,11 @@ export class AdminRequisitionFormComponent implements OnInit {
   allDepartments: any[] = [];
   attnUsers: any[] = [];
   mainBranchIds = [1, 5];
+  
+  // Draggable modal properties
+  sigModalPosition = { x: 0, y: 0 };
+  isDraggingSigModal = false;
+  sigModalDragStart = { x: 0, y: 0 };
   
   reqData: any = {
     request_from: '',
@@ -489,6 +491,13 @@ export class AdminRequisitionFormComponent implements OnInit {
         if (user && user.fullname) {
           this.reqData.prepared_name = user.fullname || '';
           this.reqData.request_from = user.department || user.dept || '';
+          
+          // ✅ Auto-fill Approved By for Head/Manager/Supervisor/Branch Manager
+          const role = (user.role || '').toLowerCase();
+          if (role === 'head/manager' || role === 'supervisor' || role === 'branch manager') {
+            this.reqData.approved_name = user.fullname || '';
+            this.reqData.approved_date = new Date().toISOString().split('T')[0];
+          }
         }
       }
     });
@@ -501,19 +510,16 @@ export class AdminRequisitionFormComponent implements OnInit {
     return !!(user && this.mainBranchIds.includes(Number(user.branch_id)));
 }
 
-// ✅ ADD THIS NEW GETTER
-get availableRecipientBranches(): any[] {
+  get availableRecipientBranches(): any[] {
     const user: any = JSON.parse(localStorage.getItem('currentUser') || '{}');
     const userBranchId = Number(user?.branch_id);
     
-    // If user is in a main branch, show the OTHER main branch(es)
     if (this.mainBranchIds.includes(userBranchId)) {
         return this.mainBranches.filter(b => b.id !== userBranchId);
     }
     
-    // For non-main branch users, show main branches (existing behavior)
     return this.mainBranches;
-}
+  }
 
   get companyName(): string {
     if (this.userBranch?.company_name) return this.userBranch.company_name;
@@ -525,16 +531,14 @@ get availableRecipientBranches(): any[] {
     return this.items.reduce((sum, item) => sum + ((item.qty || 0) * (item.unit_price || 0)), 0);
   }
 
- generateReqNumber(): string {
+  generateReqNumber(): string {
     const now = new Date();
-    const datePart = now.toISOString().split('T')[0].replace(/-/g, ''); // YYYYMMDD
+    const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
     
-    // Get branch code (first 3 letters of branch name, uppercase)
     const branchCode = this.userBranch?.name 
         ? this.userBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() 
         : 'BRC';
     
-    // Get department code (first 3 letters of department name, uppercase)
     let deptCode = 'DEPT';
     if (this.reqData.department_id) {
         const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
@@ -543,11 +547,11 @@ get availableRecipientBranches(): any[] {
         }
     }
     
-    // Generate sequential number (random 3 digits for simplicity)
     const random = Math.random().toString(36).substring(2, 5).toUpperCase();
     
     return `REQ-${branchCode}-${deptCode}-${datePart}-${random}`;
-}
+  }
+
   showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     this.toastMessage = msg;
     this.toastType = type;
@@ -580,14 +584,14 @@ get availableRecipientBranches(): any[] {
             });
             
             if (this.isMainBranch && user?.branch_id) {
-          this.selectedBranchId = user.branch_id;
-          this.filterDepartmentsByBranch(user.branch_id);
-        } else {
-          this.selectedBranchId = user?.branch_id || null;
-          if (this.selectedBranchId) {
-            this.filterDepartmentsByBranch(this.selectedBranchId);
-          }
-        }
+              this.selectedBranchId = user.branch_id;
+              this.filterDepartmentsByBranch(user.branch_id);
+            } else {
+              this.selectedBranchId = user?.branch_id || null;
+              if (this.selectedBranchId) {
+                this.filterDepartmentsByBranch(this.selectedBranchId);
+              }
+            }
           }
         });
       }
@@ -616,8 +620,8 @@ get availableRecipientBranches(): any[] {
             });
             
             if (branchId) {
-      this.selectedBranchId = branchId;
-      this.filterDepartmentsByBranch(branchId);
+              this.selectedBranchId = branchId;
+              this.filterDepartmentsByBranch(branchId);
               setTimeout(() => {
                 if (deptId) {
                   this.reqData.department_id = deptId;
@@ -626,13 +630,13 @@ get availableRecipientBranches(): any[] {
                 }
               }, 100);
             } else if (this.isMainBranch && user?.branch_id) {
-      this.selectedBranchId = user.branch_id;
-      this.filterDepartmentsByBranch(user.branch_id);
-    } else {
-      this.selectedBranchId = user?.branch_id || null;
-      if (this.selectedBranchId) this.filterDepartmentsByBranch(this.selectedBranchId);
-    }
-}
+              this.selectedBranchId = user.branch_id;
+              this.filterDepartmentsByBranch(user.branch_id);
+            } else {
+              this.selectedBranchId = user?.branch_id || null;
+              if (this.selectedBranchId) this.filterDepartmentsByBranch(this.selectedBranchId);
+            }
+          }
         });
       }
     });
@@ -654,48 +658,48 @@ get availableRecipientBranches(): any[] {
       this.onDepartmentChange();
     }
   }
-onDepartmentChange() {
-  if (!this.reqData.department_id) {
-    this.attnUsers = [];
-    return;
-  }
-  
-  // ✅ Get token and validate it
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
-    console.warn('⚠️ No valid token available for admin/users call');
-    this.attnUsers = [];
-    return;
-  }
-  
-  const headers = { 'Authorization': `Bearer ${token}` };
-  const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
-  const deptBranchId = selectedDept?.branch_id;
-  const deptId = selectedDept?.id;
-  
-  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
-    next: (users) => {
-      this.attnUsers = (users || []).filter(u => {
-        const userBranchId = Number(u.branch_id);
-        const userDeptId = Number(u.department_id);
-        const matchBranch = userBranchId === Number(deptBranchId);
-        const matchDept = !deptId || userDeptId === Number(deptId);
-        const role = (u.role || '').toLowerCase();
-        const matchRole = role === 'head/manager' || role === 'supervisor';
-        return matchBranch && matchDept && matchRole;
-      });
-      
-      if (this.attnUsers.length > 0 && !this.reqData.attn) {
-        this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
-      }
-    },
-    error: (err) => {
-      // ✅ Silently handle error - don't let it propagate
-      console.warn('Could not load ATTN users (status:', err.status, ')');
+
+  onDepartmentChange() {
+    if (!this.reqData.department_id) {
       this.attnUsers = [];
+      return;
     }
-  });
-}
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+      console.warn('⚠️ No valid token available for admin/users call');
+      this.attnUsers = [];
+      return;
+    }
+    
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
+    const deptBranchId = selectedDept?.branch_id;
+    const deptId = selectedDept?.id;
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+      next: (users) => {
+        this.attnUsers = (users || []).filter(u => {
+          const userBranchId = Number(u.branch_id);
+          const userDeptId = Number(u.department_id);
+          const matchBranch = userBranchId === Number(deptBranchId);
+          const matchDept = !deptId || userDeptId === Number(deptId);
+          const role = (u.role || '').toLowerCase();
+          const matchRole = role === 'head/manager' || role === 'supervisor';
+          return matchBranch && matchDept && matchRole;
+        });
+        
+        if (this.attnUsers.length > 0 && !this.reqData.attn) {
+          this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+        }
+      },
+      error: (err) => {
+        console.warn('Could not load ATTN users (status:', err.status, ')');
+        this.attnUsers = [];
+      }
+    });
+  }
+
   loadRequisition(id: string) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
@@ -739,11 +743,32 @@ onDepartmentChange() {
         if (this.approvedSignature) { this.sigSaved['approved'] = true; this.sigMode['approved'] = 'upload'; }
         if (this.itemsPreparedSignature) { this.sigSaved['items_prepared'] = true; this.sigMode['items_prepared'] = 'upload'; }
         
+        // ✅ Auto-fill Approved By when Supervisor/Head/Manager edits pending request
+        if (!this.approvalMode && this.editMode) {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          if (currentUser) {
+            const role = (currentUser.role || '').toLowerCase();
+            if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
+              if (!data.approved_name) {
+                this.reqData.approved_name = currentUser.fullname || '';
+                this.reqData.approved_date = new Date().toISOString().split('T')[0];
+              }
+            }
+          }
+        }
+        
         if (this.approvalMode) {
           const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}'); 
           if (currentUser) {
             this.reqData.items_prepared_name = this.reqData.items_prepared_name || currentUser.fullname || '';
             this.reqData.items_prepared_date = this.reqData.items_prepared_date || new Date().toISOString().split('T')[0];
+            
+            // ✅ Auto-fill Approved By for Head/Manager in approval mode
+            const role = (currentUser.role || '').toLowerCase();
+            if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
+              this.reqData.approved_name = this.reqData.approved_name || currentUser.fullname || '';
+              this.reqData.approved_date = this.reqData.approved_date || new Date().toISOString().split('T')[0];
+            }
           }
         }
       },
@@ -811,9 +836,11 @@ onDepartmentChange() {
 
   setSigMode(target: string, mode: 'draw' | 'upload') { this.sigMode[target] = mode; }
 
+  // Draggable modal methods
   openSigModal(target: string) {
     this.sigModalTarget = target;
     this.showSigModal = true;
+    this.sigModalPosition = { x: 0, y: 0 };
     setTimeout(() => {
       const canvas = document.getElementById('sigModalCanvas') as HTMLCanvasElement;
       if (canvas) {
@@ -821,12 +848,45 @@ onDepartmentChange() {
         canvas.width = rect.width;
         canvas.height = rect.height;
         const ctx = canvas.getContext('2d');
-        if (ctx) { ctx.strokeStyle = '#000'; ctx.lineWidth = 2; ctx.lineCap = 'round'; }
+        if (ctx) { 
+          ctx.strokeStyle = '#000'; 
+          ctx.lineWidth = 2; 
+          ctx.lineCap = 'round';
+          const existingSig = target === 'prepared' ? this.preparedSignature :
+                             target === 'approved' ? this.approvedSignature : this.itemsPreparedSignature;
+          if (existingSig) {
+            const img = new Image();
+            img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            img.src = existingSig;
+          }
+        }
       }
     }, 100);
   }
 
   closeSigModal() { this.showSigModal = false; this.sigDrawing = false; }
+
+  startSigModalDrag(event: MouseEvent) {
+    this.isDraggingSigModal = true;
+    this.sigModalDragStart = {
+      x: event.clientX - this.sigModalPosition.x,
+      y: event.clientY - this.sigModalPosition.y
+    };
+    event.preventDefault();
+  }
+
+  onSigModalDrag(event: MouseEvent) {
+    if (!this.isDraggingSigModal) return;
+    event.preventDefault();
+    this.sigModalPosition = {
+      x: event.clientX - this.sigModalDragStart.x,
+      y: event.clientY - this.sigModalDragStart.y
+    };
+  }
+
+  stopSigModalDrag() {
+    this.isDraggingSigModal = false;
+  }
 
   startSigDraw(event: any, target: string) {
     event.preventDefault(); this.sigDrawing = true;
@@ -905,10 +965,23 @@ onDepartmentChange() {
       return;
     }
 
+    // Client mode validation
     if (!this.reqData.request_from) { this.showToastMsg('Please select Request From.', 'warning'); return; }
     if (this.items.length === 0) { this.showToastMsg('Please add at least one item.', 'warning'); return; }
-    if (!this.reqData.prepared_name || !this.preparedSignature) { this.showToastMsg('Please fill in Prepared By name and signature.', 'warning'); return; }
-    if (!this.reqData.approved_name || !this.approvedSignature) { this.showToastMsg('Please fill in Approved By name and signature.', 'warning'); return; }
+    if (!this.reqData.prepared_name || !this.preparedSignature) { 
+      this.showToastMsg('Please fill in Prepared By name and signature.', 'warning'); 
+      return; 
+    }
+
+    // ✅ Only require Approved By for Head/Manager/Supervisor/Branch Manager
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const role = (currentUser?.role || '').toLowerCase();
+    const isHeadOrManager = role === 'head/manager' || role === 'branch manager' || role === 'supervisor';
+
+    if (isHeadOrManager && (!this.reqData.approved_name || !this.approvedSignature)) {
+      this.showToastMsg('Please fill in Approved By name and signature.', 'warning');
+      return;
+    }
 
     this.submitting = true;
     const payload: any = {
@@ -916,21 +989,18 @@ onDepartmentChange() {
       requisition_number: this.reqNumber,
       items: this.items,
       branch_id: this.selectedBranchId,
+      department_id: this.reqData.department_id,
       prepared_signature: this.preparedSignature,
       approved_signature: this.approvedSignature,
       items_prepared_signature: this.itemsPreparedSignature,
+      submitted_by: currentUser.id || null,
     };
-
-    if (!this.editMode) {
-      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      payload.submitted_by = user.id || null;
-    }
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     const url = this.editMode && this.editReqId 
-  ? `${environment.apiUrl}/api/admin/requisitions/${this.editReqId}` 
-  : `${environment.apiUrl}/api/admin/requisitions`;
+      ? `${environment.apiUrl}/api/admin/requisitions/${this.editReqId}` 
+      : `${environment.apiUrl}/api/admin/requisitions`;
     
     const request = this.editMode 
       ? this.http.put(url, payload, { headers })
@@ -939,18 +1009,13 @@ onDepartmentChange() {
     request.subscribe({
       next: () => {
         this.submitting = false;
-        this.showToastMsg('✅ Requisition submitted!', 'success');
+        this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
         this.router.navigate(['/admin/requisitions']);
       },
-      error: () => {
+      error: (err) => {
         this.submitting = false;
-        const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
-        const existingIndex = saved.findIndex((r: any) => r.requisition_number === this.reqNumber);
-        if (existingIndex !== -1) saved[existingIndex] = payload;
-        else saved.push(payload);
-        localStorage.setItem('requisitions', JSON.stringify(saved));
-        this.showToastMsg('📋 Saved locally', 'warning');
-        this.router.navigate(['/admin/requisitions']);
+        console.error('❌ Submit error:', err);
+        this.showToastMsg(`⚠️ Failed: ${err.error?.error || err.message}`, 'error');
       }
     });
   }

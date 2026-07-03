@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
 import { TicketService, Ticket } from '../../services/ticket.service';
 import { HttpClient } from '@angular/common/http';
@@ -266,12 +266,11 @@ interface ClientTicket {
               <span class="nav-badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
             </a>
 
-            <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
-              <span class="nav-icon">📩</span>
-              <span class="nav-label">Requests</span>
-              <span class="nav-badge" *ngIf="pendingRequisitionsCount > 0">{{ pendingRequisitionsCount }}</span>
-            </a>
-
+           <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
+  <span class="nav-icon">📩</span>
+  <span class="nav-label">Requests</span>
+  <span class="nav-badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
+</a>
             <div class="sidebar-divider"></div>
             <div class="sidebar-section-label">RESOURCES</div>
 
@@ -1500,6 +1499,7 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isTokenValid = false;
   isRefreshing = false;
   clientNotifications: ClientNotification[] = [];
+  private _requisitionsNotificationCount: number = 0;
   readonly announcements = [
     { type: 'new',   text: 'IT Support hours: Mon–Fri 8AM – 6PM' },
     { type: 'info',  text: 'Password resets available via self-service portal' },
@@ -1521,6 +1521,11 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     // First, verify authentication before loading anything
     this.verifyAuthentication();
+    this.router.events.subscribe((event: any) => {
+  if (event.url && event.url.includes('/client/request')) {
+    this.markRequisitionNotificationsAsRead();
+  }
+});
   }
 
   // =============================================
@@ -1692,6 +1697,28 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
 
     this.loadSystemSettings();
   }
+get requisitionsNotificationCount(): number {
+  return this._requisitionsNotificationCount;
+}
+// ✅ Persist seen IDs to localStorage
+private get seenReqNotificationIds(): Set<number> {
+  const stored = localStorage.getItem('clientDash_seenReqIds');
+  if (stored) {
+    try { return new Set(JSON.parse(stored)); }
+    catch { return new Set(); }
+  }
+  return new Set();
+}
+
+private set seenReqNotificationIds(ids: Set<number>) {
+  localStorage.setItem('clientDash_seenReqIds', JSON.stringify([...ids]));
+}
+
+private addSeenReqIds(ids: number[]): void {
+  const current = this.seenReqNotificationIds;
+  ids.forEach(id => current.add(id));
+  this.seenReqNotificationIds = current;
+}
 
   // =============================================
   // INACTIVITY & AUTO LOGOUT
@@ -2008,15 +2035,91 @@ refreshAll() {
   goToAbout() { this.router.navigate(['/client/about']); this.activeMenu = null; }
   goToShortcuts() { this.router.navigate(['/client/shortcuts']); this.activeMenu = null; }
 
-  loadRequisitionsCount() {
+ loadRequisitionsCount() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
     const headers = { 'Authorization': `Bearer ${token}` };
     this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
-      next: (data) => { const reqs = Array.isArray(data) ? data : []; this.pendingRequisitionsCount = reqs.filter(r => (r.status || 'pending') === 'pending').length; },
-      error: () => { this.pendingRequisitionsCount = 0; }
+      next: (data) => { 
+        const reqs = Array.isArray(data) ? data : [];
+        
+        // Keep pending count for widget if needed
+        this.pendingRequisitionsCount = reqs.filter(r => (r.status || 'pending') === 'pending').length;
+        
+        // Get current user info
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const userBranchId = currentUser?.branch_id;
+        const userDeptId = currentUser?.department_id;
+        const userId = currentUser?.id;
+        
+        // ✅ Calculate notification count (exclude seen IDs)
+        const seenIds = this.seenReqNotificationIds;
+        
+        this._requisitionsNotificationCount = reqs.filter(r => {
+          // Skip if already seen
+          if (seenIds.has(r.id)) return false;
+          
+          const creatorBranch = r.creator_branch_id;
+          const creatorDept = r.creator_dept_id;
+          const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+          
+          const isIncoming = 
+            (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+            (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+          
+          if (!isIncoming) return false;
+          
+          // 1. New pending requests
+          if (r.status === 'pending') return true;
+          // 2. Forwarded requests on process
+          if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+          // 3. Forwarded requests released by recipient
+          if (r.is_forwarded && r.forwarded_status === 'released') return true;
+          
+          return false;
+        }).length;
+      },
+      error: () => { 
+        this.pendingRequisitionsCount = 0; 
+        this._requisitionsNotificationCount = 0;
+      }
     });
-  }
+}
+markRequisitionNotificationsAsRead(): void {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
+    next: (data) => {
+      const reqs = Array.isArray(data) ? data : [];
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const userBranchId = currentUser?.branch_id;
+      const userDeptId = currentUser?.department_id;
+      const userId = currentUser?.id;
+      
+      const idsToMark: number[] = [];
+      
+      reqs.forEach(r => {
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+        
+        const isIncoming = 
+          (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+          (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+        
+        if (isIncoming) {
+          idsToMark.push(r.id);
+        }
+      });
+      
+      this.addSeenReqIds(idsToMark);
+      this._requisitionsNotificationCount = 0;
+    },
+    error: () => {}
+  });
+}
 getNotificationCount(): number {
   if (this.isEDPUser()) {
     return this.allTicketsNotificationCount;

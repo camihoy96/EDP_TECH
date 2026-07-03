@@ -17,12 +17,14 @@ import { Subscription } from 'rxjs';
       <!-- Header -->
       <div class="view-header">
   <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
-  <div class="header-actions">
+<div class="header-actions">
     <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
       📤 Our Requests
+      <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
     </button>
     <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
       📥 Request Management
+      <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
     </button>
     <button class="classic-btn primary" routerLink="/client/request/new">
       <span>➕</span> New Requisition
@@ -133,7 +135,7 @@ import { Subscription } from 'rxjs';
     <th>Date</th>
     <th>{{ viewMode === 'our' ? 'Forwarded To' : 'Forwarded From' }}</th>
     <th *ngIf="viewMode === 'incoming'">Request From</th>
-    <th *ngIf="viewMode === 'our'">{{ isEDPUser() ? 'Department' : 'Recipient' }}</th>
+    <th *ngIf="viewMode === 'our'">Recipient</th>
     <th>ATTN</th>
     <th>Items</th>
     <th>Total</th>
@@ -196,8 +198,9 @@ import { Subscription } from 'rxjs';
     <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
       🏢 {{ getBranchName(req.branch_id) }}
     </span>
+    <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
     <span class="direction-tag outgoing" *ngIf="req.submitted_by === currentUser?.id">📤 Sent by you</span>
-<span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 Sent by colleague</span>
+    <span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 Sent by colleague</span>
   </div>
 </td>
     <td class="attn-cell">
@@ -231,16 +234,17 @@ import { Subscription } from 'rxjs';
       <!-- Creator can edit their own pending -->
       <button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
       
-      <!-- Forward button for accepted requests -->
-      <button class="action-btn forward-btn" 
-        *ngIf="req.status === 'approved' && canForward(req)" 
-        (click)="openForwardModal(req)" 
-        title="Forward">📤</button>
+     <!-- Forward button - only in Request Management (incoming) view -->
+<button class="action-btn forward-btn" 
+  *ngIf="viewMode === 'incoming' && req.status === 'approved' && canForward(req)" 
+  (click)="openForwardModal(req)" 
+  title="Forward">📤</button>
       
-      <!-- Recipient can Accept/Reject pending -->
-      <button class="action-btn accept-btn" *ngIf="canAcceptReject(req)" (click)="acceptRequisition(req)" title="Accept">✅</button>
-      <button class="action-btn reject-btn" *ngIf="canAcceptReject(req)" (click)="rejectRequisition(req)" title="Reject">❌</button>
+      <!-- Accept button - only show when request has been approved (approved_name is filled) -->
+<button class="action-btn accept-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="acceptRequisition(req)" title="Accept">✅</button>
 
+<!-- Reject button - only show when request has been approved (approved_name is filled) -->
+<button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">❌</button>
       <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
       <button class="action-btn process-btn" 
         *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
@@ -448,7 +452,7 @@ import { Subscription } from 'rxjs';
 <button class="classic-btn primary" 
         *ngIf="viewReq && canModify(viewReq)" 
         (click)="editFromModal()">
-  ✏️ {{ isSentToMyDepartment(viewReq) ? 'Process' : 'Edit' }}
+  ✏️ Edit
 </button>
 </div>
       </div>
@@ -873,6 +877,27 @@ import { Subscription } from 'rxjs';
   margin-top: 1px;
   font-style: italic;
 }
+  .notif-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 5px;
+  margin-left: 4px;
+  line-height: 1;
+}
+.notif-badge.our {
+  background: #008800;
+  color: white;
+}
+.notif-badge.incoming {
+  background: #cc6600;
+  color: white;
+}
   .modal-titlebar {
   cursor: grab;
   user-select: none;
@@ -1170,6 +1195,37 @@ setViewMode(mode: string) {
   this.viewMode = mode;
   this.activeTab = 'all'; 
   this.selectedReqIds = [];
+  
+  // ✅ Mark all current notifications as "seen" for this view
+  const idsToMark: number[] = [];
+  
+  if (mode === 'our') {
+    this.requisitions.forEach(r => {
+      const userBranchId = this.currentUser?.branch_id;
+      const userDeptId = this.currentUser?.department_id;
+      const userId = this.currentUser?.id;
+      const isOurRequest = 
+        r.submitted_by == userId ||
+        (r.creator_branch_id == userBranchId && r.creator_dept_id == userDeptId) ||
+        (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId);
+      if (isOurRequest) idsToMark.push(r.id);
+    });
+  } else if (mode === 'incoming') {
+    this.requisitions.forEach(r => {
+      const userBranchId = this.currentUser?.branch_id;
+      const userDeptId = this.currentUser?.department_id;
+      const userId = this.currentUser?.id;
+      const creatorBranch = r.creator_branch_id;
+      const creatorDept = r.creator_dept_id;
+      const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+      const isIncoming = 
+        (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+        (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+      if (isIncoming) idsToMark.push(r.id);
+    });
+  }
+  
+  this.addSeenReqIds(idsToMark);
   this.applyFilters();
 }
 // Accept requisition
@@ -1352,7 +1408,89 @@ confirmBulkProcess() {
     });
   });
 }
+// ✅ Persist seen IDs to localStorage so they survive page reloads
+private get seenReqIds(): Set<number> {
+  const stored = localStorage.getItem('client_reqMgmt_seenIds');
+  if (stored) {
+    try { return new Set(JSON.parse(stored)); }
+    catch { return new Set(); }
+  }
+  return new Set();
+}
 
+private set seenReqIds(ids: Set<number>) {
+  localStorage.setItem('client_reqMgmt_seenIds', JSON.stringify([...ids]));
+}
+
+private addSeenReqIds(ids: number[]): void {
+  const current = this.seenReqIds;
+  ids.forEach(id => current.add(id));
+  this.seenReqIds = current;
+}
+get ourNotificationCount(): number {
+  return this.requisitions.filter(r => {
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    // Skip if already seen
+    if (this.seenReqIds.has(r.id)) return false;
+    
+    const isOurRequest = 
+      r.submitted_by == userId ||
+      (r.creator_branch_id == userBranchId && r.creator_dept_id == userDeptId) ||
+      (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId);
+    
+    if (!isOurRequest) return false;
+    
+    // Accepted by recipient
+    if (r.status === 'approved') return true;
+    // On process (normal)
+    if (!r.is_forwarded && r.status === 'processing') return true;
+    // Forwarded
+    if (r.is_forwarded && r.status === 'forwarded' && !r.forwarded_status) return true;
+    // Released
+    if (!r.is_forwarded && r.status === 'released') return true;
+    // Forwarded on process
+    if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+    // Forwarded released by recipient
+    if (r.is_forwarded && r.status === 'forwarded' && r.forwarded_status === 'released') return true;
+    // Final released
+    if (r.is_forwarded && r.status === 'released') return true;
+    
+    return false;
+  }).length;
+}
+
+get incomingNotificationCount(): number {
+  return this.requisitions.filter(r => {
+    const userBranchId = this.currentUser?.branch_id;
+    const userDeptId = this.currentUser?.department_id;
+    const userId = this.currentUser?.id;
+    
+    // Skip if already seen
+    if (this.seenReqIds.has(r.id)) return false;
+    
+    const creatorBranch = r.creator_branch_id;
+    const creatorDept = r.creator_dept_id;
+    const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+    
+    const isIncoming = 
+      (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+      (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+    
+    if (!isIncoming) return false;
+    
+    // 1. New pending requests
+    if (r.status === 'pending') return true;
+    // 2. Forwarded requests on process
+    if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+    // 3. Forwarded requests released by recipient
+    if (r.is_forwarded && r.forwarded_status === 'released') return true;
+    
+    return false;
+  }).length;
+}
 cancelBulkProcess() {
   this.showBulkProcessConfirm = false;
   this.bulkProcessCount = 0;
@@ -2119,24 +2257,16 @@ cancelRelease() {
   }
 canModify(req: any): boolean { 
     const isPending = (req.status || 'pending') === 'pending';
-    
-    // Is this my own requisition? (creator)
     const isMyRequisition = req.submitted_by === this.currentUser?.id;
+    const isHeadOrSup = this.isHeadOrSupervisor();
     
-    // Is this sent to my department? (recipient)
-    const isSentToMyDept = this.isSentToMyDepartment(req);
-    
-    // ✅ ONLY creator can edit their OWN pending requisitions
     if (isMyRequisition && isPending) return true;
-    
-    // ✅ Head/Manager or Supervisor recipient can also edit pending requests sent to them
-    if (isSentToMyDept && isPending && this.isHeadOrSupervisor()) return true;
-    
-    // EDP users with head/manager or supervisor role can modify any pending
-    if (this.isEDPUser() && this.isHeadOrSupervisor() && isPending) return true;
+    if (isHeadOrSup && isPending) return true;
     
     return false;
 }
+
+
 getBranchCompany(branchId: number): string {
   if (!branchId) return '';
   const branch = this.branches.find(b => b.id == branchId);
@@ -2145,16 +2275,13 @@ getBranchCompany(branchId: number): string {
 canDelete(req: any): boolean {
     if (!this.currentUser) return false;
     
-    // ✅ ONLY creator can delete their OWN pending requests
-    if (req.submitted_by === this.currentUser.id && (req.status || 'pending') === 'pending') return true;
+    const isPending = (req.status || 'pending') === 'pending';
+    const isMyRequisition = req.submitted_by === this.currentUser?.id;
+    const isHeadOrSup = this.isHeadOrSupervisor();
     
-    // ✅ Head/Manager/Supervisor recipient can delete any request sent to their department
-    if (this.isSentToMyDepartment(req) && this.isHeadOrSupervisor()) return true;
+    if (isMyRequisition && isPending) return true;
+    if (isHeadOrSup && isPending) return true;
     
-    // EDP users with head/manager or supervisor role can delete any
-    if (this.isEDPUser() && this.isHeadOrSupervisor()) return true;
-    
-    // ❌ Staff, Supervisor (non-head), and other colleagues CANNOT delete
     return false;
 }
   // ✅ NEW METHOD: Check if current user is the recipient

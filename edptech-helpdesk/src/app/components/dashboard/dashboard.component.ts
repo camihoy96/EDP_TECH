@@ -1,7 +1,8 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { filter } from 'rxjs/operators';
 import { AuthService } from '../../services/auth.service';
 import { TicketService, Ticket } from '../../services/ticket.service';
 import { NotificationBellComponent } from '../notification-bell/notification-bell.component';
@@ -177,12 +178,12 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
   <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
 </a>
 <a routerLink="/admin/job-orders" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📋</span> Job Orders
+  <span class="nav-icon">📋</span>Manage Job Orders
   <span class="badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
 </a>
 <a routerLink="/admin/requisitions" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📩</span> Requisitions
-  <span class="badge" *ngIf="pendingRequisitionsCount > 0">{{ pendingRequisitionsCount }}</span>
+  <span class="nav-icon">📩</span>Manage Requisitions
+  <span class="badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
 </a>
 <a routerLink="/admin/users-management" routerLinkActive="active" class="sidebar-link">
   <span class="nav-icon">👥</span> User Management
@@ -2110,6 +2111,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   logoutCountdown = 60;
   private logoutWarningTimer: any;
   private logoutCountdownInterval: any;
+  private _requisitionsNotificationCount: number = 0;
   aiQuery = '';
   aiResponse = '';
   aiLoading = false;
@@ -2152,7 +2154,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   };
   unreadMessagesCount = 0;
   private destroy$ = new Subject<void>();
-
+private get seenReqNotificationIds(): Set<number> {
+  const stored = localStorage.getItem('seenReqNotificationIds');
+  if (stored) {
+    try {
+      return new Set(JSON.parse(stored));
+    } catch { return new Set(); }
+  }
+  return new Set();
+}
   // ADD THE CONSTRUCTOR - was missing!
   constructor(
     private authService: AuthService,
@@ -2167,6 +2177,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.setupSubscriptions();
     this.verifyAuthentication();
+    this.router.events.pipe(
+  filter(event => event instanceof NavigationEnd)
+).subscribe((event: any) => {
+  if (event.url.includes('/admin/requisitions')) {
+    this.markRequisitionNotificationsAsRead();
+  }
+});
   }
 checkSystemStatus() {
   // Check API connection
@@ -2191,7 +2208,16 @@ showStatusPopup(message: string) {
     this.popupMessage = null;
   }, 5000);
 }
+private set seenReqNotificationIds(ids: Set<number>) {
+  localStorage.setItem('seenReqNotificationIds', JSON.stringify([...ids]));
+}
 
+// Add a method to add IDs to the set
+private addSeenReqIds(ids: number[]): void {
+  const current = this.seenReqNotificationIds;
+  ids.forEach(id => current.add(id));
+  this.seenReqNotificationIds = current;
+}
  // =============================================
   // SUBSCRIPTIONS (safe to set up immediately)
   // =============================================
@@ -2315,7 +2341,10 @@ if (currentUser.user_table !== 'users') {
     this.handleUnauthorized('Session validation failed');
   }
 }
-
+get requisitionsNotificationCount(): number {
+  // This will be updated by loadRequisitionsCount()
+  return this._requisitionsNotificationCount;
+}
  private validateToken(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
@@ -2677,14 +2706,87 @@ loadRequisitionsCount() {
     next: (data) => {
       const reqs = Array.isArray(data) ? data : [];
       this.allReqsTotal = reqs.length;
+      
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const userBranchId = currentUser?.branch_id;
+      const userDeptId = currentUser?.department_id;
+      const userId = currentUser?.id;
+      
       this.pendingRequisitionsCount = reqs.filter(r => (r.status || 'pending') === 'pending').length;
       this.receivedRequisitionsCount = reqs.filter(r => r.status === 'approved').length;
       this.rejectedRequisitionsCount = reqs.filter(r => r.status === 'rejected').length;
+      
+      // ✅ Use the getter which reads from localStorage
+      const seenIds = this.seenReqNotificationIds;
+      
+      this._requisitionsNotificationCount = reqs.filter(r => {
+        if (seenIds.has(r.id)) return false;
+        
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+        
+        const isIncoming = 
+          (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+          (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+        
+        if (!isIncoming) return false;
+        
+        if (r.status === 'pending') return true;
+        if (r.is_forwarded && r.forwarded_status === 'processing') return true;
+        if (r.is_forwarded && r.forwarded_status === 'released') return true;
+        
+        return false;
+      }).length;
     },
     error: () => {
       this.pendingRequisitionsCount = 0;
+      this._requisitionsNotificationCount = 0;
     }
   });
+}
+markRequisitionNotificationsAsRead(): void {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { headers }).subscribe({
+    next: (data) => {
+      const reqs = Array.isArray(data) ? data : [];
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      const userBranchId = currentUser?.branch_id;
+      const userDeptId = currentUser?.department_id;
+      const userId = currentUser?.id;
+      
+      const idsToMark: number[] = [];
+      
+      reqs.forEach(r => {
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+        
+        const isIncoming = 
+          (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+          (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+        
+        if (isIncoming) {
+          idsToMark.push(r.id);
+        }
+      });
+      
+      // ✅ Add all current incoming IDs to the seen set (persisted to localStorage)
+      this.addSeenReqIds(idsToMark);
+      
+      // Reset the count after marking as read
+      this._requisitionsNotificationCount = 0;
+    },
+    error: () => {
+      // Silently fail
+    }
+  });
+}
+goToRequisitions() {
+  this.markRequisitionNotificationsAsRead();
+  this.router.navigate(['/admin/requisitions']);
 }
  setViewMode(mode: string) {
   this.currentViewMode = mode;

@@ -274,14 +274,16 @@ markAllRead() { this.clientNotificationService.markAllAsRead(); }
     this.clientNotificationService.dismissNotification(id);
   }
 
-  onNotificationClick(notification: ClientNotification) {
+ onNotificationClick(notification: ClientNotification) {
     this.clientNotificationService.markAsRead(notification.id);
     if (notification.ticketId) {
       this.router.navigate(['/client/tickets', notification.ticketId]);
+    } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
+      // Navigate to requisitions page for requisition notifications
+      this.router.navigate(['/client/request']);
     }
     this.showDropdown = false;
-  }
-
+}
   showMore() { this.visibleLimit += 20; }
 
   getIcon(type: string): string {
