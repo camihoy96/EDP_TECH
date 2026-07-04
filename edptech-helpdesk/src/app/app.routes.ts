@@ -190,6 +190,7 @@ export const routes: Routes = [
       { path: 'job-orders', component: ClientJobOrderListComponent }, 
       { path: 'job-orders/new', component: ClientJobOrderFormComponent },
       { path: 'job-orders/edit', component: ClientJobOrderFormComponent },
+      { path: 'job-orders/approve', component: ClientJobOrderFormComponent },
       { path: 'request', component: ClientRequisitionListComponent },
       { path: 'request/new', component: ClientRequisitionFormComponent },
       { path: 'request/edit', component: ClientRequisitionFormComponent },

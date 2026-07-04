@@ -3015,6 +3015,9 @@ app.get('/api/reports', async (req, res) => {
     }
 });
 
+// ============================================
+// JOB-ORDER API ENDPOINTS (FIXED ORDER)
+// ============================================
 // POST - Submit Job Order
 app.post('/api/job-orders', async (req, res) => {
     try {
@@ -3024,16 +3027,17 @@ app.post('/api/job-orders', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        const {
+         const {
             date, company, crtk_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
             job_order_for, requested_date, requested_name,
-            approved_name, received_date, received_name,
+            approved_name, approved_date, received_date, received_name,  
             job_order_number, submitted_by,
-            requested_signature, approved_signature, received_signature
+            requested_signature, approved_signature, received_signature,
+            branch_id, department_id, ctrl_no, time
         } = req.body;
         
-        console.log('📋 Creating job order:', { job_order_number, company });
+        console.log('📋 Creating job order:', { job_order_number, company, branch_id, department_id });
         
         const userId = submitted_by || decoded.id;
         
@@ -3051,19 +3055,21 @@ app.post('/api/job-orders', async (req, res) => {
         
         const [result] = await pool.query(`
             INSERT INTO job_orders (
-                job_order_number, date, company, crtk_no, date_needed, department,
+                job_order_number, date, time, company, ctrl_no, date_needed, department,
+                branch_id, department_id,
                 is_charge, is_expense, request_dept, particulars, job_order_for,
-                requested_date, requested_name, approved_name, received_date,
+                requested_date, requested_name, approved_name, approved_date, received_date,
                 received_name, requested_signature, approved_signature, received_signature,
                 submitted_by
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            joNumber, date || null, company || null, crtk_no || null, 
+            joNumber, date || null, time || null, company || null, ctrl_no || null,
             date_needed || null, department || null,
+            branch_id || null, department_id || null,
             is_charge ? 1 : 0, is_expense ? 1 : 0, 
             request_dept || null, particulars || null,
             job_order_for || null, requested_date || null, 
-            requested_name || null, approved_name || null,
+            requested_name || null, approved_name || null, approved_date || null,
             received_date || null, received_name || null,
             requested_signature || null, approved_signature || null, received_signature || null,
             userId
@@ -3079,7 +3085,7 @@ app.post('/api/job-orders', async (req, res) => {
     }
 });
 
-// GET - My Job Orders
+// GET - My Job Orders (also gets orders sent to user's department AND forwarded to user's department)
 app.get('/api/job-orders/my', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3088,9 +3094,37 @@ app.get('/api/job-orders/my', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
+        let userBranchId = null;
+        let userDeptId = null;
+        let userFullname = null;
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id, fullname FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+            userFullname = userInfo[0].fullname;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id, fullname FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+                userFullname = newUserInfo[0].fullname;
+            }
+        }
+        
         const [orders] = await pool.query(
-            'SELECT * FROM job_orders WHERE submitted_by = ? ORDER BY created_at DESC',
-            [decoded.id]
+            `SELECT * FROM job_orders 
+             WHERE submitted_by = ? 
+                OR (branch_id = ? AND department_id = ? AND submitted_by != ? AND is_forwarded = 0)
+                OR (is_forwarded = 1 AND forwarded_to_branch_id = ? AND forwarded_to_department_id = ?)
+                OR (is_forwarded = 1 AND forwarded_by_name = ?)
+                OR (received_name = ?)
+             ORDER BY created_at DESC`,
+            [decoded.id, userBranchId, userDeptId, decoded.id, userBranchId, userDeptId, userFullname, userFullname]
         );
         
         res.json(orders);
@@ -3099,7 +3133,6 @@ app.get('/api/job-orders/my', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 // DELETE - Delete Job Order
 app.delete('/api/job-orders/:id', async (req, res) => {
     try {
@@ -3166,17 +3199,17 @@ app.put('/api/job-orders/:id', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const id = req.params.id;
-        const {
+         const {
             date, company, crtk_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
             job_order_for, requested_date, requested_name,
-            approved_name, received_date, received_name,
-            requested_signature, approved_signature, received_signature
+            approved_name, approved_date, received_date, received_name,  
+            requested_signature, approved_signature, received_signature,
+            branch_id, department_id, ctrl_no, time
         } = req.body;
         
         console.log('✏️ Updating job order:', id);
         
-        // Find the order first
         const [existing] = await pool.query(
             'SELECT id FROM job_orders WHERE id = ? OR job_order_number = ?',
             [isNaN(id) ? 0 : parseInt(id), id]
@@ -3187,20 +3220,21 @@ app.put('/api/job-orders/:id', async (req, res) => {
         }
         
         const orderId = existing[0].id;
-        
         await pool.query(`
             UPDATE job_orders SET
-                date = ?, company = ?, crtk_no = ?, date_needed = ?, department = ?,
+                date = ?, time = ?, company = ?, ctrl_no = ?, date_needed = ?, department = ?,
+                branch_id = ?, department_id = ?,
                 is_charge = ?, is_expense = ?, request_dept = ?, particulars = ?,
                 job_order_for = ?, requested_date = ?, requested_name = ?,
-                approved_name = ?, received_date = ?, received_name = ?,
+                approved_name = ?, approved_date = ?, received_date = ?, received_name = ?,  // ✅ ADD approved_date
                 requested_signature = ?, approved_signature = ?, received_signature = ?
             WHERE id = ?
         `, [
-            date || null, company || null, crtk_no || null, date_needed || null, department || null,
+            date || null, time || null, company || null, ctrl_no || null, date_needed || null, department || null,
+            branch_id || null, department_id || null,
             is_charge ? 1 : 0, is_expense ? 1 : 0, request_dept || null, particulars || null,
             job_order_for || null, requested_date || null, requested_name || null,
-            approved_name || null, received_date || null, received_name || null,
+            approved_name || null, approved_date || null, received_date || null, received_name || null,  // ✅ ADD
             requested_signature || null, approved_signature || null, received_signature || null,
             orderId
         ]);
@@ -3228,40 +3262,109 @@ app.get('/api/admin/job-orders', async (req, res) => {
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
 
-// PUT - Update Job Order Status (Admin)
-// PUT - Update Job Order Status (Admin) - UPDATED
+// PUT - Update Job Order Status (handles forwarded sub-statuses too)
 app.put('/api/admin/job-orders/:id/status', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
-            return res.status(403).json({ error: 'Access denied' });
+        
+        const { status, done_name, done_date, assigned_to, assigned_users, assigned_names } = req.body;
+        
+        // Get the job order first
+        const [orders] = await pool.query('SELECT * FROM job_orders WHERE id = ?', [req.params.id]);
+        if (orders.length === 0) {
+            return res.status(404).json({ error: 'Job order not found' });
         }
-        const { status, done_name, done_date } = req.body;
         
-        const updates = ['status = ?'];
-        const values = [status];
+        const jo = orders[0];
+        const updates = [];
+        const values = [];
         
-        // ✅ Support done/release fields
-        if (status === 'done' || done_name) {
+        // ✅ Handle forwarded job orders differently
+       if (jo.is_forwarded) {
+    if (status === 'assigned') {
+        // Keep main status as 'forwarded', set forwarded_status to 'assigned'
+        updates.push('forwarded_status = ?');
+        values.push('assigned');
+    } else if (status === 'done') {
+        // ✅ Change main status to 'done' AND set forwarded_status to 'done'
+        updates.push('status = ?');
+        values.push('done');
+        updates.push('forwarded_status = ?');
+        values.push('done');
+    } else {
+        updates.push('status = ?');
+        values.push(status);
+    }
+}else {
+            // Normal status update for non-forwarded JOs
+            if (status) {
+                updates.push('status = ?');
+                values.push(status);
+            }
+        }
+        
+        if (done_name !== undefined) {
             updates.push('done_name = ?');
             values.push(done_name || null);
         }
-        if (status === 'done' || done_date) {
+        if (done_date !== undefined) {
             updates.push('done_date = ?');
             values.push(done_date || null);
         }
+        if (assigned_to !== undefined) {
+            updates.push('assigned_to = ?');
+            values.push(assigned_to || null);
+        }
+        if (assigned_users !== undefined) {
+            updates.push('assigned_users = ?');
+            values.push(JSON.stringify(assigned_users) || null);
+        }
+        if (assigned_names !== undefined) {
+            updates.push('assigned_names = ?');
+            values.push(assigned_names || null);
+        }
         
-        values.push(req.params.id);
+        if (updates.length > 0) {
+            values.push(req.params.id);
+            await pool.query(`UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, values);
+            console.log('✅ Job order status updated:', req.params.id);
+        }
         
-        await pool.query(`UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, values);
-        console.log('✅ Job order status updated:', req.params.id, '→', status);
         res.json({ success: true });
     } catch (error) { 
         console.error('Status update error:', error);
         res.status(500).json({ error: error.message }); 
+    }
+});
+// PUT - Forward Job Order
+app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const { forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name } = req.body;
+        
+        await pool.query(`
+            UPDATE job_orders SET 
+                is_forwarded = 1,
+                forwarded_to_branch_id = ?,
+                forwarded_to_department_id = ?,
+                forwarded_by_name = ?,
+                forwarded_date = CURDATE(),
+                status = 'forwarded'
+            WHERE id = ?
+        `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, req.params.id]);
+        
+        console.log('✅ Job order forwarded:', req.params.id);
+        res.json({ success: true, message: 'Job order forwarded' });
+    } catch (error) {
+        console.error('Forward error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 // DELETE - Admin Delete Job Order
@@ -3276,32 +3379,155 @@ app.delete('/api/admin/job-orders/:id', async (req, res) => {
         res.json({ success: true });
     } catch (error) { res.status(500).json({ error: error.message }); }
 });
-// PUT - Approve Job Order with signatures
+// PUT - Approve/Receive Job Order with signatures (Admin AND Recipient)
 app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
+        
+        const { approved_name, approved_signature, received_name, received_date, received_signature, status } = req.body;
+        
+        // Get the job order
+        const [orders] = await pool.query('SELECT * FROM job_orders WHERE id = ?', [req.params.id]);
+        if (orders.length === 0) {
+            return res.status(404).json({ error: 'Job order not found' });
+        }
+        
+        const jo = orders[0];
+        
+        // ✅ Allow access if: admin, Technician, OR the recipient (same branch+department)
+        let userBranchId = null;
+        let userDeptId = null;
+        let userRole = '';
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id, role FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+            userRole = userInfo[0].role || '';
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id, role FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+                userRole = newUserInfo[0].role || '';
+            }
+        }
+        
+        const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician' || userRole === 'admin' || userRole === 'Technician';
+        const isRecipient = jo.branch_id == userBranchId && jo.department_id == userDeptId;
+        const isHeadOrSupervisor = userRole === 'head/manager' || userRole === 'supervisor' || userRole === 'branch manager';
+        
+        // ✅ Allow: Admin, Technician, OR recipient Head/Supervisor
+        if (!isAdmin && !(isRecipient && isHeadOrSupervisor)) {
+            console.log('❌ Access denied for approve:', { decodedId: decoded.id, isAdmin, isRecipient, isHeadOrSupervisor });
             return res.status(403).json({ error: 'Access denied' });
         }
         
-        const { approved_name, approved_signature, received_name, received_date, received_signature } = req.body;
+        const updates = [];
+        const values = [];
+        
+        if (status) {
+            updates.push('status = ?');
+            values.push(status);
+        }
+        if (approved_name !== undefined) {
+            updates.push('approved_name = ?');
+            values.push(approved_name || null);
+        }
+        if (approved_signature !== undefined) {
+            updates.push('approved_signature = ?');
+            values.push(approved_signature || null);
+        }
+        if (received_name !== undefined) {
+            updates.push('received_name = ?');
+            values.push(received_name || null);
+        }
+        if (received_date !== undefined) {
+            updates.push('received_date = ?');
+            values.push(received_date || null);
+        }
+        if (received_signature !== undefined) {
+            updates.push('received_signature = ?');
+            values.push(received_signature || null);
+        }
+        
+        if (updates.length > 0) {
+            values.push(req.params.id);
+            await pool.query(`UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, values);
+            console.log('✅ Job order received/approved:', req.params.id);
+        }
+        
+        res.json({ success: true, message: 'Job order updated' });
+    } catch (error) {
+        console.error('PUT /api/admin/job-orders/:id/approve error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// PUT - Receive Job Order (Client/Recipient)
+app.put('/api/job-orders/:id/receive', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const { received_name, received_date, received_signature } = req.body;
+        
+        // Get the job order
+        const [orders] = await pool.query('SELECT * FROM job_orders WHERE id = ?', [req.params.id]);
+        if (orders.length === 0) {
+            return res.status(404).json({ error: 'Job order not found' });
+        }
+        
+        const jo = orders[0];
+        
+        // Get user info
+        let userBranchId = null;
+        let userDeptId = null;
+        
+        const [userInfo] = await pool.query(
+            'SELECT branch_id, department_id FROM users WHERE id = ?', [decoded.id]
+        );
+        if (userInfo.length > 0) {
+            userBranchId = userInfo[0].branch_id;
+            userDeptId = userInfo[0].department_id;
+        } else {
+            const [newUserInfo] = await pool.query(
+                'SELECT branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]
+            );
+            if (newUserInfo.length > 0) {
+                userBranchId = newUserInfo[0].branch_id;
+                userDeptId = newUserInfo[0].department_id;
+            }
+        }
+        
+        // ✅ Check if user is the recipient (same branch+department)
+        const isRecipient = jo.branch_id == userBranchId && jo.department_id == userDeptId;
+        
+        if (!isRecipient) {
+            return res.status(403).json({ error: 'Access denied. You are not the recipient of this job order.' });
+        }
         
         await pool.query(`
             UPDATE job_orders SET 
                 status = 'approved',
-                approved_name = ?,
-                approved_signature = ?,
                 received_name = ?,
                 received_date = ?,
                 received_signature = ?
             WHERE id = ?
-        `, [approved_name || null, approved_signature || null, received_name || null, received_date || null, received_signature || null, req.params.id]);
+        `, [received_name || null, received_date || null, received_signature || null, req.params.id]);
         
-        res.json({ success: true, message: 'Job order approved' });
+        console.log('✅ Job order received:', req.params.id, 'by', received_name);
+        res.json({ success: true, message: 'Job order received' });
     } catch (error) {
+        console.error('PUT /api/job-orders/:id/receive error:', error);
         res.status(500).json({ error: error.message });
     }
 });
