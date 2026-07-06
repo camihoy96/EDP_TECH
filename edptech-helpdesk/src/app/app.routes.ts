@@ -62,6 +62,14 @@ export const routes: Routes = [
       { path: 'knowledge-base', component: KnowledgeBaseComponent },
       { path: 'knowledge-base/create', component: KnowledgeBaseAdminComponent },
       { path: 'knowledge-base/edit', component: KnowledgeBaseAdminComponent },
+      { 
+            path: 'job-orders/new', 
+            loadComponent: () => import('./components/admin/admin-panel/job-order-form.component').then(m => m.AdminJobOrderFormComponent) 
+          },
+          { 
+            path: 'job-orders/edit', 
+            loadComponent: () => import('./components/admin/admin-panel/job-order-form.component').then(m => m.AdminJobOrderFormComponent) 
+          },
        { path: 'requisitions/new', loadComponent: () => import('./components/admin/admin-panel/requisition-form.component').then(m => m.AdminRequisitionFormComponent) },
     { path: 'requisitions/edit', loadComponent: () => import('./components/admin/admin-panel/requisition-form.component').then(m => m.AdminRequisitionFormComponent) },
       { path: 'profile', component: ProfileComponent },
@@ -92,7 +100,7 @@ export const routes: Routes = [
           },
           {
             path: 'job-orders/approve',
-            loadComponent: () => import('./components/client-tickets/client-job-order-form.component').then(m => m.ClientJobOrderFormComponent)
+            loadComponent: () => import('./components/admin/admin-panel/job-order-form.component').then(m => m.AdminJobOrderFormComponent)
           },
         { 
           path: 'requisitions/approve', 
