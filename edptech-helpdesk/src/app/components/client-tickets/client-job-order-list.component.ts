@@ -153,9 +153,10 @@ import { Subscription } from 'rxjs/internal/Subscription';
       </div>
     </ng-container>
     <ng-container *ngIf="viewMode === 'incoming'">
-      <span class="forward-label">📥 From: {{ jo.forwarded_by_name || jo.branch_name || '—' }}</span>
+      <span class="forward-label">📥 From: {{ jo.forwarded_by_name || '—' }}</span>
       <span class="forward-dept">{{ jo.department_name || jo.department || '—' }}</span>
       <span class="forward-company" *ngIf="jo.company_name">{{ jo.company_name }}</span>
+      <span class="branch-tag-tiny" *ngIf="jo.branch_name">{{ jo.branch_name }}</span>
     </ng-container>
   </ng-container>
   <span *ngIf="!jo.is_forwarded" style="color: #ccc;">—</span>
@@ -176,6 +177,10 @@ import { Subscription } from 'rxjs/internal/Subscription';
   </div>
 </td>
 <td (click)="$event.stopPropagation()">
+<!-- ✅ Edit button - for pending orders in both views -->
+<button class="action-btn edit-btn" 
+        *ngIf="jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending')" 
+        (click)="editOrder(jo)" title="Edit">✏️</button>
   <button class="action-btn view-btn" (click)="viewDetail(jo)" title="View">👁️</button>
   <button class="action-btn print-btn" (click)="printOrder(jo)" title="Print">🖨️</button>
   
@@ -183,7 +188,10 @@ import { Subscription } from 'rxjs/internal/Subscription';
   <button class="action-btn accept-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
           (click)="receiveOrder(jo)" title="Receive">📥</button>
-  
+<!-- ✅ Forward button - ONLY when status is approved (received) -->
+<button class="action-btn forward-btn" 
+        *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
+        (click)="forwardOrder(jo)" title="Forward">➡️</button>
   <!-- ✅ Assign / Reassign button - ONLY in J.O. Request Management -->
   <button class="action-btn assign-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'approved' || jo.status === 'assigned' || (jo.is_forwarded && (jo.forwarded_status === 'approved' || jo.forwarded_status === 'assigned')))" 
@@ -215,91 +223,171 @@ import { Subscription } from 'rxjs/internal/Subscription';
     </div>
 
     <!-- Detail Modal -->
-    <div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetailModal()">
-      <div class="modal-window view-modal" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
-          <span>📋 Job Order Details</span>
-          <button type="button" (click)="closeDetailModal()" class="modal-close">✕</button>
+<div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetailModal()">
+  <div class="modal-window view-modal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
+      <span>📋 Job Order Details</span>
+      <button type="button" (click)="closeDetailModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body view-body" *ngIf="selectedOrder">
+      <div class="view-header-info">
+        <div class="view-req-number">
+          <span class="view-label">JO #:</span>
+          <code>{{ selectedOrder.job_order_number }}</code>
         </div>
-        <div class="modal-body view-body" *ngIf="selectedOrder">
-          <div class="view-header-info">
-            <div class="view-req-number">
-              <span class="view-label">JO #:</span>
-              <code>{{ selectedOrder.job_order_number }}</code>
-            </div>
-            <span class="status-badge" [class]="'status-' + (selectedOrder.status || 'pending')">
-              {{ getStatusLabel(selectedOrder.status) }}
-            </span>
-          </div>
-          <div class="view-grid">
-            <div class="view-field"><label>Date:</label><span>{{ formatDate(selectedOrder.date) }}</span></div>
-            <div class="view-field"><label>Time:</label><span>{{ selectedOrder.time || '—' }}</span></div>
-            <div class="view-field"><label>Request From:</label><span>{{ selectedOrder.request_dept || '—' }}</span></div>
-            <div class="view-field"><label>Department:</label><span>{{ selectedOrder.department || '—' }}</span></div>
-            <div class="view-field"><label>Job For:</label><span>{{ selectedOrder.job_order_for || '—' }}</span></div>
-            <div class="view-field full-width"><label>Requested By:</label><span>{{ selectedOrder.requested_name || '—' }}</span></div>
-          </div>
-          
-          <!-- Forwarded Information -->
-          <div class="view-section" *ngIf="selectedOrder.is_forwarded">
-            <h4>📤 Forward Information</h4>
-            <div class="view-grid">
-              <div class="view-field"><label>Forwarded To:</label><span>{{ selectedOrder.forwarded_to_branch_id || '—' }}</span></div>
-              <div class="view-field"><label>Department:</label><span>{{ selectedOrder.forwarded_to_department_id || '—' }}</span></div>
-              <div class="view-field"><label>Forwarded By:</label><span>{{ selectedOrder.forwarded_by_name || '—' }}</span></div>
-              <div class="view-field"><label>Forwarded Date:</label><span>{{ formatDate(selectedOrder.forwarded_date) }}</span></div>
-            </div>
-          </div>
+        <span class="status-badge" [class]="'status-' + (selectedOrder.status || 'pending')">
+          {{ getStatusLabel(selectedOrder.status) }}
+        </span>
+      </div>
+      
+      <div class="view-grid">
+        <div class="view-field"><label>Date:</label><span>{{ formatDate(selectedOrder.date) }}</span></div>
+        <div class="view-field"><label>Time:</label><span>{{ selectedOrder.time || '—' }}</span></div>
+        <div class="view-field"><label>Job For:</label><span>{{ selectedOrder.job_order_for || '—' }}</span></div>
+        <div class="view-field full-width"><label>Requested By:</label><span>{{ selectedOrder.requested_name || '—' }}</span></div>
+      </div>
 
-          <!-- Assigned Users -->
-          <div class="view-section" *ngIf="selectedOrder.assigned_names">
-            <h4>👤 Assigned To</h4>
-            <div class="assigned-info">
-              <span class="assigned-names">{{ selectedOrder.assigned_names || '—' }}</span>
-            </div>
+      <!-- ✅ Our Job Orders: Show Recipient Info -->
+      <div class="view-section" *ngIf="viewMode === 'our'">
+        <h4>📥 Recipient</h4>
+        <div class="detail-info-row">
+          <div class="detail-info-item">
+            <label>Department:</label>
+            <span>{{ selectedOrder.department_name || selectedOrder.department || '—' }}</span>
           </div>
-          
-          <div class="view-section">
-            <h4>📝 Description</h4>
-            <div class="view-remarks">{{ selectedOrder.particulars || selectedOrder.remarks || 'No description provided.' }}</div>
+          <div class="detail-info-item">
+            <label>Branch:</label>
+            <span>{{ selectedOrder.branch_name || '—' }}</span>
           </div>
-
-          <div class="view-section">
-            <h4>✍️ Signatures</h4>
-            <div class="view-signatures">
-              <div class="view-sig-block">
-                <h5>Requested By</h5>
-                <div class="view-sig-image" *ngIf="selectedOrder.requested_signature">
-                  <img [src]="selectedOrder.requested_signature" alt="Signature">
-                </div>
-                <div class="view-sig-name">{{ selectedOrder.requested_name || '—' }}</div>
-                <div class="view-sig-date">{{ formatDate(selectedOrder.requested_date) }}</div>
-              </div>
-              <div class="view-sig-block">
-                <h5>Approved By</h5>
-                <div class="view-sig-image" *ngIf="selectedOrder.approved_signature">
-                  <img [src]="selectedOrder.approved_signature" alt="Signature">
-                </div>
-                <div class="view-sig-name">{{ selectedOrder.approved_name || '—' }}</div>
-              </div>
-              <div class="view-sig-block">
-                <h5>Received By</h5>
-                <div class="view-sig-image" *ngIf="selectedOrder.received_signature">
-                  <img [src]="selectedOrder.received_signature" alt="Signature">
-                </div>
-                <div class="view-sig-name">{{ selectedOrder.received_name || '—' }}</div>
-                <div class="view-sig-date">{{ formatDate(selectedOrder.received_date) }}</div>
-              </div>
-            </div>
+          <div class="detail-info-item">
+            <label>Company:</label>
+            <span>{{ selectedOrder.company_name || selectedOrder.company || '—' }}</span>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="classic-btn" (click)="printOrder(selectedOrder)">🖨️ Print</button>
-          <button class="classic-btn" (click)="closeDetailModal()">Close</button>
+      </div>
+
+      <!-- ✅ J.O. Request Management: Show Request From Info -->
+      <div class="view-section" *ngIf="viewMode === 'incoming'">
+        <h4>📤 Request From</h4>
+        <div class="detail-info-row">
+          <div class="detail-info-item">
+            <label>Department: </label>
+            <span>{{ selectedOrder.request_dept || selectedOrder.department_name || '—' }}</span>
+          </div>
+          <div class="detail-info-item">
+            <label>Branch:</label>
+            <span>{{ selectedOrder.branch_name || '—' }}</span>
+          </div>
+          <div class="detail-info-item">
+            <label>Company:</label>
+            <span>{{ selectedOrder.company_name || selectedOrder.company || '—' }}</span>
+          </div>
+          <div class="detail-info-item" *ngIf="selectedOrder.submitted_by_name">
+            <label>Submitted By:</label>
+            <span>👤 {{ selectedOrder.submitted_by_name }}</span>
+          </div>
+        </div>
+      </div>
+          
+      <!-- Forwarded Information -->
+      <div class="view-section" *ngIf="selectedOrder.is_forwarded">
+        <h4>📤 Forward Information</h4>
+        <div class="detail-info-row">
+          <ng-container *ngIf="viewMode === 'our'">
+            <div class="detail-info-item">
+              <label>Forwarded To Branch:</label>
+              <span>{{ selectedOrder.forwarded_to_branch_name || '—' }}</span>
+            </div>
+            <div class="detail-info-item">
+              <label>Forwarded To Dept:</label>
+              <span>{{ selectedOrder.forwarded_to_department_name || '—' }}</span>
+            </div>
+          </ng-container>
+          <ng-container *ngIf="viewMode === 'incoming'">
+            <div class="detail-info-item">
+              <label>Forwarded From Branch:</label>
+              <span>{{ selectedOrder.branch_name || '—' }}</span>
+            </div>
+            <div class="detail-info-item">
+              <label>Forwarded From Dept:</label>
+              <span>{{ selectedOrder.department_name || selectedOrder.department || '—' }}</span>
+            </div>
+          </ng-container>
+          <div class="detail-info-item">
+            <label>Forwarded By:</label>
+            <span>{{ selectedOrder.forwarded_by_name || '—' }}</span>
+          </div>
+          <div class="detail-info-item">
+            <label>Forwarded Date:</label>
+            <span>{{ formatDate(selectedOrder.forwarded_date) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assigned Users -->
+      <div class="view-section" *ngIf="selectedOrder.assigned_names">
+        <h4>👤 Assigned To</h4>
+        <div class="assigned-info">
+          <span class="assigned-names">{{ selectedOrder.assigned_names || '—' }}</span>
+        </div>
+      </div>
+          
+      <div class="view-section">
+        <h4>📝 Description</h4>
+        <div class="view-remarks">{{ selectedOrder.particulars || selectedOrder.remarks || 'No description provided.' }}</div>
+      </div>
+
+      <div class="view-section">
+        <h4>✍️ Signatures</h4>
+        <div class="view-signatures">
+          <div class="view-sig-block" *ngIf="selectedOrder.requested_signature || selectedOrder.requested_name">
+            <h5>Requested By</h5>
+            <div class="view-sig-image" *ngIf="selectedOrder.requested_signature">
+              <img [src]="selectedOrder.requested_signature" alt="Signature">
+            </div>
+            <div class="view-sig-name">{{ selectedOrder.requested_name || '—' }}</div>
+            <div class="view-sig-date">{{ formatDate(selectedOrder.requested_date) }}</div>
+          </div>
+          <div class="view-sig-block" *ngIf="selectedOrder.approved_signature || selectedOrder.approved_name">
+            <h5>Approved By</h5>
+            <div class="view-sig-image" *ngIf="selectedOrder.approved_signature">
+              <img [src]="selectedOrder.approved_signature" alt="Signature">
+            </div>
+            <div class="view-sig-name">{{ selectedOrder.approved_name || '—' }}</div>
+            <div class="view-sig-date">{{ formatDate(selectedOrder.approved_date) }}</div>
+          </div>
+          <div class="view-sig-block" *ngIf="selectedOrder.received_signature || selectedOrder.received_name">
+            <h5>Received By</h5>
+            <div class="view-sig-image" *ngIf="selectedOrder.received_signature">
+              <img [src]="selectedOrder.received_signature" alt="Signature">
+            </div>
+            <div class="view-sig-name">{{ selectedOrder.received_name || '—' }}</div>
+            <div class="view-sig-date">{{ formatDate(selectedOrder.received_date) }}</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Done Info -->
+      <div class="view-section" *ngIf="selectedOrder.status === 'done' && selectedOrder.done_name">
+        <h4>✅ Completed</h4>
+        <div class="detail-info-row">
+          <div class="detail-info-item">
+            <label>Done By:</label>
+            <span>{{ selectedOrder.done_name || '—' }}</span>
+          </div>
+          <div class="detail-info-item">
+            <label>Done Date:</label>
+            <span>{{ formatDate(selectedOrder.done_date) }}</span>
+          </div>
         </div>
       </div>
     </div>
-
+    <div class="modal-footer">
+      <button class="classic-btn" (click)="printOrder(selectedOrder)">🖨️ Print</button>
+      <button class="classic-btn" (click)="closeDetailModal()">Close</button>
+    </div>
+  </div>
+</div>
     <!-- Confirm Modal -->
     <div class="modal-overlay" *ngIf="showConfirmModal" (click)="cancelConfirm()">
       <div class="modal-window" (click)="$event.stopPropagation()">
@@ -375,6 +463,46 @@ import { Subscription } from 'rxjs/internal/Subscription';
       <button class="classic-btn" (click)="closeAssignModal()">Cancel</button>
       <button class="classic-btn primary" (click)="confirmAssign()" [disabled]="selectedAssignUsers.length === 0">
         👤 Assign ({{ selectedAssignUsers.length }})
+      </button>
+    </div>
+  </div>
+</div>
+<!-- Forward Modal -->
+<div class="modal-overlay" *ngIf="showForwardModal" (click)="closeForwardModal()">
+  <div class="modal-window forward-modal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
+      <span>➡️ Forward Job Order</span>
+      <button type="button" (click)="closeForwardModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="assign-info" *ngIf="forwardTarget">
+        <p>Job Order: <strong>#{{ forwardTarget.job_order_number }}</strong></p>
+      </div>
+      
+      <div class="filter-group" style="margin-bottom: 10px;">
+        <label>Branch:</label>
+        <select class="classic-select" [(ngModel)]="forwardData.branchId" (change)="onForwardBranchChange()" style="width: 100%;">
+          <option value="">— Select Branch —</option>
+          <option *ngFor="let branch of forwardBranches" [value]="branch.id">
+            🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+          </option>
+        </select>
+      </div>
+      
+      <div class="filter-group" style="margin-bottom: 10px;">
+        <label>Department:</label>
+        <select class="classic-select" [(ngModel)]="forwardData.departmentId" style="width: 100%;">
+          <option value="">— Select Department —</option>
+          <option *ngFor="let dept of forwardDepartments" [value]="dept.id">
+            {{ dept.name }}
+          </option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="classic-btn" (click)="closeForwardModal()">Cancel</button>
+      <button class="classic-btn primary" (click)="confirmForward()" [disabled]="!forwardData.branchId || !forwardData.departmentId">
+        ➡️ Forward
       </button>
     </div>
   </div>
@@ -499,6 +627,7 @@ import { Subscription } from 'rxjs/internal/Subscription';
   display: block;
   font-style: italic;
 }
+  .forward-modal { max-width: 500px !important; }
 .forward-by {
   margin-top: 2px;
   font-size: 7px;
@@ -547,6 +676,8 @@ import { Subscription } from 'rxjs/internal/Subscription';
   font-size: 8px;
   color: #888;
 }
+  .forward-btn { color: #0a3a8c; }
+.forward-btn:hover { background: #e8f0fe; border-color: #0a3a8c; }
   .assign-btn { color: #0a3a8c; }
 .assign-btn:hover { background: #e8f0fe; border-color: #0a3a8c; }
 /* Assign Modal */
@@ -600,6 +731,15 @@ private routerSub: Subscription | null = null;
 filters = {
   branchId: '',
   requestFromDept: ''
+};
+// Forward modal properties
+showForwardModal = false;
+forwardTarget: any = null;
+forwardBranches: any[] = [];
+forwardDepartments: any[] = [];
+forwardData = {
+  branchId: '',
+  departmentId: ''
 };
 filteredBranches: any[] = [];
 filteredFilterDepartments: any[] = [];
@@ -712,10 +852,13 @@ filteredFilterDepartments: any[] = [];
   }
 
   receiveOrder(jo: any) {
-    this.router.navigate(['/admin/job-orders/approve'], { 
-      queryParams: { id: jo.id || jo.job_order_number } 
-    });
-  }
+  this.router.navigate(['/client/job-orders/approve'], { 
+    queryParams: { 
+      id: jo.id || jo.job_order_number,
+      mode: 'approve'  // ✅ Add this to enable approval mode
+    } 
+  });
+}
 
   markAsDone(jo: any) {
     this.confirmTarget = jo;
@@ -976,7 +1119,97 @@ filterAssignUsers() {
       }
     });
   }
+  forwardOrder(jo: any) {
+  this.forwardTarget = jo;
+  this.forwardData = { branchId: '', departmentId: '' };
+  this.forwardDepartments = [];
+  this.showForwardModal = true;
+  this.loadForwardBranches();
+}
+// Load branches for forward modal
+loadForwardBranches() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+    next: (branches) => {
+      const allBranches = branches || [];
+      const currentUserBranchId = Number(this.currentUser?.branch_id);
+      const mainBranchIds = [1, 5]; // LSP Main branch IDs
+      
+      // ✅ If user is from main branch, show ONLY main branches
+      if (mainBranchIds.includes(currentUserBranchId)) {
+        this.forwardBranches = allBranches.filter(b => mainBranchIds.includes(b.id));
+      } else {
+        // ✅ For non-main branch users: ONLY show their branch + main branches
+        this.forwardBranches = allBranches.filter(b => 
+          b.id === currentUserBranchId || mainBranchIds.includes(b.id)
+        );
+        
+        // Sort: User's branch first, then main branches
+        this.forwardBranches.sort((a, b) => {
+          if (a.id === currentUserBranchId) return -1;
+          if (b.id === currentUserBranchId) return 1;
+          return 0;
+        });
+      }
+    },
+    error: (err) => console.error('Failed to load branches:', err)
+  });
+}
+// When forward branch changes, load departments
+onForwardBranchChange() {
+  if (!this.forwardData.branchId) {
+    this.forwardDepartments = [];
+    this.forwardData.departmentId = '';
+    return;
+  }
   
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+    next: (depts) => {
+      this.forwardDepartments = (depts || []).filter(d => 
+        d.branch_id == this.forwardData.branchId
+      );
+      this.forwardData.departmentId = '';
+    },
+    error: (err) => console.error('Failed to load departments:', err)
+  });
+}
+
+// Confirm forward
+confirmForward() {
+  if (!this.forwardTarget || !this.forwardData.branchId || !this.forwardData.departmentId) return;
+  
+  const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const payload = {
+    forwarded_to_branch_id: this.forwardData.branchId,
+    forwarded_to_department_id: this.forwardData.departmentId,
+    forwarded_by_name: currentUser?.fullname || 'User'
+  };
+  
+  this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.forwardTarget.id}/forward`, payload, { headers }).subscribe({
+    next: () => {
+      this.forwardTarget.is_forwarded = 1;
+      this.forwardTarget.forwarded_to_branch_id = this.forwardData.branchId;
+      this.forwardTarget.forwarded_to_department_id = this.forwardData.departmentId;
+      this.forwardTarget.forwarded_by_name = currentUser?.fullname;
+      this.forwardTarget.status = 'forwarded';
+      this.applyFilters();
+      this.closeForwardModal();
+      this.showToastMsg('✅ Job Order forwarded successfully!', 'success');
+    },
+    error: (err) => {
+      console.error('Failed to forward:', err);
+      this.showToastMsg('⚠️ Failed to forward', 'error');
+    }
+  });
+}
+
+// Close forward modal
+closeForwardModal() {
+  this.showForwardModal = false;
+  this.forwardTarget = null;
+  this.forwardData = { branchId: '', departmentId: '' };
+  this.forwardDepartments = [];
+}
   // ✅ Close assign modal
   closeAssignModal() {
     this.showAssignModal = false;
@@ -1048,7 +1281,11 @@ toggleSelectAll(event: any) {
     this.showDetailModal = false;
     this.selectedOrder = null;
   }
-
+editOrder(jo: any) {
+  this.router.navigate(['/client/job-orders/edit'], { 
+    queryParams: { id: jo.id || jo.job_order_number } 
+  });
+}
   // Draggable modal methods
   startDrag(event: MouseEvent) {
     const target = event.target as HTMLElement;

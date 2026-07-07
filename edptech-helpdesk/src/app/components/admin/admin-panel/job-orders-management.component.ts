@@ -183,7 +183,10 @@ import { environment } from '../../../../environments/environment';
   <button class="action-btn accept-btn" 
         *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
         (click)="receiveOrder(jo)" title="Receive">📥</button>
-  
+   <!-- ✅ NEW: Forward button - appears after receiving (status = approved/received) -->
+  <button class="action-btn forward-btn" 
+          *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
+          (click)="openForwardModal(jo)" title="Forward">➡️</button>
   <!-- ✅ Assign / Reassign button -->
   <button class="action-btn assign-btn" 
           *ngIf="jo.status === 'approved' || jo.status === 'assigned' || (jo.is_forwarded && (jo.forwarded_status === 'approved' || jo.forwarded_status === 'assigned'))" 
@@ -364,10 +367,11 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
     </div>
-  <!-- Assign Modal -->
+  <!-- Assign Modal - FIXED -->
 <div class="modal-overlay" *ngIf="showAssignModal" (click)="closeAssignModal()">
-  <div class="modal-window assign-modal" (click)="$event.stopPropagation()">
-     <div class="modal-titlebar" (mousedown)="startDrag($event, 'assign')" style="cursor: grab;">
+  <div class="modal-window assign-modal" (click)="$event.stopPropagation()"
+     [ngStyle]="{'transform': 'translate(' + assignModalPos.x + 'px, ' + assignModalPos.y + 'px)'}">
+    <div class="modal-titlebar" style="cursor: grab;" (mousedown)="startDrag($event, 'assign')">
       <span>👤 Assign Users</span>
       <button type="button" (click)="closeAssignModal()" class="modal-close">✕</button>
     </div>
@@ -405,6 +409,92 @@ import { environment } from '../../../../environments/environment';
   </div>
 </div>
 
+<!-- Forward Modal - FIXED -->
+<div class="modal-overlay" *ngIf="showForwardModal" (click)="cancelForward()">
+  <div class="modal-window" (click)="$event.stopPropagation()"
+     [ngStyle]="{'transform': 'translate(' + forwardModalPos.x + 'px, ' + forwardModalPos.y + 'px)'}">
+    <div class="modal-titlebar" style="background: #0a3a8c; cursor: grab;" (mousedown)="startDrag($event, 'forward')">
+      <span>➡️ Forward Job Order</span>
+      <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="assign-info" *ngIf="forwardTargetReq">
+        <p>Job Order: <strong>#{{ forwardTargetReq.job_order_number }}</strong></p>
+      </div>
+      
+      <div class="filter-group" style="margin-bottom: 10px;">
+        <label>Branch:</label>
+        <select class="classic-select" [(ngModel)]="forwardBranchId" (change)="onForwardBranchChange()" style="width: 100%;">
+          <option [ngValue]="null">— Select Branch —</option>
+          <option *ngFor="let branch of forwardBranches" [value]="branch.id">
+            🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+          </option>
+        </select>
+      </div>
+      
+      <div class="filter-group" style="margin-bottom: 10px;">
+        <label>Department:</label>
+        <select class="classic-select" [(ngModel)]="forwardDepartmentId" style="width: 100%;">
+          <option [ngValue]="null">— Select Department —</option>
+          <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
+            {{ dept.displayName || dept.name }}
+          </option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="classic-btn" (click)="cancelForward()">Cancel</button>
+      <button class="classic-btn primary" (click)="confirmForward()" [disabled]="!forwardBranchId || !forwardDepartmentId">
+        ➡️ Forward
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Reassign Modal - FIXED -->
+<div class="modal-overlay" *ngIf="showReassignModal" (click)="closeReassignModal()">
+  <div class="modal-window assign-modal" (click)="$event.stopPropagation()"
+     [ngStyle]="{'transform': 'translate(' + reassignModalPos.x + 'px, ' + reassignModalPos.y + 'px)'}">
+    <div class="modal-titlebar" style="background: #0a246a; cursor: grab;" (mousedown)="startDrag($event, 'reassign')">
+      <span>👤 Reassign Users</span>
+      <button type="button" (click)="closeReassignModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="assign-info" *ngIf="reassignTarget">
+        <p>Job Order: <strong>#{{ reassignTarget.job_order_number }}</strong></p>
+        <p>Department: <strong>{{ reassignTarget.department_name || reassignTarget.department || '—' }}</strong></p>
+      </div>
+      
+      <div class="assign-select-all" *ngIf="filteredReassignUsers.length > 0">
+        <label class="checkbox-label">
+          <input type="checkbox" [checked]="selectedReassignUsers.length === filteredReassignUsers.length" (change)="toggleReassignSelectAll($event)">
+          <span>Select All ({{ filteredReassignUsers.length }} users)</span>
+        </label>
+      </div>
+      
+      <div class="assign-search">
+        <input type="text" class="classic-input" placeholder="Search users..." [(ngModel)]="reassignSearchTerm" (input)="filterReassignUsers()">
+      </div>
+      
+      <div class="assign-user-list">
+        <div class="assign-user-item" *ngFor="let user of filteredReassignUsers" [class.selected]="isReassignUserSelected(user.id)">
+          <label class="checkbox-label user-label" (click)="$event.stopPropagation()">
+            <input type="checkbox" [checked]="isReassignUserSelected(user.id)" (change)="toggleReassignUser(user)">
+          </label>
+          <span class="assign-user-name">{{ user.fullname || user.username }}</span>
+          <span class="assign-user-role">{{ user.role }}</span>
+        </div>
+        <div class="assign-empty" *ngIf="filteredReassignUsers.length === 0">No users found</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="classic-btn" (click)="closeReassignModal()">Cancel</button>
+      <button class="classic-btn primary" (click)="confirmReassign()" [disabled]="selectedReassignUsers.length === 0">
+        👤 Reassign ({{ selectedReassignUsers.length }})
+      </button>
+    </div>
+  </div>
+</div>
     <!-- Toast -->
     <div class="toast-notification" [class.show]="showToast" [class.success]="toastType === 'success'" [class.error]="toastType === 'error'">
       <span>{{ toastMessage }}</span>
@@ -475,14 +565,184 @@ import { environment } from '../../../../environments/environment';
     .attn-cell { max-width: 120px; }
     .attn-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
     .empty-row { text-align: center; padding: 30px; color: #888; }
-    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+    .modal-overlay { 
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%; 
+  background: rgba(0,0,0,0.5); 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  z-index: 2000; 
+}
+.modal-window { 
+  background: #f0f0f0; 
+  border: 2px solid #808080; 
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.4); 
+  width: 100%; 
+  max-width: 450px;
+  position: relative;
+}.modal-titlebar { 
+  background: #0a246a; 
+  color: white; 
+  padding: 8px 14px; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  font-size: 13px; 
+  font-weight: bold; 
+  user-select: none;
+  cursor: grab;
+}
+  .modal-titlebar:active {
+  cursor: grabbing;
+}
+
     .modal-content { background: white; width: 90%; max-width: 700px; max-height: 85vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative; }
     .confirm-modal { max-width: 450px; }
     .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; background: #0a246a; color: white; user-select: none; }
     .modal-header h3 { margin: 0; font-size: 14px; }
-    .modal-close { background: rgba(255,255,255,0.2); border: none; color: white; font-size: 18px; cursor: pointer; padding: 4px 10px; border-radius: 4px; }
-    .modal-close:hover { background: rgba(255,0,0,0.7); }
-    .modal-body { padding: 18px; }
+    .modal-close { 
+  background: rgba(255,255,255,0.2); 
+  border: 1px solid rgba(255,255,255,0.6); 
+  color: white; 
+  cursor: pointer; 
+  padding: 2px 10px; 
+  font-size: 16px; 
+  font-weight: bold;
+  border-radius: 0;
+  line-height: 1.2;
+}
+
+.modal-close:hover { 
+  background: rgba(255,0,0,0.7); 
+  color: white;
+}
+
+.modal-body { 
+  padding: 16px; 
+  background: white;
+}
+.modal-footer { 
+  display: flex; 
+  justify-content: flex-end; 
+  gap: 8px; 
+  padding: 12px 16px; 
+  background: #e0e0e0; 
+  border-top: 1px solid #a0a0a0; 
+}
+
+.assign-modal { 
+  max-width: 500px !important; 
+}
+
+.assign-info { 
+  margin-bottom: 12px; 
+  padding: 8px 12px; 
+  background: #f0f4ff; 
+  border: 1px solid #b8c8e8; 
+  border-radius: 3px; 
+}
+
+.assign-info p { 
+  margin: 2px 0; 
+  font-size: 11px; 
+  color: #333; 
+}
+
+.assign-select-all { 
+  margin-bottom: 8px; 
+  padding: 6px 10px; 
+  background: #f5f5f5; 
+  border: 1px solid #ddd; 
+  border-radius: 3px; 
+}
+
+.assign-search { 
+  margin-bottom: 10px; 
+}
+
+.assign-search .classic-input { 
+  width: 100%; 
+  padding: 6px 10px; 
+  box-sizing: border-box;
+}
+
+.assign-user-list { 
+  max-height: 250px; 
+  overflow-y: auto; 
+  border: 1px solid #ddd; 
+  background: white; 
+}
+
+.assign-user-item { 
+  display: flex; 
+  align-items: center; 
+  padding: 6px 12px; 
+  border-bottom: 1px solid #eee; 
+  cursor: pointer; 
+}
+
+.assign-user-item:hover { 
+  background: #e8f0fe; 
+}
+
+.assign-user-item.selected { 
+  background: #d4edda; 
+}
+
+.checkbox-label { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  cursor: pointer; 
+  font-size: 11px; 
+  margin: 0; 
+}
+
+.checkbox-label input[type="checkbox"] { 
+  width: 16px; 
+  height: 16px; 
+  cursor: pointer; 
+  accent-color: #0a3a8c; 
+}
+
+.user-label { 
+  margin-right: 10px; 
+}
+
+.assign-user-name { 
+  flex: 1; 
+  font-size: 12px; 
+  font-weight: 500; 
+  color: #333; 
+}
+
+.assign-user-role { 
+  font-size: 10px; 
+  color: #888; 
+  background: #f0f0f0; 
+  padding: 2px 8px; 
+  border-radius: 3px; 
+}
+
+.assign-empty { 
+  padding: 20px; 
+  text-align: center; 
+  color: #888; 
+  font-style: italic; 
+}
+
+.assign-btn { 
+  color: #0a3a8c; 
+}
+
+.assign-btn:hover { 
+  background: #e8f0fe; 
+  border-color: #0a3a8c; 
+}
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .detail-item { padding: 6px 8px; background: #f9f9f9; border-radius: 4px; }
     .detail-item label { display: block; font-size: 9px; font-weight: 600; color: #555; text-transform: uppercase; }
@@ -520,7 +780,8 @@ import { environment } from '../../../../environments/environment';
   display: block;
   font-style: italic;
 }
-
+.forward-btn { color: #0a3a8c; }
+.forward-btn:hover { background: #e8f0fe; border-color: #0a3a8c; }
 .forward-by {
   margin-top: 2px;
   font-size: 7px;
@@ -615,6 +876,22 @@ import { environment } from '../../../../environments/environment';
   font-size: 8px;
   color: #888;
 }
+  .assign-modal { max-width: 500px !important; }
+.assign-info { margin-bottom: 12px; padding: 8px 12px; background: #f0f4ff; border: 1px solid #b8c8e8; border-radius: 4px; }
+.assign-info p { margin: 2px 0; font-size: 11px; color: #333; }
+.assign-select-all { margin-bottom: 8px; padding: 6px 10px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px; }
+.assign-search { margin-bottom: 10px; }
+.assign-search .classic-input { width: 100%; padding: 6px 10px; }
+.assign-user-list { max-height: 250px; overflow-y: auto; border: 1px solid #ddd; background: white; }
+.assign-user-item { display: flex; align-items: center; padding: 6px 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+.assign-user-item:hover { background: #e8f0fe; }
+.assign-user-item.selected { background: #d4edda; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 11px; margin: 0; }
+.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #0a3a8c; }
+.user-label { margin-right: 10px; }
+.assign-user-name { flex: 1; font-size: 12px; font-weight: 500; color: #333; }
+.assign-user-role { font-size: 10px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
+.assign-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
    .assign-btn { color: #0a3a8c; }
     .assign-btn:hover { background: #e8f0fe; border-color: #0a3a8c; }
     .assign-modal { max-width: 500px !important; }
@@ -633,7 +910,7 @@ import { environment } from '../../../../environments/environment';
     .assign-user-name { flex: 1; font-size: 12px; font-weight: 500; color: #333; }
     .assign-user-role { font-size: 10px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
     .assign-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
-    .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 420px; }
+   
   `]
 })
 export class JobOrdersManagementComponent implements OnInit {
@@ -652,7 +929,24 @@ export class JobOrdersManagementComponent implements OnInit {
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
   private toastTimer: any;
-
+// Forward modal properties (for incoming)
+showForwardModal = false;
+forwardTargetReq: any = null;
+forwardBranchId: number | null = null;
+forwardDepartmentId: number | null = null;
+forwardFilteredDepartments: any[] = [];
+forwardBranches: any[] = [];
+departments: any[] = [];
+// Reassign modal properties
+showReassignModal = false;
+reassignTarget: any = null;
+reassignUsers: any[] = [];
+filteredReassignUsers: any[] = [];
+selectedReassignUsers: any[] = [];
+reassignSearchTerm = '';
+forwardModalPos = { x: 0, y: 0 };
+assignModalPos = { x: 0, y: 0 };
+reassignModalPos = { x: 0, y: 0 };
   // Dragging properties
   isDragging = false;
   dragStartX = 0;
@@ -677,13 +971,14 @@ filteredFilterDepartments: any[] = [];
 
   constructor(private http: HttpClient, private authService: AuthService, private router: Router) {}
 
-  ngOnInit() {
-    this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    this.loadAllOrders();
-    this.loadFilterBranches();
-    document.addEventListener('mousemove', this.onMouseMove.bind(this));
-    document.addEventListener('mouseup', this.onMouseUp.bind(this));
-  }
+ ngOnInit() {
+  this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  this.loadAllOrders();
+  this.loadFilterBranches();
+  this.loadDepartments(); // ✅ Add this
+  document.addEventListener('mousemove', this.onMouseMove.bind(this));
+  document.addEventListener('mouseup', this.onMouseUp.bind(this));
+}
 
   startDrag(event: MouseEvent, modal: string) {
     this.isDragging = true;
@@ -693,20 +988,25 @@ filteredFilterDepartments: any[] = [];
     event.preventDefault();
   }
 
- onMouseMove(event: MouseEvent) {
+onMouseMove(event: MouseEvent) {
     if (!this.isDragging) return;
     const deltaX = event.clientX - this.dragStartX;
     const deltaY = event.clientY - this.dragStartY;
     this.dragStartX = event.clientX;
     this.dragStartY = event.clientY;
+    
     if (this.currentDragModal === 'detail') {
       this.detailModalPos = { x: this.detailModalPos.x + deltaX, y: this.detailModalPos.y + deltaY };
     } else if (this.currentDragModal === 'confirm') {
       this.confirmModalPos = { x: this.confirmModalPos.x + deltaX, y: this.confirmModalPos.y + deltaY };
+    } else if (this.currentDragModal === 'forward') {
+      this.forwardModalPos = { x: this.forwardModalPos.x + deltaX, y: this.forwardModalPos.y + deltaY };
+    } else if (this.currentDragModal === 'assign') {
+      this.assignModalPos = { x: this.assignModalPos.x + deltaX, y: this.assignModalPos.y + deltaY };
+    } else if (this.currentDragModal === 'reassign') {
+      this.reassignModalPos = { x: this.reassignModalPos.x + deltaX, y: this.reassignModalPos.y + deltaY };
     }
-    // ✅ No position tracking needed for assign modal - it uses the default modal-window dragging
 }
-
   onMouseUp() { this.isDragging = false; this.currentDragModal = ''; }
 
   private getAuthHeaders() {
@@ -854,7 +1154,211 @@ editOrder(jo: any) {
     this.filteredOrders = filtered;
 }
   newJobOrder() { this.router.navigate(['/job-orders/new']); }
+// Load branches for forward modal (same logic as job orders)
+loadForwardBranches() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+    next: (branches) => {
+      const allBranches = branches || [];
+      const currentUserBranchId = Number(this.currentUser?.branch_id);
+      const mainBranchIds = [1, 5]; // LSP Main branch IDs
+      
+      if (mainBranchIds.includes(currentUserBranchId)) {
+        this.forwardBranches = allBranches.filter(b => mainBranchIds.includes(b.id));
+      } else {
+        this.forwardBranches = allBranches.filter(b => 
+          b.id === currentUserBranchId || mainBranchIds.includes(b.id)
+        );
+        this.forwardBranches.sort((a, b) => {
+          if (a.id === currentUserBranchId) return -1;
+          if (b.id === currentUserBranchId) return 1;
+          return 0;
+        });
+      }
+    },
+    error: (err) => console.error('Failed to load branches:', err)
+  });
+}
 
+// Open forward modal
+openForwardModal(req: any) {
+  this.forwardTargetReq = req;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+  this.forwardFilteredDepartments = [];
+  this.showForwardModal = true;
+  this.loadForwardBranches();
+  this.forwardModalPos = { x: 0, y: 0 };
+}
+
+// Cancel forward
+cancelForward() {
+  this.showForwardModal = false;
+  this.forwardTargetReq = null;
+  this.forwardBranchId = null;
+  this.forwardDepartmentId = null;
+}
+
+// When forward branch changes
+onForwardBranchChange() {
+  if (!this.forwardBranchId) {
+    this.forwardFilteredDepartments = [];
+    this.forwardDepartmentId = null;
+      this.forwardModalPos = { x: 0, y: 0 };
+    return;
+    
+  }
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+    next: (depts) => {
+      this.forwardFilteredDepartments = (depts || []).filter(d => 
+        d.branch_id == this.forwardBranchId
+      );
+      this.forwardDepartmentId = null;
+    },
+    error: (err) => console.error('Failed to load departments:', err)
+  });
+}
+
+// ✅ FIXED: Uses job-orders API endpoint
+confirmForward() {
+  if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+  
+  const payload = {
+    forwarded_to_branch_id: this.forwardBranchId,
+    forwarded_to_department_id: this.forwardDepartmentId,
+    forwarded_by_name: this.currentUser?.fullname || 'Admin'
+  };
+  
+  // ✅ FIXED: Use job-orders endpoint instead of requisitions
+  this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
+    next: () => {
+      this.forwardTargetReq.is_forwarded = 1;
+      this.forwardTargetReq.forwarded_to_branch_id = this.forwardBranchId;
+      this.forwardTargetReq.forwarded_to_department_id = this.forwardDepartmentId;
+      this.forwardTargetReq.forwarded_by_name = this.currentUser?.fullname;
+      this.forwardTargetReq.status = 'forwarded';
+      this.applyFilters();
+      this.cancelForward();
+      this.showToastMsg('📤 Job Order forwarded successfully!', 'success');
+    },
+    error: (err) => {
+      console.error('Forward failed:', err);
+      this.showToastMsg('⚠️ Failed to forward', 'error');
+    }
+  });
+}
+// Reassign methods
+openReassignModal(req: any) {
+  this.reassignTarget = req;
+  this.selectedReassignUsers = [];
+  this.reassignSearchTerm = '';
+  this.showReassignModal = true;
+  this.loadReassignUsers(req.department_id);
+  this.reassignModalPos = { x: 0, y: 0 };
+}
+
+loadReassignUsers(departmentId: number) {
+  const headers = this.getAuthHeaders();
+  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users/by-dept/${departmentId}`, { headers }).subscribe({
+    next: (users) => {
+      this.reassignUsers = users || [];
+      this.selectedReassignUsers = [...this.reassignUsers];
+      this.filterReassignUsers();
+    },
+    error: () => {
+      this.reassignUsers = [{
+        id: this.currentUser?.id,
+        fullname: this.currentUser?.fullname || 'Current User',
+        username: this.currentUser?.username,
+        role: this.currentUser?.role || 'staff'
+      }];
+      this.selectedReassignUsers = [...this.reassignUsers];
+      this.filteredReassignUsers = [...this.reassignUsers];
+    }
+  });
+}
+
+filterReassignUsers() {
+  if (!this.reassignSearchTerm.trim()) {
+    this.filteredReassignUsers = this.reassignUsers;
+  } else {
+    const term = this.reassignSearchTerm.toLowerCase().trim();
+    this.filteredReassignUsers = this.reassignUsers.filter(u =>
+      (u.fullname || u.username || '').toLowerCase().includes(term) ||
+      (u.role || '').toLowerCase().includes(term)
+    );
+  }
+}
+
+isReassignUserSelected(userId: number): boolean {
+  return this.selectedReassignUsers.some(u => u.id === userId);
+}
+
+toggleReassignUser(user: any) {
+  if (this.isReassignUserSelected(user.id)) {
+    this.selectedReassignUsers = this.selectedReassignUsers.filter(u => u.id !== user.id);
+  } else {
+    this.selectedReassignUsers.push(user);
+  }
+}
+
+toggleReassignSelectAll(event: any) {
+  if (event.target.checked) {
+    this.selectedReassignUsers = [...this.filteredReassignUsers];
+  } else {
+    this.selectedReassignUsers = [];
+  }
+}
+
+// ✅ FIXED: Uses job-orders API endpoint
+confirmReassign() {
+  if (!this.reassignTarget || this.selectedReassignUsers.length === 0) return;
+  
+  const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
+  const assignedNames = this.selectedReassignUsers.map(u => u.fullname || u.username).join(', ');
+  const payload = {
+    status: 'assigned',
+    assigned_to: this.selectedReassignUsers[0].id,
+    assigned_users: this.selectedReassignUsers.map(u => u.id),
+    assigned_names: assignedNames
+  };
+  
+  // ✅ FIXED: Use job-orders endpoint instead of requisitions
+  this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.reassignTarget.id}/status`, payload, { headers }).subscribe({
+    next: () => {
+      this.reassignTarget.status = 'assigned';
+      this.reassignTarget.assigned_names = assignedNames;
+      this.applyFilters();
+      this.closeReassignModal();
+      this.showToastMsg('✅ Users assigned successfully!', 'success');
+    },
+    error: () => this.showToastMsg('⚠️ Failed to assign users', 'error')
+  });
+} 
+
+closeReassignModal() {
+  this.showReassignModal = false;
+  this.reassignTarget = null;
+  this.selectedReassignUsers = [];
+  this.reassignSearchTerm = '';
+   this.reassignModalPos = { x: 0, y: 0 };
+}
+getDepartmentName(deptId: number): string {
+  if (!deptId) return '—';
+  const dept = this.departments?.find(d => d.id == deptId);
+  return dept?.name || dept?.displayName || 'Dept #' + deptId;
+}
+loadDepartments() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+    next: (depts) => {
+      this.departments = depts || [];
+    },
+    error: (err) => console.error('Failed to load departments:', err)
+  });
+}
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       'pending': 'Pending', 'approved': 'Received', 'assigned': 'Assigned',
@@ -1018,6 +1522,7 @@ onFilterBranchChange() {
     this.assignSearchTerm = '';
     this.showAssignModal = true;
     this.loadAssignUsers(jo.department_id);
+     this.assignModalPos = { x: 0, y: 0 };
   }
 
   loadAssignUsers(departmentId: number) {
@@ -1106,5 +1611,6 @@ onFilterBranchChange() {
     this.assignTarget = null;
     this.selectedAssignUsers = [];
     this.assignSearchTerm = '';
+    this.assignModalPos = { x: 0, y: 0 };
   }
 }

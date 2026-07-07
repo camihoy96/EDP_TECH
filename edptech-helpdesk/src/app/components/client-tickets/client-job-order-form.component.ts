@@ -44,7 +44,7 @@ import { environment } from '../../../environments/environment';
  <!-- Branch Selection (Recipient) -->
 <div class="field-row">
   <label>Recipient:</label>
-  <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()" [disabled]="isRecipientEdit">
+ <select [(ngModel)]="selectedBranchId" class="req-input" [disabled]="approvalMode || isRecipientEdit">
     <option value="">— Select Branch —</option>
     <option [value]="userBranch?.id" *ngIf="userBranch">
       🏢 {{ userBranch?.name }} <small>({{ userBranch?.company_name }})</small> - Your Branch
@@ -58,7 +58,7 @@ import { environment } from '../../../environments/environment';
 <!-- Department Selection - based on selected branch -->
 <div class="field-row">
   <label>Dept:</label>
-  <select [(ngModel)]="joData.department_id" class="req-input" (change)="onDepartmentChange()" [disabled]="isRecipientEdit">
+   <select [(ngModel)]="joData.department_id" class="req-input" [disabled]="approvalMode || isRecipientEdit">
     <option value="">— Select Department —</option>
     <option *ngFor="let dept of filteredDepartments" [value]="dept.id">
       {{ dept.displayName || dept.name }}
@@ -70,7 +70,7 @@ import { environment } from '../../../environments/environment';
   <!-- ATTN (auto-filled from department supervisor) -->
   <div class="field-row">
     <label>ATTN.:</label>
-    <select [(ngModel)]="joData.attn" class="req-input">
+    <select [(ngModel)]="joData.attn" class="req-input" [disabled]="approvalMode">
       <option value="">— Auto from department —</option>
       <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
         {{ user.fullname || user.username }} ({{ user.role }})
@@ -79,17 +79,17 @@ import { environment } from '../../../environments/environment';
   </div>
   <div class="field-row">
     <label>Date:</label>
-    <input type="date" [(ngModel)]="joData.date" class="req-input">
+   <input type="date" [(ngModel)]="joData.date" class="req-input" [readonly]="approvalMode">
   </div>
   <div class="field-row">
     <label>Time:</label>
-    <input type="time" [(ngModel)]="joData.time" class="req-input">
+     <input type="time" [(ngModel)]="joData.time" class="req-input" [readonly]="approvalMode">
   </div>
 </div>
         <div class="req-section">
           <label>Work Description / Remarks:</label>
-          <textarea [(ngModel)]="joData.remarks" class="req-textarea" rows="4" 
-                    placeholder="Describe the work or service needed..."></textarea>
+           <textarea [(ngModel)]="joData.remarks" class="req-textarea" rows="4" 
+            placeholder="Describe the work or service needed..." [readonly]="approvalMode"></textarea>
         </div>       
 <!-- Signatures -->
 <div class="req-signatures">
@@ -98,45 +98,44 @@ import { environment } from '../../../environments/environment';
     <h5>Form Requested By:</h5>
     <div class="sig-field">
       <label>Name:</label>
-      <input type="text" [(ngModel)]="joData.prepared_name" class="req-input-sm" placeholder="Your name">
+      <input type="text" [(ngModel)]="joData.prepared_name" class="req-input-sm" placeholder="Your name" [readonly]="approvalMode">
     </div>
     <div class="sig-field">
       <label>Date:</label>
-      <input type="date" [(ngModel)]="joData.prepared_date" class="req-input-sm">
+      <input type="date" [(ngModel)]="joData.prepared_date" class="req-input-sm" [readonly]="approvalMode">
     </div>
-    <div class="sig-options">
-      <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'draw'" (click)="setSigMode('prepared', 'draw')">✍️ Draw</button>
-      <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'upload'" (click)="setSigMode('prepared', 'upload')">📁 Upload</button>
+    
+    <!-- Show saved signature preview -->
+    <div class="sig-saved-preview" *ngIf="preparedSignature">
+      <img [src]="preparedSignature" alt="Signature" class="sig-image-small">
+      <span class="sig-saved-label">✓ Signature</span>
+      <button type="button" class="sig-clear" (click)="clearSignature('prepared')" *ngIf="!approvalMode">✕</button>
     </div>
-    <div class="sig-draw-area" *ngIf="sigMode['prepared'] === 'draw'">
-      <button type="button" class="sig-draw-trigger" (click)="openSigModal('prepared')">
-        <span class="sig-draw-icon">✍️</span>
-        <span>Click to Draw Signature</span>
-      </button>
-    </div>
-    <div class="sig-upload" *ngIf="sigMode['prepared'] === 'upload'"
-         [class.has-file]="preparedSignature"
-         [class.drag-over]="dragOverTarget === 'prepared'"
-         (dragover)="onSigDragOver($event, 'prepared')"
-         (dragleave)="onSigDragLeave($event)"
-         (drop)="onSigDrop($event, 'prepared')">
-      <div class="sig-preview" *ngIf="preparedSignature; else noPrepSig">
-        <img [src]="preparedSignature" alt="Signature" class="sig-image">
-        <button type="button" class="sig-clear" (click)="clearSignature('prepared')">✕</button>
+    
+    <!-- Draw/Upload options - ONLY when NOT in approval mode and no signature -->
+    <ng-container *ngIf="!approvalMode && !preparedSignature">
+      <div class="sig-options">
+        <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'draw'" (click)="setSigMode('prepared', 'draw')">✍️ Draw</button>
+        <button type="button" class="sig-option-btn" [class.active]="sigMode['prepared'] === 'upload'" (click)="setSigMode('prepared', 'upload')">📁 Upload</button>
       </div>
-      <ng-template #noPrepSig>
+      <div class="sig-draw-area" *ngIf="sigMode['prepared'] === 'draw'">
+        <button type="button" class="sig-draw-trigger" (click)="openSigModal('prepared')">
+          <span class="sig-draw-icon">✍️</span>
+          <span>Click to Draw Signature</span>
+        </button>
+      </div>
+      <div class="sig-upload" *ngIf="sigMode['prepared'] === 'upload'"
+           [class.drag-over]="dragOverTarget === 'prepared'"
+           (dragover)="onSigDragOver($event, 'prepared')"
+           (dragleave)="onSigDragLeave($event)"
+           (drop)="onSigDrop($event, 'prepared')">
         <div class="sig-placeholder" (click)="triggerSigFileInput('prepared')">
           <span class="sig-icon">📁</span>
           <span>Drop signature or click to upload</span>
           <input type="file" hidden accept="image/*" (change)="handleSigFile($event, 'prepared')" id="preparedFileInput">
         </div>
-      </ng-template>
-    </div>
-    <div class="sig-saved-preview" *ngIf="preparedSignature && sigSaved['prepared']">
-      <img [src]="preparedSignature" alt="Signature" class="sig-image-small">
-      <span class="sig-saved-label">✓ Signature</span>
-      <button type="button" class="sig-clear" (click)="clearSignature('prepared')">✕</button>
-    </div>
+      </div>
+    </ng-container>
   </div>
 
   <!-- Form Approved By -->
@@ -144,48 +143,47 @@ import { environment } from '../../../environments/environment';
     <h5>Form Approved By:</h5>
     <div class="sig-field">
       <label>Name:</label>
-      <input type="text" [(ngModel)]="joData.approved_name" class="req-input-sm" placeholder="Approver name">
+      <input type="text" [(ngModel)]="joData.approved_name" class="req-input-sm" placeholder="Approver name" [readonly]="approvalMode">
     </div>
     <div class="sig-field">
       <label>Date:</label>
-      <input type="date" [(ngModel)]="joData.approved_date" class="req-input-sm">
+      <input type="date" [(ngModel)]="joData.approved_date" class="req-input-sm" [readonly]="approvalMode">
     </div>
-    <div class="sig-options">
-      <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'draw'" (click)="setSigMode('approved', 'draw')">✍️ Draw</button>
-      <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'upload'" (click)="setSigMode('approved', 'upload')">📁 Upload</button>
+    
+    <!-- Show saved signature preview -->
+    <div class="sig-saved-preview" *ngIf="approvedSignature">
+      <img [src]="approvedSignature" alt="Signature" class="sig-image-small">
+      <span class="sig-saved-label">✓ Signature</span>
+      <button type="button" class="sig-clear" (click)="clearSignature('approved')" *ngIf="!approvalMode">✕</button>
     </div>
-    <div class="sig-draw-area" *ngIf="sigMode['approved'] === 'draw'">
-      <button type="button" class="sig-draw-trigger" (click)="openSigModal('approved')">
-        <span class="sig-draw-icon">✍️</span>
-        <span>Click to Draw Signature</span>
-      </button>
-    </div>
-    <div class="sig-upload" *ngIf="sigMode['approved'] === 'upload'"
-         [class.has-file]="approvedSignature"
-         [class.drag-over]="dragOverTarget === 'approved'"
-         (dragover)="onSigDragOver($event, 'approved')"
-         (dragleave)="onSigDragLeave($event)"
-         (drop)="onSigDrop($event, 'approved')">
-      <div class="sig-preview" *ngIf="approvedSignature; else noAppSig">
-        <img [src]="approvedSignature" alt="Signature" class="sig-image">
-        <button type="button" class="sig-clear" (click)="clearSignature('approved')">✕</button>
+    
+    <!-- Draw/Upload options - ONLY when NOT in approval mode and no signature -->
+    <ng-container *ngIf="!approvalMode && !approvedSignature">
+      <div class="sig-options">
+        <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'draw'" (click)="setSigMode('approved', 'draw')">✍️ Draw</button>
+        <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'upload'" (click)="setSigMode('approved', 'upload')">📁 Upload</button>
       </div>
-      <ng-template #noAppSig>
+      <div class="sig-draw-area" *ngIf="sigMode['approved'] === 'draw'">
+        <button type="button" class="sig-draw-trigger" (click)="openSigModal('approved')">
+          <span class="sig-draw-icon">✍️</span>
+          <span>Click to Draw Signature</span>
+        </button>
+      </div>
+      <div class="sig-upload" *ngIf="sigMode['approved'] === 'upload'"
+           [class.drag-over]="dragOverTarget === 'approved'"
+           (dragover)="onSigDragOver($event, 'approved')"
+           (dragleave)="onSigDragLeave($event)"
+           (drop)="onSigDrop($event, 'approved')">
         <div class="sig-placeholder" (click)="triggerSigFileInput('approved')">
           <span class="sig-icon">📁</span>
           <span>Drop signature or click to upload</span>
           <input type="file" hidden accept="image/*" (change)="handleSigFile($event, 'approved')" id="approvedFileInput">
         </div>
-      </ng-template>
-    </div>
-    <div class="sig-saved-preview" *ngIf="approvedSignature && sigSaved['approved']">
-      <img [src]="approvedSignature" alt="Signature" class="sig-image-small">
-      <span class="sig-saved-label">✓ Signature</span>
-      <button type="button" class="sig-clear" (click)="clearSignature('approved')">✕</button>
-    </div>
+      </div>
+    </ng-container>
   </div>
 
-   <!-- Form Received By - Fillable in approval mode, readonly otherwise -->
+  <!-- Form Received By - Fillable in approval mode, readonly otherwise -->
   <div class="sig-block" [class.readonly]="!approvalMode">
     <h5>Form Received By:</h5>
     <div class="sig-field">
@@ -198,7 +196,15 @@ import { environment } from '../../../environments/environment';
       <input type="date" [(ngModel)]="joData.received_date" class="req-input-sm" [readonly]="!approvalMode">
     </div>
     
-    <ng-container *ngIf="approvalMode">
+    <!-- Show saved signature preview -->
+    <div class="sig-saved-preview" *ngIf="receivedSignature">
+      <img [src]="receivedSignature" alt="Signature" class="sig-image-small">
+      <span class="sig-saved-label">✓ Signature</span>
+      <button type="button" class="sig-clear" (click)="clearSignature('received')" *ngIf="approvalMode">✕</button>
+    </div>
+    
+    <!-- Draw/Upload options - ONLY in approval mode and no signature -->
+    <ng-container *ngIf="approvalMode && !receivedSignature">
       <div class="sig-options">
         <button type="button" class="sig-option-btn" [class.active]="sigMode['received'] === 'draw'" (click)="setSigMode('received', 'draw')">✍️ Draw</button>
         <button type="button" class="sig-option-btn" [class.active]="sigMode['received'] === 'upload'" (click)="setSigMode('received', 'upload')">📁 Upload</button>
@@ -210,30 +216,24 @@ import { environment } from '../../../environments/environment';
         </button>
       </div>
       <div class="sig-upload" *ngIf="sigMode['received'] === 'upload'"
-           [class.has-file]="receivedSignature"
            [class.drag-over]="dragOverTarget === 'received'"
            (dragover)="onSigDragOver($event, 'received')"
            (dragleave)="onSigDragLeave($event)"
            (drop)="onSigDrop($event, 'received')">
-        <div class="sig-preview" *ngIf="receivedSignature; else noRecSig">
-          <img [src]="receivedSignature" alt="Signature" class="sig-image">
-          <button type="button" class="sig-clear" (click)="clearSignature('received')">✕</button>
+        <div class="sig-placeholder" (click)="triggerSigFileInput('received')">
+          <span class="sig-icon">📁</span>
+          <span>Drop signature or click to upload</span>
+          <input type="file" hidden accept="image/*" (change)="handleSigFile($event, 'received')" id="receivedFileInput">
         </div>
-        <ng-template #noRecSig>
-          <div class="sig-placeholder" (click)="triggerSigFileInput('received')">
-            <span class="sig-icon">📁</span>
-            <span>Drop signature or click to upload</span>
-            <input type="file" hidden accept="image/*" (change)="handleSigFile($event, 'received')" id="receivedFileInput">
-          </div>
-        </ng-template>
       </div>
     </ng-container>
-    <div class="sig-saved-preview" *ngIf="receivedSignature && sigSaved['received']">
-      <img [src]="receivedSignature" alt="Signature" class="sig-image-small">
-      <span class="sig-saved-label">✓ Signature</span>
-      <button type="button" class="sig-clear" (click)="clearSignature('received')" *ngIf="approvalMode">✕</button>
+    
+    <!-- Placeholder when not in approval mode and no signature -->
+    <div *ngIf="!approvalMode && !receivedSignature" style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 9px;">
+      To be completed upon receipt
     </div>
   </div>
+</div>
         <div class="req-footer">
           <p>📋 This Job Order authorizes the recipient department to perform the described work.</p>
           <p>EDPtech Helpdesk v2.0 | Job Order #{{ joNumber }}</p>
