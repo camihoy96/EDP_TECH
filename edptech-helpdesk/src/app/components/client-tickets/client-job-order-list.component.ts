@@ -126,7 +126,10 @@ import { Subscription } from 'rxjs/internal/Subscription';
                   <span>{{ jo.job_order_for || '—' }}</span>
                 </div>
               </td>
-              <td class="date-cell">{{ formatDate(jo.date) }}</td>
+              <td class="date-cell">
+  {{ formatDate(jo.date) }}
+  <div class="time-under-date" *ngIf="jo.time">{{ formatTime(jo.time) }}</div>
+</td>
               <td>
   <ng-container *ngIf="viewMode === 'our'">
     <span class="dept-name-small">{{ jo.department_name || jo.department || '—' }}</span>
@@ -153,10 +156,11 @@ import { Subscription } from 'rxjs/internal/Subscription';
       </div>
     </ng-container>
     <ng-container *ngIf="viewMode === 'incoming'">
+      <!-- ✅ FIXED: Show forwarder's info -->
       <span class="forward-label">📥 From: {{ jo.forwarded_by_name || '—' }}</span>
       <span class="forward-dept">{{ jo.department_name || jo.department || '—' }}</span>
-      <span class="forward-company" *ngIf="jo.company_name">{{ jo.company_name }}</span>
-      <span class="branch-tag-tiny" *ngIf="jo.branch_name">{{ jo.branch_name }}</span>
+      <span class="branch-tag-tiny">{{ jo.forwarder_branch_name || jo.branch_name || '—' }}</span>
+      <span class="forward-company" *ngIf="jo.forwarder_company_name || jo.company_name">{{ jo.forwarder_company_name || jo.company_name }}</span>
     </ng-container>
   </ng-container>
   <span *ngIf="!jo.is_forwarded" style="color: #ccc;">—</span>
@@ -192,13 +196,16 @@ import { Subscription } from 'rxjs/internal/Subscription';
 <button class="action-btn forward-btn" 
         *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
         (click)="forwardOrder(jo)" title="Forward">➡️</button>
-  <!-- ✅ Assign / Reassign button - ONLY in J.O. Request Management -->
-  <button class="action-btn assign-btn" 
-          *ngIf="viewMode === 'incoming' && (jo.status === 'approved' || jo.status === 'assigned' || (jo.is_forwarded && (jo.forwarded_status === 'approved' || jo.forwarded_status === 'assigned')))" 
-          (click)="assignOrder(jo)" 
-          [title]="jo.status === 'assigned' || (jo.is_forwarded && jo.forwarded_status === 'assigned') ? 'Reassign' : 'Assign'">
-    {{ jo.status === 'assigned' || (jo.is_forwarded && jo.forwarded_status === 'assigned') ? '🔄' : '👤' }}
-  </button>
+
+  <!-- ✅ Assign / Reassign button - FIXED -->
+<!-- ✅ Reassign button - for supervisor/head/manager only when already assigned -->
+<button class="action-btn assign-btn" 
+        *ngIf="canReassign() && viewMode === 'incoming' && (
+          jo.status === 'assigned' || 
+          (jo.is_forwarded && jo.forwarded_status === 'assigned')
+        )" 
+        (click)="assignOrder(jo)" 
+        title="Reassign">🔄</button>
   
   <!-- ✅ Done button - ONLY in J.O. Request Management -->
   <button class="action-btn done-btn" 
@@ -241,53 +248,65 @@ import { Subscription } from 'rxjs/internal/Subscription';
       </div>
       
       <div class="view-grid">
-        <div class="view-field"><label>Date:</label><span>{{ formatDate(selectedOrder.date) }}</span></div>
-        <div class="view-field"><label>Time:</label><span>{{ selectedOrder.time || '—' }}</span></div>
-        <div class="view-field"><label>Job For:</label><span>{{ selectedOrder.job_order_for || '—' }}</span></div>
-        <div class="view-field full-width"><label>Requested By:</label><span>{{ selectedOrder.requested_name || '—' }}</span></div>
-      </div>
+  <div class="view-field">
+    <label>Date:</label>
+    <span>{{ formatDate(selectedOrder.date) }}</span>
+  </div>
+  <div class="view-field">
+    <label>Time:</label>
+    <span>{{ formatTime(selectedOrder.time) || '—' }}</span>
+  </div>
+  <div class="view-field">
+    <label>Job For:</label>
+    <span>{{ selectedOrder.job_order_for || '—' }}</span>
+  </div>
+  <div class="view-field full-width">
+    <label>Requested By:</label>
+    <span>{{ selectedOrder.requested_name || '—' }}</span>
+  </div>
+</div>
 
-      <!-- ✅ Our Job Orders: Show Recipient Info -->
-      <div class="view-section" *ngIf="viewMode === 'our'">
-        <h4>📥 Recipient</h4>
-        <div class="detail-info-row">
-          <div class="detail-info-item">
-            <label>Department:</label>
-            <span>{{ selectedOrder.department_name || selectedOrder.department || '—' }}</span>
-          </div>
-          <div class="detail-info-item">
-            <label>Branch:</label>
-            <span>{{ selectedOrder.branch_name || '—' }}</span>
-          </div>
-          <div class="detail-info-item">
-            <label>Company:</label>
-            <span>{{ selectedOrder.company_name || selectedOrder.company || '—' }}</span>
-          </div>
-        </div>
-      </div>
+     <!-- ✅ Our Job Orders: Show Recipient Info -->
+<div class="view-section" *ngIf="viewMode === 'our'">
+  <h4>📥 Recipient</h4>
+  <div class="detail-info-row">
+    <div class="detail-info-item">
+      <label>Department:</label>
+      <span>{{ getDepartmentName(selectedOrder.department_id) || selectedOrder.department_name || selectedOrder.department || '—' }}</span>
+    </div>
+    <div class="detail-info-item">
+      <label>Branch:</label>
+      <span>{{ getBranchName(selectedOrder.branch_id) || selectedOrder.branch_name || '—' }}</span>
+    </div>
+    <div class="detail-info-item">
+      <label>Company:</label>
+      <span>{{ getBranchCompany(selectedOrder.branch_id) || selectedOrder.company_name || selectedOrder.company || '—' }}</span>
+    </div>
+  </div>
+</div>
 
-      <!-- ✅ J.O. Request Management: Show Request From Info -->
-      <div class="view-section" *ngIf="viewMode === 'incoming'">
-        <h4>📤 Request From</h4>
-        <div class="detail-info-row">
-          <div class="detail-info-item">
-            <label>Department: </label>
-            <span>{{ selectedOrder.request_dept || selectedOrder.department_name || '—' }}</span>
-          </div>
-          <div class="detail-info-item">
-            <label>Branch:</label>
-            <span>{{ selectedOrder.branch_name || '—' }}</span>
-          </div>
-          <div class="detail-info-item">
-            <label>Company:</label>
-            <span>{{ selectedOrder.company_name || selectedOrder.company || '—' }}</span>
-          </div>
-          <div class="detail-info-item" *ngIf="selectedOrder.submitted_by_name">
-            <label>Submitted By:</label>
-            <span>👤 {{ selectedOrder.submitted_by_name }}</span>
-          </div>
-        </div>
-      </div>
+<!-- ✅ J.O. Request Management: Show Request From Info -->
+<div class="view-section" *ngIf="viewMode === 'incoming'">
+  <h4>📤 Request From</h4>
+  <div class="detail-info-row">
+    <div class="detail-info-item">
+      <label>Department: </label>
+      <span>{{ selectedOrder.request_dept || getDepartmentName(selectedOrder.department_id) || selectedOrder.department_name || '—' }}</span>
+    </div>
+    <div class="detail-info-item">
+      <label>Branch:</label>
+      <span>{{ getBranchName(selectedOrder.branch_id) || selectedOrder.branch_name || '—' }}</span>
+    </div>
+    <div class="detail-info-item">
+      <label>Company:</label>
+      <span>{{ getBranchCompany(selectedOrder.branch_id) || selectedOrder.company_name || selectedOrder.company || '—' }}</span>
+    </div>
+    <div class="detail-info-item" *ngIf="selectedOrder.submitted_by_name">
+      <label>Submitted By:</label>
+      <span>👤 {{ selectedOrder.submitted_by_name }}</span>
+    </div>
+  </div>
+</div>
           
       <!-- Forwarded Information -->
       <div class="view-section" *ngIf="selectedOrder.is_forwarded">
@@ -423,10 +442,10 @@ import { Subscription } from 'rxjs/internal/Subscription';
       <button type="button" (click)="closeAssignModal()" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <div class="assign-info" *ngIf="assignTarget">
-        <p>Job Order: <strong>#{{ assignTarget.job_order_number }}</strong></p>
-        <p>Department: <strong>{{ assignTarget.department_name || assignTarget.department || '—' }}</strong></p>
-      </div>
+     <div class="assign-info" *ngIf="assignTarget">
+    <p>Job Order: <strong>#{{ assignTarget.job_order_number }}</strong></p>
+    <p>Department: <strong>{{ currentUser?.department_name || currentUser?.department || assignTarget.department_name || assignTarget.department || '—' }}</strong></p>
+</div>
       
       <!-- Select All / Deselect All -->
       <div class="assign-select-all" *ngIf="filteredAssignUsers.length > 0">
@@ -627,6 +646,11 @@ import { Subscription } from 'rxjs/internal/Subscription';
   display: block;
   font-style: italic;
 }
+  .time-under-date {
+  font-size: 8px;
+  color: #888;
+  margin-top: 1px;
+}
   .forward-modal { max-width: 500px !important; }
 .forward-by {
   margin-top: 2px;
@@ -732,6 +756,8 @@ filters = {
   branchId: '',
   requestFromDept: ''
 };
+allBranches: any[] = [];
+allDepartments: any[] = [];
 // Forward modal properties
 showForwardModal = false;
 forwardTarget: any = null;
@@ -768,11 +794,17 @@ filteredFilterDepartments: any[] = [];
     this.applyFilters();
   }
 
-  loadAllOrders() {
+ loadAllOrders() {
     const headers = this.getAuthHeaders();
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/job-orders`, { headers }).subscribe({
+    // ✅ CHANGE: Use the /my endpoint which filters by user's department
+    this.http.get<any[]>(`${environment.apiUrl}/api/job-orders/my`, { headers }).subscribe({
       next: (data) => {
         this.allOrders = Array.isArray(data) ? data : [];
+        // 🔍 DEBUG: Log the first order to see actual field names
+        if (this.allOrders.length > 0) {
+          console.log('🔍 First job order fields:', Object.keys(this.allOrders[0]));
+          console.log('🔍 First job order:', this.allOrders[0]);
+        }
         this.applyFilters();
       },
       error: (err) => {
@@ -781,49 +813,114 @@ filteredFilterDepartments: any[] = [];
       }
     });
   }
-
-  getFilteredStatusCount(status: string): number {
-    let filtered = [...this.allOrders];
-    if (status === 'all') return filtered.length;
-    return filtered.filter(o => (o.status || 'pending') === status).length;
-  }
-
- applyFilters() {
+getFilteredStatusCount(status: string): number {
     let filtered = [...this.allOrders];
     
-    const userBranchId = this.currentUser?.branch_id;
-    const userDeptId = this.currentUser?.department_id;
-    const userId = this.currentUser?.id;
+    const userBranchId = Number(this.currentUser?.branch_id);
+    const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+    
+    if (this.viewMode === 'our') {
+      // Exclude incoming forwarded orders
+      filtered = filtered.filter(o => {
+        const forwardedToBranchId = Number(o.forwarded_to_branch_id);
+        const forwardedToDeptId = Number(o.forwarded_to_department_id);
+        const orderBranchId = Number(o.branch_id);
+        const orderDeptId = Number(o.department_id || o.dept_id);
+        
+        if (o.is_forwarded && 
+            forwardedToBranchId === userBranchId && 
+            forwardedToDeptId === userDeptId &&
+            !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          return false;
+        }
+        return true;
+      });
+    } else if (this.viewMode === 'incoming') {
+      filtered = filtered.filter(o => {
+        const orderBranchId = Number(o.branch_id);
+        const orderDeptId = Number(o.department_id || o.dept_id);
+        const forwardedToBranchId = Number(o.forwarded_to_branch_id);
+        const forwardedToDeptId = Number(o.forwarded_to_department_id);
+        
+        if (o.is_forwarded && 
+            forwardedToBranchId === userBranchId && 
+            forwardedToDeptId === userDeptId &&
+            !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          return true;
+        }
+        return false;
+      });
+    }
+    
+    if (status === 'all') return filtered.length;
+    return filtered.filter(o => (o.status || 'pending') === status).length;
+}
+applyFilters() {
+    let filtered = [...this.allOrders];
+    
+    const userBranchId = Number(this.currentUser?.branch_id);
+    const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+    const userId = Number(this.currentUser?.id);
+    
+    // ✅ Branch filter
     if (this.filters.branchId) {
       filtered = filtered.filter(o => 
         Number(o.branch_id) === Number(this.filters.branchId)
       );
     }
-     // ✅ Apply department filter
+    
+    // ✅ Department filter
     if (this.filters.requestFromDept) {
       filtered = filtered.filter(o => 
         o.request_dept === this.filters.requestFromDept ||
-        o.department === this.filters.requestFromDept
+        o.department === this.filters.requestFromDept ||
+        o.department_name === this.filters.requestFromDept
       );
     }
+    
     if (this.viewMode === 'our') {
+      // ✅ "Our Job Orders" - Everything that's NOT incoming from outside
+      // Since backend already returns dept orders, just exclude incoming forwarded orders
       filtered = filtered.filter(jo => {
-        if (jo.submitted_by == userId) return true;
-        if (jo.is_forwarded && jo.branch_id == userBranchId && jo.department_id == userDeptId) return true;
-        return false;
+        const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
+        const forwardedToDeptId = Number(jo.forwarded_to_department_id);
+        const orderBranchId = Number(jo.branch_id);
+        const orderDeptId = Number(jo.department_id || jo.dept_id);
+        
+        // ❌ EXCLUDE: Forwarded TO us FROM another department (this is incoming)
+        if (jo.is_forwarded && 
+            forwardedToBranchId === userBranchId && 
+            forwardedToDeptId === userDeptId &&
+            !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          return false;
+        }
+        
+        // ✅ INCLUDE: Everything else (my orders, dept orders, forwarded FROM us)
+        return true;
       });
     } else if (this.viewMode === 'incoming') {
+      // ✅ "J.O. Request Management" - ONLY incoming forwarded orders
       filtered = filtered.filter(jo => {
-        if (jo.is_forwarded && jo.forwarded_to_branch_id == userBranchId && jo.forwarded_to_department_id == userDeptId && jo.submitted_by != userId) return true;
-        if (!jo.is_forwarded && jo.branch_id == userBranchId && jo.department_id == userDeptId && jo.submitted_by != userId) return true;
+        const orderBranchId = Number(jo.branch_id);
+        const orderDeptId = Number(jo.department_id || jo.dept_id);
+        const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
+        const forwardedToDeptId = Number(jo.forwarded_to_department_id);
+        
+        // ✅ Forwarded TO us from another department
+        if (jo.is_forwarded && 
+            forwardedToBranchId === userBranchId && 
+            forwardedToDeptId === userDeptId &&
+            !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          return true;
+        }
+        
         return false;
       });
     }
     
-    // ✅ Fix: Filter by status - for forwarded orders, check forwarded_status too
+    // ✅ Filter by status
     if (this.activeTab !== 'all') {
       filtered = filtered.filter(o => {
-        // For forwarded orders, check both status and forwarded_status
         if (o.is_forwarded) {
           return (o.status || 'pending') === this.activeTab || 
                  (o.forwarded_status || '') === this.activeTab;
@@ -832,17 +929,21 @@ filteredFilterDepartments: any[] = [];
       });
     }
     
+    // ✅ Search filter
     if (this.searchTerm.trim()) {
       const term = this.searchTerm.toLowerCase().trim();
       filtered = filtered.filter(o =>
         o.job_order_number?.toLowerCase().includes(term) ||
         o.requested_name?.toLowerCase().includes(term) ||
-        o.department?.toLowerCase().includes(term)
+        o.department?.toLowerCase().includes(term) ||
+        o.department_name?.toLowerCase().includes(term) ||
+        o.job_order_for?.toLowerCase().includes(term) ||
+        o.submitted_by_name?.toLowerCase().includes(term) ||
+        o.branch_name?.toLowerCase().includes(term)
       );
     }
     this.filteredOrders = filtered;
 }
-
   getStatusLabel(status: string): string {
     const labels: Record<string, string> = {
       'pending': 'Pending', 'approved': 'Received', 'assigned': 'Assigned',
@@ -872,8 +973,11 @@ filteredFilterDepartments: any[] = [];
   return allowedRoles.includes(role);
 }
 loadFilterBranches() {
+  // ✅ Load branches
   this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
     next: (branches) => {
+      this.allBranches = branches || [];  // ✅ Store all branches
+      
       const allBranches = branches || [];
       const currentUserBranchId = Number(this.currentUser?.branch_id);
       const mainBranchIds = [1, 5]; // LSP Main branch IDs
@@ -908,8 +1012,36 @@ loadFilterBranches() {
       }];
     }
   });
+  
+  // ✅ ALSO LOAD DEPARTMENTS - INSERT HERE
+  this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
+    next: (depts) => {
+      this.allDepartments = depts || [];
+      console.log('📋 Loaded departments:', this.allDepartments.length);
+    },
+    error: (err) => {
+      console.error('Failed to load departments:', err);
+      this.allDepartments = [];
+    }
+  });
+}
+getBranchName(branchId: number): string {
+    if (!branchId) return '—';
+    const branch = this.allBranches.find(b => b.id == branchId);
+    return branch?.name || '—';
 }
 
+getBranchCompany(branchId: number): string {
+    if (!branchId) return '—';
+    const branch = this.allBranches.find(b => b.id == branchId);
+    return branch?.company_name || '—';
+}
+
+getDepartmentName(deptId: number): string {
+    if (!deptId) return '—';
+    const dept = this.allDepartments.find(d => d.id == deptId);
+    return dept?.name || '—';
+}
 // When branch filter changes, load departments for that branch
 onFilterBranchChange() {
   if (!this.filters.branchId) {
@@ -959,12 +1091,19 @@ onFilterBranchChange() {
     }
     
     const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
-    const payload = { status, ...extraPayload };
+    
+    // ✅ For forwarded orders, update forwarded_status instead of status
+    const payload: any = { ...extraPayload };
+    if (jo.is_forwarded) {
+      payload.forwarded_status = status;  // ✅ Update forwarded_status
+    } else {
+      payload.status = status;  // Normal order
+    }
     
     this.http.put(endpoint, payload, { headers }).subscribe({
       next: () => {
-        if (jo.is_forwarded && this.confirmAction === 'reject') {
-          jo.forwarded_status = 'rejected';
+        if (jo.is_forwarded) {
+          jo.forwarded_status = status;  // ✅ Update local forwarded_status
         } else {
           jo.status = status;
         }
@@ -979,8 +1118,8 @@ onFilterBranchChange() {
         this.showToastMsg(`✅ Job Order ${status === 'done' ? 'marked as Done' : 'rejected'}!`, 'success');
       },
       error: () => {
-        if (jo.is_forwarded && this.confirmAction === 'reject') {
-          jo.forwarded_status = 'rejected';
+        if (jo.is_forwarded) {
+          jo.forwarded_status = status;
         } else {
           jo.status = status;
         }
@@ -992,27 +1131,42 @@ onFilterBranchChange() {
       }
     });
 }
-
+canReassign(): boolean {
+    const role = (this.currentUser?.role || '').toLowerCase();
+    return role === 'supervisor' || role === 'head/manager' || role === 'admin' || role === 'branch manager';
+}
  // ✅ Open assign modal
-  assignOrder(jo: any) {
+assignOrder(jo: any) {
     this.assignTarget = jo;
     this.selectedAssignUsers = [];
     this.assignSearchTerm = '';
     this.showAssignModal = true;
-    this.loadAssignUsers(jo.department_id);
-  }
-  
+    
+    // ✅ For forwarded orders, use forwarded_to_department_id (recipient's dept)
+    // For normal orders, use department_id
+    let deptToLoad;
+    if (jo.is_forwarded && jo.forwarded_to_department_id) {
+        deptToLoad = jo.forwarded_to_department_id;  // Recipient's department
+    } else {
+        deptToLoad = jo.department_id;  // Order's department
+    }
+    
+    console.log('🔍 Loading users for department:', deptToLoad);
+    this.loadAssignUsers(deptToLoad);
+}
   // ✅ Load users from the same department
 loadAssignUsers(departmentId: number) {
     const headers = this.getAuthHeaders();
     
-    // First try the by-dept endpoint
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users/by-dept/${departmentId}`, { headers }).subscribe({
+    console.log('📡 Fetching users for department ID:', departmentId);
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/client/users/by-dept/${departmentId}`, { headers }).subscribe({
       next: (users) => {
+        console.log('👥 Users received from API:', users);
         if (users && users.length > 0) {
           this.assignUsers = users;
         } else {
-          // Fallback: get all admin users and filter by department
+          console.log('⚠️ No users from by-dept, trying fallback...');
           this.loadAllUsersForDepartment(departmentId);
           return;
         }
@@ -1020,47 +1174,41 @@ loadAssignUsers(departmentId: number) {
         this.filterAssignUsers();
       },
       error: (err) => {
-        console.error('Failed to load users by dept:', err);
-        // Fallback: get all admin users and filter by department
+        console.error('❌ Failed to load users by dept:', err);
         this.loadAllUsersForDepartment(departmentId);
       }
     });
 }
-
 // Fallback method
 loadAllUsersForDepartment(departmentId: number) {
     const headers = this.getAuthHeaders();
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+    console.log('🔄 Fallback: Loading ALL client users, filtering for dept:', departmentId);
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/client/users`, { headers }).subscribe({
       next: (allUsers) => {
-        // Filter users by department_id or dept_id
-        this.assignUsers = (allUsers || []).filter(u => 
-          Number(u.department_id) === Number(departmentId) || 
-          Number(u.dept_id) === Number(departmentId)
-        );
+        console.log('👥 All client users from API:', allUsers);
         
-        if (this.assignUsers.length === 0) {
-          // Last fallback: include current user
-          this.assignUsers = [{
-            id: this.currentUser?.id,
-            fullname: this.currentUser?.fullname || 'Current User',
-            username: this.currentUser?.username || 'current_user',
-            role: this.currentUser?.role || 'staff'
-          }];
-        }
+        this.assignUsers = (allUsers || []).filter(u => {
+          const matchesDept = Number(u.department_id) === Number(departmentId) || 
+                              Number(u.dept_id) === Number(departmentId) ||
+                              Number(u.departmentId) === Number(departmentId);
+          console.log(`  User ${u.fullname || u.username}: dept_id=${u.department_id}, deptId=${u.departmentId}, matches=${matchesDept}`);
+          return matchesDept;
+        });
+        
+        console.log('👥 Filtered assign users:', this.assignUsers);
+        
+        // ❌ REMOVED: No longer fall back to only showing current user
+        // If no users found, show empty list with message
         
         this.selectedAssignUsers = [...this.assignUsers];
         this.filterAssignUsers();
       },
       error: (err) => {
         console.error('Fallback also failed:', err);
-        this.assignUsers = [{
-          id: this.currentUser?.id,
-          fullname: this.currentUser?.fullname || 'Current User',
-          username: this.currentUser?.username || 'current_user',
-          role: this.currentUser?.role || 'staff'
-        }];
-        this.selectedAssignUsers = [...this.assignUsers];
-        this.filteredAssignUsers = [...this.assignUsers];
+        this.assignUsers = [];
+        this.selectedAssignUsers = [];
+        this.filteredAssignUsers = [];
       }
     });
 }
@@ -1097,16 +1245,27 @@ filterAssignUsers() {
     
     const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
     const assignedNames = this.selectedAssignUsers.map(u => u.fullname || u.username).join(', ');
-    const payload = {
-      status: 'assigned',
+    
+    // ✅ For forwarded orders, update forwarded_status instead of status
+    const payload: any = {
       assigned_to: this.selectedAssignUsers[0].id,
       assigned_users: this.selectedAssignUsers.map(u => u.id),
       assigned_names: assignedNames
     };
     
+    if (this.assignTarget.is_forwarded) {
+      payload.forwarded_status = 'assigned';  // ✅ Update forwarded_status
+    } else {
+      payload.status = 'assigned';  // Normal order
+    }
+    
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.assignTarget.id}/status`, payload, { headers }).subscribe({
       next: () => {
-        this.assignTarget.status = 'assigned';
+        if (this.assignTarget.is_forwarded) {
+          this.assignTarget.forwarded_status = 'assigned';  // ✅ Update local
+        } else {
+          this.assignTarget.status = 'assigned';
+        }
         this.assignTarget.assigned_names = assignedNames;
         this.assignTarget.assigned_users = JSON.stringify(this.selectedAssignUsers.map(u => u.id));
         this.applyFilters();
@@ -1118,7 +1277,7 @@ filterAssignUsers() {
         this.showToastMsg('⚠️ Failed to assign users', 'error');
       }
     });
-  }
+}
   forwardOrder(jo: any) {
   this.forwardTarget = jo;
   this.forwardData = { branchId: '', departmentId: '' };
@@ -1320,15 +1479,35 @@ editOrder(jo: any) {
     this.currentDragModal = null;
   }
 
-  formatDate(val: any): string {
+ formatDate(val: any): string {
     if (!val) return '—';
     try {
       const d = new Date(val);
-      if (isNaN(d.getTime())) return String(val).split('T')[0];
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (isNaN(d.getTime())) return String(val);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[d.getMonth()]} ${String(d.getDate()).padStart(2, '0')}, ${d.getFullYear()}`;
     } catch { return String(val); }
-  }
-
+}
+formatTime(val: any): string {
+    if (!val) return '';
+    try {
+      // If it's already in HH:MM format
+      if (typeof val === 'string' && /^\d{2}:\d{2}$/.test(val)) {
+        const [hours, minutes] = val.split(':').map(Number);
+        const ampm = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${String(minutes).padStart(2, '0')} ${ampm}`;
+      }
+      // If it's a full datetime string
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '';
+      const hours = d.getHours();
+      const minutes = d.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${String(minutes).padStart(2, '0')} ${ampm}`;
+    } catch { return ''; }
+}
   printOrder(jo: any) {
     const printWindow = window.open('', '_blank', 'width=700,height=800');
     if (!printWindow) return;

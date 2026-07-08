@@ -3018,13 +3018,10 @@ app.get('/api/reports', async (req, res) => {
 // ============================================
 // JOB ORDER API ENDPOINTS
 // ============================================
-
 // ============================================
 // SECTION 1: CLIENT JOB ORDER ENDPOINTS
 // ============================================
-
 // GET - My Job Orders (Client)
-// Gets orders: submitted by user, sent to user's department, forwarded to user's department
 app.get('/api/job-orders/my', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -3036,7 +3033,9 @@ app.get('/api/job-orders/my', async (req, res) => {
         let userBranchId = null;
         let userDeptId = null;
         let userFullname = null;
+        let userDeptName = null;  // ✅ ADD THIS
         
+        // Get current user info
         const [userInfo] = await pool.query(
             'SELECT branch_id, department_id, fullname FROM users WHERE id = ?', [decoded.id]
         );
@@ -3055,24 +3054,51 @@ app.get('/api/job-orders/my', async (req, res) => {
             }
         }
         
-        const [orders] = await pool.query(
-            `SELECT * FROM job_orders 
-             WHERE submitted_by = ? 
-                OR (branch_id = ? AND department_id = ? AND submitted_by != ? AND is_forwarded = 0)
-                OR (is_forwarded = 1 AND forwarded_to_branch_id = ? AND forwarded_to_department_id = ?)
-                OR (is_forwarded = 1 AND forwarded_by_name = ?)
-                OR (received_name = ?)
-             ORDER BY created_at DESC`,
-            [decoded.id, userBranchId, userDeptId, decoded.id, userBranchId, userDeptId, userFullname, userFullname]
-        );
+        // ✅ Get department name for the current user
+        if (userDeptId) {
+            const [deptInfo] = await pool.query(
+                'SELECT name FROM departments WHERE id = ?', [userDeptId]
+            );
+            if (deptInfo.length > 0) {
+                userDeptName = deptInfo[0].name;
+            }
+        }
         
-        res.json(orders);
+        console.log('👤 User:', { id: decoded.id, branchId: userBranchId, deptId: userDeptId, deptName: userDeptName, fullname: userFullname });
+        
+        // ✅ Get ALL orders that could be relevant
+       const [allOrders] = await pool.query(
+    `SELECT jo.*, 
+            b.name as forwarder_branch_name,
+            b.company_name as forwarder_company_name
+     FROM job_orders jo
+     LEFT JOIN branches b ON jo.branch_id = b.id
+     WHERE 
+        jo.submitted_by = ?
+        OR (jo.branch_id = ? AND jo.department_id = ? AND jo.is_forwarded = 0)
+        OR (jo.is_forwarded = 1 AND jo.forwarded_to_branch_id = ? AND jo.forwarded_to_department_id = ?)
+        OR (jo.is_forwarded = 1 AND jo.forwarded_by_name = ?)
+        OR (jo.received_name = ?)
+        OR LOWER(jo.request_dept) = LOWER(?)
+     ORDER BY jo.created_at DESC`,
+    [
+        decoded.id,
+        userBranchId, userDeptId,
+        userBranchId, userDeptId,
+        userFullname,
+        userFullname,
+        userDeptName
+    ]
+);
+        
+        console.log(`📋 Found ${allOrders.length} orders for user ${decoded.id} (dept: ${userDeptName})`);
+        
+        res.json(allOrders);
     } catch (error) {
         console.error('❌ Error fetching my job orders:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // GET - Single Job Order by ID (Client)
 app.get('/api/job-orders/:id', async (req, res) => {
     try {
@@ -4765,6 +4791,57 @@ app.get('/api/admin/users', async (req, res) => {
         res.json(allUsers);
     } catch (error) {
         console.error('GET /api/admin/users error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET - Client users by department (for assign modal)
+app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { departmentId } = req.params;
+        
+        // ✅ Get users from new_user table only, filtered by department_id
+        const [users] = await pool.query(
+            `SELECT id, fullname, username, role, branch_id, department_id 
+             FROM new_user 
+             WHERE department_id = ? AND role != 'admin'
+             ORDER BY fullname`,
+            [departmentId]
+        );
+        
+        console.log(`📋 /api/client/users/by-dept/${departmentId} - Returning ${users.length} users`);
+        res.json(users);
+    } catch (error) {
+        console.error('Error fetching client users by dept:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - All client users (fallback)
+app.get('/api/client/users', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const [users] = await pool.query(
+            `SELECT id, fullname, username, role, branch_id, department_id 
+             FROM new_user 
+             WHERE role != 'admin'
+             ORDER BY fullname`
+        );
+        
+        console.log(`📋 /api/client/users - Returning ${users.length} users`);
+        res.json(users);
+    } catch (error) {
+        console.error('Error fetching all client users:', error);
         res.status(500).json({ error: error.message });
     }
 });

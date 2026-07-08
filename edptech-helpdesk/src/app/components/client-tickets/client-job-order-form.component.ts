@@ -952,13 +952,47 @@ getDepartmentNameForSubmission(deptId: number): string {
         this.joCtrlNumber = jo.ctrl_no || '';
         this.selectedBranchId = jo.branch_id || null;
         
-        // ✅ Parse dates properly - handle ISO strings, null, and date-only strings
+        // ✅ FIXED: Parse dates properly without timezone shifting
         const parseDate = (val: any): string => {
           if (!val) return '';
           try {
+            // If it's already a date-only string (YYYY-MM-DD), return as-is
+            if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+              return val;
+            }
+            // If it's a datetime string (YYYY-MM-DD HH:mm:ss), extract date part
+            if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}\s/.test(val)) {
+              return val.split(' ')[0];
+            }
+            // If it's an ISO string, convert to local date
             const d = new Date(val);
             if (isNaN(d.getTime())) return '';
-            return d.toISOString().split('T')[0];
+            // Use local date components to avoid timezone shift
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+          } catch { return ''; }
+        };
+        
+        // ✅ Parse time - extract HH:mm from various formats
+        const parseTime = (val: any): string => {
+          if (!val) return '';
+          try {
+            // If it's already HH:mm format
+            if (typeof val === 'string' && /^\d{2}:\d{2}$/.test(val)) {
+              return val;
+            }
+            // If it's HH:mm:ss format
+            if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(val)) {
+              return val.substring(0, 5);
+            }
+            // If it's a full datetime, extract time
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return '';
+            const hours = String(d.getHours()).padStart(2, '0');
+            const minutes = String(d.getMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}`;
           } catch { return ''; }
         };
         
@@ -966,15 +1000,15 @@ getDepartmentNameForSubmission(deptId: number): string {
           request_from: jo.request_dept || '',
           attn: jo.job_order_for || '',
           department_id: jo.department_id || null,
-          date: parseDate(jo.date) || new Date().toISOString().split('T')[0],
-          time: jo.time || new Date().toTimeString().split(' ')[0].substring(0, 5),
+          date: parseDate(jo.date),
+          time: parseTime(jo.time),
           remarks: jo.particulars || '',
           prepared_name: jo.requested_name || '',
-          prepared_date: parseDate(jo.requested_date) || new Date().toISOString().split('T')[0],
+          prepared_date: parseDate(jo.requested_date),
           approved_name: jo.approved_name || '',
-          approved_date: parseDate(jo.approved_date) || '',  // ✅ Load approved_date
+          approved_date: parseDate(jo.approved_date),
           received_name: jo.received_name || '',
-          received_date: parseDate(jo.received_date) || '',  // ✅ Load received_date
+          received_date: parseDate(jo.received_date),
         };
         
         // Load signatures
@@ -993,6 +1027,14 @@ getDepartmentNameForSubmission(deptId: number): string {
             this.joData.received_name = this.joData.received_name || currentUser.fullname || '';
             this.joData.received_date = this.joData.received_date || new Date().toISOString().split('T')[0];
           }
+        }
+        
+        // ✅ Set current time if empty
+        if (!this.joData.time) {
+          this.joData.time = new Date().toTimeString().split(' ')[0].substring(0, 5);
+        }
+        if (!this.joData.date) {
+          this.joData.date = new Date().toISOString().split('T')[0];
         }
         
         this.loadBranchesAndDepartmentsForEdit(jo.branch_id, jo.department_id);
