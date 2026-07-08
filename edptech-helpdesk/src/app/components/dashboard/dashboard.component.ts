@@ -2152,6 +2152,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     viewMode: true, sidebarState: true, searchHistory: true,
     formData: true, notifications: false, userPreferences: false, allData: false
   };
+   readOrderIds: Set<number> = new Set<number>();
+  notificationMap: Map<number, { type: 'incoming' | 'status_update', status: string }> = new Map();
+  allOrders: any[] = [];
+   ourOrdersUnreadCount: number = 0;
+  incomingOrdersUnreadCount: number = 0;
+  totalUnreadCount: number = 0;
   unreadMessagesCount = 0;
   private destroy$ = new Subject<void>();
 private get seenReqNotificationIds(): Set<number> {
@@ -2175,8 +2181,12 @@ private get seenReqNotificationIds(): Set<number> {
   @ViewChild(AiAssistantComponent) aiAssistant!: AiAssistantComponent;
 
   ngOnInit() {
+   this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     this.setupSubscriptions();
     this.verifyAuthentication();
+    this.loadReadOrdersFromStorage();
+    this.loadNotificationMapFromStorage();
+    this.loadJobOrdersCount();
     this.router.events.pipe(
   filter(event => event instanceof NavigationEnd)
 ).subscribe((event: any) => {
@@ -2680,23 +2690,126 @@ onUserActivity() {
   closeAllMenus() {
     this.activeMenu = null;
   }
-loadJobOrdersCount() {
+   loadNotificationMapFromStorage() {
+    const stored = localStorage.getItem('jobOrderNotifications');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        this.notificationMap = new Map(parsed);
+      } catch (e) {
+        this.notificationMap = new Map();
+      }
+    }
+  }
+  // ✅ Load read orders from localStorage
+  loadReadOrdersFromStorage() {
+    const stored = localStorage.getItem('readJobOrders');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        this.readOrderIds = new Set(parsed);
+      } catch (e) {
+        this.readOrderIds = new Set();
+      }
+    }
+  }
+saveNotificationMapToStorage() {
+  localStorage.setItem('jobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
+}
+
+  // ✅ Update notification counts
+ updateNotificationCounts() {
+  // Count unread orders for "Our Job Orders" (status updates)
+  this.ourOrdersUnreadCount = this.allOrders.filter(o => {
+    return this.notificationMap.has(o.id) && 
+           this.notificationMap.get(o.id)?.type === 'status_update';
+  }).length;
+  
+  // Count unread orders for "J.O. Request Management" (incoming)
+  this.incomingOrdersUnreadCount = this.allOrders.filter(o => {
+    return this.notificationMap.has(o.id) && 
+           this.notificationMap.get(o.id)?.type === 'incoming';
+  }).length;
+  
+  // ✅ Total unread count for the sidebar badge (combine both types)
+  this.totalUnreadCount = this.ourOrdersUnreadCount + this.incomingOrdersUnreadCount;
+  
+  // ✅ Update pending count with the total unread count
+  // This will show the badge on the sidebar link
+  this.pendingJobOrdersCount = this.totalUnreadCount;
+}
+
+ loadJobOrdersCount() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}` };
   
   this.http.get<any[]>(`${environment.apiUrl}/api/admin/job-orders`, { headers }).subscribe({
     next: (data) => {
-      const orders = Array.isArray(data) ? data : [];
-      this.allJOsTotal = orders.length;
-      this.pendingJobOrdersCount = orders.filter(o => o.status === 'pending').length;
-      this.receivedJOsCount = orders.filter(o => o.status === 'approved').length;
-      this.rejectedJOsCount = orders.filter(o => o.status === 'rejected').length;
+      this.allOrders = Array.isArray(data) ? data : [];
+      this.allJOsTotal = this.allOrders.length;
+      
+      // ✅ Traditional counts (for reference only - not used for badge)
+      // Don't overwrite pendingJobOrdersCount here
+      this.receivedJOsCount = this.allOrders.filter(o => o.status === 'approved').length;
+      this.rejectedJOsCount = this.allOrders.filter(o => o.status === 'rejected').length;
+      
+      // ✅ Check for new notifications
+      this.checkForNewNotifications();
+      
+      // ✅ Update notification counts (this will set pendingJobOrdersCount)
+      this.updateNotificationCounts();
     },
     error: () => {
+      this.totalUnreadCount = 0;
       this.pendingJobOrdersCount = 0;
     }
   });
 }
+checkForNewNotifications() {
+  const currentUserBranchId = Number(this.currentUser?.branch_id);
+  const currentUserDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+  const currentUserId = Number(this.currentUser?.id);
+  
+  this.allOrders.forEach(o => {
+    // Skip if already has a notification or is already read
+    if (this.notificationMap.has(o.id) || this.readOrderIds.has(o.id)) return;
+    
+    const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
+    const submitterDeptId = Number(o.submitter_dept_id || o.submitted_by_dept_id);
+    const submittedById = Number(o.submitted_by);
+    const orderBranchId = Number(o.branch_id);
+    const orderDeptId = Number(o.department_id);
+    const forwardedToBranchId = Number(o.forwarded_to_branch_id);
+    const forwardedToDeptId = Number(o.forwarded_to_department_id);
+    
+    const isForUs = (orderBranchId === currentUserBranchId && orderDeptId === currentUserDeptId);
+    const isForwardedToUs = o.is_forwarded && 
+                           (forwardedToBranchId === currentUserBranchId && forwardedToDeptId === currentUserDeptId);
+    const isFromOthers = !(submitterBranchId === currentUserBranchId && submitterDeptId === currentUserDeptId) && submittedById !== currentUserId;
+    
+    // ✅ Check for incoming notifications (new or forwarded orders)
+    if ((isForUs || isForwardedToUs) && isFromOthers) {
+      this.notificationMap.set(o.id, { type: 'incoming', status: '' });
+      this.saveNotificationMapToStorage();
+      return; // Skip status update check if already marked as incoming
+    }
+    
+    // ✅ Check for status updates (for Our Job Orders)
+    const isStatusUpdate = o.status && ['approved', 'assigned', 'forwarded', 'done'].includes(o.status);
+    if (isStatusUpdate && (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname)) {
+      if (!this.notificationMap.has(o.id)) {
+        this.notificationMap.set(o.id, { type: 'status_update', status: o.status });
+        this.saveNotificationMapToStorage();
+      }
+    }
+  });
+}
+    getBadgeCount(): number {
+    return this.totalUnreadCount > 0 ? this.totalUnreadCount : 0;
+  }
+   hasUnreadNotifications(): boolean {
+    return this.totalUnreadCount > 0;
+  }
 
 loadRequisitionsCount() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');

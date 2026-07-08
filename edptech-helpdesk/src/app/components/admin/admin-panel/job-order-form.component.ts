@@ -459,30 +459,49 @@ populateFormFromJobOrder(jo: any) {
   this.joCtrlNumber = jo.ctrl_no || jo.crtk_no || '';
   this.selectedBranchId = jo.branch_id || null;
   
+  // ✅ Parse dates properly
+  const parseDate = (val: any): string => {
+    if (!val) return '';
+    try {
+      if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+      if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}\s/.test(val)) return val.split(' ')[0];
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    } catch { return ''; }
+  };
+  
+  // ✅ Parse time properly
+  const parseTime = (val: any): string => {
+    if (!val) return '';
+    try {
+      if (typeof val === 'string' && /^\d{2}:\d{2}$/.test(val)) return val;
+      if (typeof val === 'string' && /^\d{2}:\d{2}:\d{2}$/.test(val)) return val.substring(0, 5);
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return '';
+      return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } catch { return ''; }
+  };
+  
   const attnValue = jo.job_order_for || jo.attn || '';
   
   this.joData = {
     request_from: jo.request_dept || jo.request_from || '',
-    attn: attnValue,  // ✅ Set the value
+    attn: attnValue,
     department_id: jo.department_id || null,
-    date: jo.date || '',
-    time: jo.time || '',
+    date: parseDate(jo.date) || new Date().toISOString().split('T')[0],
+    time: parseTime(jo.time) || new Date().toTimeString().split(' ')[0].substring(0, 5),
     remarks: jo.particulars || jo.remarks || '',
     prepared_name: jo.requested_name || jo.prepared_name || '',
-    prepared_date: jo.requested_date || jo.prepared_date || '',
+    prepared_date: parseDate(jo.requested_date || jo.prepared_date) || new Date().toISOString().split('T')[0],
     approved_name: jo.approved_name || '',
-    approved_date: jo.approved_date || '',
+    approved_date: parseDate(jo.approved_date) || '',
     received_name: jo.received_name || '',
-    received_date: jo.received_date || '',
+    received_date: parseDate(jo.received_date) || '',
   };
   
-  // ✅ Add the loaded ATTN value to attnUsers so the select shows it
   if (attnValue) {
-    this.attnUsers = [{
-      fullname: attnValue,
-      username: attnValue,
-      role: ''
-    }];
+    this.attnUsers = [{ fullname: attnValue, username: attnValue, role: '' }];
   }
   
   this.preparedSignature = jo.requested_signature || jo.prepared_signature || null;
@@ -869,8 +888,7 @@ onDepartmentChange() {
     const dataUrl = canvas.toDataURL('image/png');
     this.setSignatureData(this.sigModalTarget, dataUrl);
   }
-
-  submitJobOrder() {
+submitJobOrder() {
     // Approval mode - receive the job order
     if (this.approvalMode) {
       if (!this.joData.received_name) {
@@ -888,17 +906,21 @@ onDepartmentChange() {
       
       const payload = {
         received_name: this.joData.received_name,
-        received_date: this.joData.received_date,
+        received_date: this.joData.received_date || new Date().toISOString().split('T')[0],
         received_signature: this.receivedSignature,
         status: 'approved'
       };
 
-      this.http.put(`${environment.apiUrl}/api/job-orders/${this.editReqId}/receive`, payload, { headers }).subscribe({
+      console.log('📤 Approval payload:', payload);
+
+      // ✅ FIXED: Use ADMIN endpoint
+      this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.editReqId}/receive`, payload, { headers }).subscribe({
         next: () => {
           this.showToastMsg('📥 Job Order received successfully!', 'success');
           setTimeout(() => this.cancel(), 1500);
         },
         error: (err) => {
+          console.error('Failed to receive:', err);
           this.showToastMsg('Failed to receive job order', 'error');
           this.submitting = false;
         }
@@ -913,34 +935,73 @@ onDepartmentChange() {
     }
     
     this.submitting = true;
+    
+    const formatDate = (val: any): string => {
+      if (!val) return new Date().toISOString().split('T')[0];
+      if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
+      try {
+        return new Date(val).toISOString().split('T')[0];
+      } catch { return new Date().toISOString().split('T')[0]; }
+    };
+    
     const payload: any = {
-  ...this.joData,
-  branch_id: this.selectedBranchId,
-  jo_number: this.joNumber,
-  ctrl_no: this.joCtrlNumber,
-  prepared_signature: this.preparedSignature, 
-  approved_signature: this.approvedSignature,
-  status: 'pending'
-};
+      job_order_number: this.joNumber,
+      ctrl_no: this.joCtrlNumber,
+      date: formatDate(this.joData.date),
+      time: this.joData.time || new Date().toTimeString().split(' ')[0].substring(0, 5),
+      request_dept: this.joData.request_from,
+      department: this.getDepartmentName(this.joData.department_id),
+      branch_id: this.selectedBranchId,
+      department_id: this.joData.department_id,
+      particulars: this.joData.remarks,
+      job_order_for: this.joData.attn,
+      requested_name: this.joData.prepared_name,
+      requested_date: formatDate(this.joData.prepared_date),
+      requested_signature: this.preparedSignature || null,
+      prepared_signature: this.preparedSignature || null,  // ✅ Send both field names
+      approved_name: this.joData.approved_name || null,
+      approved_date: this.joData.approved_date ? formatDate(this.joData.approved_date) : null,
+      approved_signature: this.approvedSignature || null,
+      received_name: this.joData.received_name || null,
+      received_date: this.joData.received_date || null,
+      received_signature: this.receivedSignature || null,
+      submitted_by: this.authService.getCurrentUser()?.id || null,
+      status: 'pending'
+    };
+
+    console.log('📤 Submitting payload:', payload);
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const url = this.editMode ? `${environment.apiUrl}/api/job-orders/${this.editReqId}` : `${environment.apiUrl}/api/job-orders`;
-    const request = this.editMode ? this.http.put(url, payload, { headers }) : this.http.post(url, payload, { headers });
+    
+    // ✅ FIXED: Use ADMIN endpoint
+    const url = this.editMode 
+      ? `${environment.apiUrl}/api/admin/job-orders/${this.editReqId}` 
+      : `${environment.apiUrl}/api/admin/job-orders`;  // ← /api/admin/job-orders
+
+    const request = this.editMode 
+      ? this.http.put(url, payload, { headers })
+      : this.http.post(url, payload, { headers });
 
     request.subscribe({
       next: (res: any) => {
+        console.log('✅ Server response:', res);
         this.showToastMsg(this.editMode ? 'Job Order updated!' : 'Job Order submitted successfully!', 'success');
         setTimeout(() => this.cancel(), 1500);
       },
       error: (err) => {
         this.showToastMsg('Failed to save Job Order', 'error');
-        console.error(err);
+        console.error('❌ Error:', err);
         this.submitting = false;
       }
     });
-  }
-
+}
+getDepartmentName(deptId: number): string {
+    if (!deptId) return '';
+    const dept = this.filteredDepartments.find(d => d.id == deptId) || 
+                 this.allDepartments.find(d => d.id == deptId);
+    return dept?.name || '';
+}
   printForm() { 
     window.print(); 
   }

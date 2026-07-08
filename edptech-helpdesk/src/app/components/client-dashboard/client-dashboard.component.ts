@@ -260,11 +260,11 @@ interface ClientTicket {
           <span class="nav-label">New Ticket</span>
         </a>
 
-            <a routerLink="/client/job-orders" routerLinkActive="active" class="sidebar-link">
-              <span class="nav-icon">✍️</span>
-              <span class="nav-label">Job Orders</span>
-              <span class="nav-badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
-            </a>
+           <a routerLink="/client/job-orders" routerLinkActive="active" class="sidebar-link" (click)="markJobOrdersAsRead()">
+  <span class="nav-icon">✍️</span>
+  <span class="nav-label">Job Orders</span>
+  <span class="nav-badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
+</a>
 
            <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
   <span class="nav-icon">📩</span>
@@ -1498,6 +1498,16 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isAuthenticated = false;
   isTokenValid = false;
   isRefreshing = false;
+  // ✅ New properties for notifications
+  ourOrdersUnreadCount: number = 0;
+  incomingOrdersUnreadCount: number = 0;
+  
+  // ✅ Track which orders have been viewed/read
+  readOrderIds: Set<number> = new Set<number>();
+  notificationMap: Map<number, { type: 'incoming' | 'status_update', status: string }> = new Map();
+  
+  // ✅ Store all orders
+  allOrders: any[] = [];
   clientNotifications: ClientNotification[] = [];
   private _requisitionsNotificationCount: number = 0;
   readonly announcements = [
@@ -1518,15 +1528,20 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  ngOnInit() {
-    // First, verify authentication before loading anything
-    this.verifyAuthentication();
-    this.router.events.subscribe((event: any) => {
-  if (event.url && event.url.includes('/client/request')) {
-    this.markRequisitionNotificationsAsRead();
-  }
-});
-  }
+ngOnInit() {
+  // First, verify authentication before loading anything
+  this.verifyAuthentication();
+  
+  // ✅ Load notification data
+  this.loadReadOrdersFromStorage();
+  this.loadNotificationMapFromStorage();
+  
+  this.router.events.subscribe((event: any) => {
+    if (event.url && event.url.includes('/client/request')) {
+      this.markRequisitionNotificationsAsRead();
+    }
+  });
+}
 
   // =============================================
   // AUTHENTICATION & SECURITY
@@ -2021,17 +2036,198 @@ refreshAll() {
     URL.revokeObjectURL(url);
     this.activeMenu = null;
   }
-
-  loadJobOrdersCount() {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) return;
-    const headers = { 'Authorization': `Bearer ${token}` };
-    this.http.get<any[]>(`${environment.apiUrl}/api/job-orders/my`, { headers }).subscribe({
-      next: (data) => { const orders = Array.isArray(data) ? data : []; this.pendingJobOrdersCount = orders.filter(o => (o.status || 'pending') === 'pending').length; },
-      error: () => { this.pendingJobOrdersCount = 0; }
-    });
+// ✅ Load read orders from localStorage
+loadReadOrdersFromStorage() {
+  const stored = localStorage.getItem('clientReadJobOrders');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      this.readOrderIds = new Set(parsed);
+    } catch (e) {
+      this.readOrderIds = new Set();
+    }
   }
+}
+// ✅ Save read orders to localStorage
+saveReadOrdersToStorage() {
+  localStorage.setItem('clientReadJobOrders', JSON.stringify(Array.from(this.readOrderIds)));
+}
+// ✅ Load notification map from localStorage
+loadNotificationMapFromStorage() {
+  const stored = localStorage.getItem('clientJobOrderNotifications');
+  if (stored) {
+    try {
+      const parsed = JSON.parse(stored);
+      this.notificationMap = new Map(parsed);
+    } catch (e) {
+      this.notificationMap = new Map();
+    }
+  }
+}
+// ✅ Save notification map to localStorage
+saveNotificationMapToStorage() {
+  localStorage.setItem('clientJobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
+}
 
+// ✅ Update notification counts
+updateNotificationCounts() {
+  // 📤 Our Job Orders: Count orders with status updates
+  const ourOrders = this.getAllOurOrders();
+  this.ourOrdersUnreadCount = ourOrders.filter(o => {
+    return this.notificationMap.has(o.id) && 
+           this.notificationMap.get(o.id)?.type === 'status_update';
+  }).length;
+  
+  // 📥 J.O. Request Management: Count new/forwarded orders
+  const incomingOrders = this.getAllIncomingOrders();
+  this.incomingOrdersUnreadCount = incomingOrders.filter(o => {
+    return this.notificationMap.has(o.id) && 
+           this.notificationMap.get(o.id)?.type === 'incoming';
+  }).length;
+  
+  // ✅ Total unread count for the sidebar badge
+  this.pendingJobOrdersCount = this.ourOrdersUnreadCount + this.incomingOrdersUnreadCount;
+}
+// ✅ Get all orders for "Our Job Orders" view
+getAllOurOrders(): any[] {
+  const userBranchId = Number(this.currentUser?.branch_id);
+  const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+  const userId = Number(this.currentUser?.id);
+  
+  return this.allOrders.filter(jo => {
+    const submittedById = Number(jo.submitted_by);
+    const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
+    const forwardedToDeptId = Number(jo.forwarded_to_department_id);
+    const orderBranchId = Number(jo.branch_id);
+    const orderDeptId = Number(jo.department_id || jo.dept_id);
+    
+    // ❌ EXCLUDE: Forwarded TO us FROM another department (this is incoming)
+    if (jo.is_forwarded && 
+        forwardedToBranchId === userBranchId && 
+        forwardedToDeptId === userDeptId &&
+        !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+      return false;
+    }
+    
+    // ❌ EXCLUDE: Non-forwarded order destined for our department but NOT created by us
+    if (!jo.is_forwarded && 
+        orderBranchId === userBranchId && 
+        orderDeptId === userDeptId && 
+        submittedById !== userId) {
+      return false;
+    }
+    
+    return true;
+  });
+}
+getAllIncomingOrders(): any[] {
+  const userBranchId = Number(this.currentUser?.branch_id);
+  const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+  const userId = Number(this.currentUser?.id);
+  
+  return this.allOrders.filter(jo => {
+    const submittedById = Number(jo.submitted_by);
+    const orderBranchId = Number(jo.branch_id);
+    const orderDeptId = Number(jo.department_id || jo.dept_id);
+    const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
+    const forwardedToDeptId = Number(jo.forwarded_to_department_id);
+    
+    // ✅ Forwarded TO us from another department
+    if (jo.is_forwarded && 
+        forwardedToBranchId === userBranchId && 
+        forwardedToDeptId === userDeptId &&
+        !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+      return true;
+    }
+    
+    // ✅ Non-forwarded order destined for our department but NOT created by us
+    if (!jo.is_forwarded && 
+        orderBranchId === userBranchId && 
+        orderDeptId === userDeptId && 
+        submittedById !== userId) {
+      return true;
+    }
+    
+    return false;
+  });
+}
+// ✅ Check for new or forwarded orders
+checkForNewOrders() {
+  const userBranchId = Number(this.currentUser?.branch_id);
+  const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
+  const userId = Number(this.currentUser?.id);
+  
+  this.allOrders.forEach(o => {
+    // Skip if already has a notification or is already read
+    if (this.notificationMap.has(o.id) || this.readOrderIds.has(o.id)) return;
+    
+    const submittedById = Number(o.submitted_by);
+    const orderBranchId = Number(o.branch_id);
+    const orderDeptId = Number(o.department_id || o.dept_id);
+    const forwardedToBranchId = Number(o.forwarded_to_branch_id);
+    const forwardedToDeptId = Number(o.forwarded_to_department_id);
+    
+    const isForUs = (orderBranchId === userBranchId && orderDeptId === userDeptId);
+    const isForwardedToUs = o.is_forwarded && 
+                           (forwardedToBranchId === userBranchId && forwardedToDeptId === userDeptId);
+    const isFromOthers = submittedById !== userId;
+    
+    // ✅ Check for incoming notifications (new or forwarded orders)
+    if ((isForUs || isForwardedToUs) && isFromOthers) {
+      this.notificationMap.set(o.id, { type: 'incoming', status: '' });
+      this.saveNotificationMapToStorage();
+    }
+    
+    // ✅ Check for status updates (for Our Job Orders)
+    const isStatusUpdate = o.status && ['approved', 'assigned', 'forwarded', 'done'].includes(o.status);
+    if (isStatusUpdate && (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname)) {
+      if (!this.notificationMap.has(o.id)) {
+        this.notificationMap.set(o.id, { type: 'status_update', status: o.status });
+        this.saveNotificationMapToStorage();
+      }
+    }
+  });
+}
+ loadJobOrdersCount() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/job-orders/my`, { headers }).subscribe({
+    next: (data) => {
+      this.allOrders = Array.isArray(data) ? data : [];
+      
+      // ✅ Check for new notifications
+      this.checkForNewOrders();
+      
+      // ✅ Update notification counts
+      this.updateNotificationCounts();
+    },
+    error: () => {
+      this.pendingJobOrdersCount = 0;
+    }
+  });
+}
+// ✅ Mark all job orders as read when clicking the link
+markJobOrdersAsRead() {
+  // Mark all orders in both views as read
+  const ourOrders = this.getAllOurOrders();
+  const incomingOrders = this.getAllIncomingOrders();
+  const allOrders = [...ourOrders, ...incomingOrders];
+  
+  allOrders.forEach(order => {
+    if (order.id) {
+      this.readOrderIds.add(order.id);
+      if (this.notificationMap.has(order.id)) {
+        this.notificationMap.delete(order.id);
+      }
+    }
+  });
+  
+  this.saveReadOrdersToStorage();
+  this.saveNotificationMapToStorage();
+  this.updateNotificationCounts();
+}
   goToAbout() { this.router.navigate(['/client/about']); this.activeMenu = null; }
   goToShortcuts() { this.router.navigate(['/client/shortcuts']); this.activeMenu = null; }
 
