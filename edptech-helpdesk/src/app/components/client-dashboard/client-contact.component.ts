@@ -14,6 +14,9 @@ interface SupportUser {
   email: string;
   role: string;
   department: string;
+  branch_id?: number;
+  branch_name?: string;
+  company_name?: string;
   avatar_color: string;
   photo_url: string | null;
   workDays: string;
@@ -66,6 +69,8 @@ interface ChatMessage {
           <option value="all">All Roles</option>
           <option value="admin">Administrators</option>
           <option value="Technician">Technicians</option>
+          <option value="Head/Manager">Head/Manager</option>
+          <option value="Supervisor">Supervisors</option>
         </select>
         <select [(ngModel)]="statusFilter" (change)="filterUsers()" class="filter-select">
           <option value="all">All Status</option>
@@ -80,25 +85,39 @@ interface ChatMessage {
       <!-- Support Team Grid -->
       <div class="team-grid">
         <div class="team-card" *ngFor="let user of filteredUsers" [class]="'status-' + user.status">
-  <div class="card-header">
-    <div class="avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
-      <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" [alt]="user.fullname" class="avatar-img">
-      <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
-    </div>
-    <!-- ADD UNREAD BADGE HERE -->
-    <div class="unread-badge" *ngIf="user.unreadCount && user.unreadCount > 0">
-      {{ user.unreadCount > 99 ? '99+' : user.unreadCount }}
-    </div>
-    <div class="status-indicator" [class]="'status-' + user.status">
-      <span class="status-dot"></span>
-      <span class="status-text">{{ getStatusText(user.status) }}</span>
-    </div>
-  </div>
+          <div class="card-header">
+            <div class="avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
+              <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" [alt]="user.fullname" class="avatar-img">
+              <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
+            </div>
+            <div class="unread-badge" *ngIf="user.unreadCount && user.unreadCount > 0">
+              {{ user.unreadCount > 99 ? '99+' : user.unreadCount }}
+            </div>
+            <div class="status-indicator" [class]="'status-' + user.status">
+              <span class="status-dot"></span>
+              <span class="status-text">{{ getStatusText(user.status) }}</span>
+            </div>
+          </div>
           
           <div class="card-body">
             <h3>{{ user.fullname }}</h3>
-            <p class="role">{{ user.role === 'Technician' ? '🔧 Technician' : '👨‍💼 Administrator' }}</p>
+            <p class="role">{{ user.role === 'Technician' ? '🔧 Technician' : user.role === 'Head/Manager' ? '👔 Head/Manager' : user.role === 'Supervisor' ? '👤 Supervisor' : '👨‍💼 Administrator' }}</p>
             <p class="department">{{ user.department || 'General Support' }}</p>
+            
+            <!-- ✅ Branch & Company Info -->
+            <div class="org-info" *ngIf="user.branch_name || user.company_name">
+              <div class="org-row" *ngIf="user.branch_name">
+                <span class="org-icon">🏢</span>
+                <span class="org-label">Branch:</span>
+                <span class="org-value">{{ user.branch_name }}</span>
+              </div>
+              <div class="org-row" *ngIf="user.company_name">
+                <span class="org-icon">🏛️</span>
+                <span class="org-label">Company:</span>
+                <span class="org-value">{{ user.company_name }}</span>
+              </div>
+            </div>
+            
             <p class="availability" [class]="'avail-' + user.status">
               {{ user.availabilityMessage }}
             </p>
@@ -154,21 +173,17 @@ interface ChatMessage {
                (dragleave)="onDragLeave($event)"
                (drop)="onDrop($event)">
             <div class="message" *ngFor="let msg of chatMessages" 
-     [class.my-message]="msg.from_username === currentUsername">
-  <!-- Reply button on ALL messages -->
-  <div class="message-actions">
-    <button class="action-btn reply-btn" (click)="replyToMessage(msg)" title="Reply">↩️</button>
-    <!-- Delete button only on OWN messages -->
-    <button class="action-btn delete-btn" *ngIf="msg.from_username === currentUsername" (click)="deleteMessage(msg.id)" title="Delete">🗑️</button>
-  </div>
-  <div class="message-bubble" [class.has-reply]="msg.reply_to_id">
-                <!-- Reply Reference -->
+                 [class.my-message]="msg.from_username === currentUsername">
+              <div class="message-actions">
+                <button class="action-btn reply-btn" (click)="replyToMessage(msg)" title="Reply">↩️</button>
+                <button class="action-btn delete-btn" *ngIf="msg.from_username === currentUsername" (click)="deleteMessage(msg.id)" title="Delete">🗑️</button>
+              </div>
+              <div class="message-bubble" [class.has-reply]="msg.reply_to_id">
                 <div class="reply-reference" *ngIf="msg.reply_to_id" (click)="scrollToMessage(msg.reply_to_id)">
                   <small>{{ msg.reply_to_username }}</small>
                   <p>{{ getReplyPreview(msg.reply_to_message || '') }}</p>
                 </div>
                 
-                <!-- File Attachment -->
                 <div class="file-attachment" *ngIf="msg.file_url">
                   <div class="file-preview" *ngIf="isImageFile(msg.file_type)">
                     <img [src]="apiUrl + msg.file_url" [alt]="msg.file_name" (click)="openImage(apiUrl + msg.file_url)">
@@ -187,7 +202,6 @@ interface ChatMessage {
               <p>No messages yet. Start the conversation!</p>
             </div>
             
-            <!-- Drag & Drop Overlay -->
             <div class="drag-overlay" *ngIf="isDragging">
               <div class="drag-overlay-content">
                 <span class="upload-icon">📤</span>
@@ -196,7 +210,6 @@ interface ChatMessage {
             </div>
           </div>
           
-          <!-- File Preview Before Sending -->
           <div class="file-send-preview" *ngIf="selectedFile">
             <div class="file-send-info">
               <span class="file-icon">📎</span>
@@ -231,17 +244,17 @@ interface ChatMessage {
       </div>
     </div>
     <!-- Confirmation Dialog -->
-<div class="confirm-overlay" *ngIf="showConfirmDialog" (click)="cancelConfirm()">
-  <div class="confirm-dialog" (click)="$event.stopPropagation()">
-    <div class="confirm-icon">⚠️</div>
-    <h3>Confirm Action</h3>
-    <p>{{ confirmMessage }}</p>
-    <div class="confirm-actions">
-      <button class="confirm-btn cancel" (click)="cancelConfirm()">Cancel</button>
-      <button class="confirm-btn confirm" (click)="confirmAction()">Confirm</button>
+    <div class="confirm-overlay" *ngIf="showConfirmDialog" (click)="cancelConfirm()">
+      <div class="confirm-dialog" (click)="$event.stopPropagation()">
+        <div class="confirm-icon">⚠️</div>
+        <h3>Confirm Action</h3>
+        <p>{{ confirmMessage }}</p>
+        <div class="confirm-actions">
+          <button class="confirm-btn cancel" (click)="cancelConfirm()">Cancel</button>
+          <button class="confirm-btn confirm" (click)="confirmAction()">Confirm</button>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
   `,
   styles: [`
     .contact-container {
@@ -371,8 +384,25 @@ interface ChatMessage {
       font-size: 12px;
       color: #666;
     }
+    .org-info {
+      margin: 8px 0;
+      padding: 6px 10px;
+      background: #f8f9fc;
+      border-radius: 6px;
+      border: 1px solid #e8ecf5;
+      font-size: 11px;
+    }
+    .org-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 0;
+    }
+    .org-icon { font-size: 12px; flex-shrink: 0; }
+    .org-label { font-weight: 600; color: #666; min-width: 46px; }
+    .org-value { color: #333; }
     .availability {
-      margin-top: 12px;
+      margin-top: 8px;
       padding: 8px;
       background: #f5f5f5;
       border-radius: 6px;
@@ -748,110 +778,110 @@ interface ChatMessage {
       text-decoration: none;
       font-size: 13px;
     }
-      /* Confirmation Dialog */
-.confirm-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 4000;
-  animation: fadeIn 0.2s ease;
-}
+    /* Confirmation Dialog */
+    .confirm-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 4000;
+      animation: fadeIn 0.2s ease;
+    }
 
-.confirm-dialog {
-  background: white;
-  border-radius: 16px;
-  padding: 32px;
-  max-width: 400px;
-  width: 90%;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  animation: slideUp 0.3s ease;
-}
+    .confirm-dialog {
+      background: white;
+      border-radius: 16px;
+      padding: 32px;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.3s ease;
+    }
 
-.confirm-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
+    .confirm-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
 
-.confirm-dialog h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  color: #333;
-}
+    .confirm-dialog h3 {
+      margin: 0 0 8px 0;
+      font-size: 18px;
+      color: #333;
+    }
 
-.confirm-dialog p {
-  margin: 0 0 24px 0;
-  font-size: 14px;
-  color: #666;
-  line-height: 1.5;
-}
-.unread-badge {
-  background: #cc0000;
-  color: white;
-  font-size: 10px;
-  font-weight: bold;
-  padding: 2px 8px;
-  border-radius: 12px;
-  min-width: 20px;
-  text-align: center;
-  margin-right: auto;
-  margin-left: 12px;
-  animation: pulse 1.5s ease-in-out infinite;
-}
+    .confirm-dialog p {
+      margin: 0 0 24px 0;
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+    }
+    .unread-badge {
+      background: #cc0000;
+      color: white;
+      font-size: 10px;
+      font-weight: bold;
+      padding: 2px 8px;
+      border-radius: 12px;
+      min-width: 20px;
+      text-align: center;
+      margin-right: auto;
+      margin-left: 12px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
-}
-.confirm-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-}
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    .confirm-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
 
-.confirm-btn {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+    .confirm-btn {
+      padding: 10px 24px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
 
-.confirm-btn.cancel {
-  background: #f0f0f0;
-  color: #333;
-}
+    .confirm-btn.cancel {
+      background: #f0f0f0;
+      color: #333;
+    }
 
-.confirm-btn.cancel:hover {
-  background: #e0e0e0;
-}
+    .confirm-btn.cancel:hover {
+      background: #e0e0e0;
+    }
 
-.confirm-btn.confirm {
-  background: #cc0000;
-  color: white;
-}
+    .confirm-btn.confirm {
+      background: #cc0000;
+      color: white;
+    }
 
-.confirm-btn.confirm:hover {
-  background: #aa0000;
-}
+    .confirm-btn.confirm:hover {
+      background: #aa0000;
+    }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
 
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
     .back-link a:hover { text-decoration: underline; }
   `]
 })
@@ -865,6 +895,7 @@ export class ClientContactComponent implements OnInit, OnDestroy {
   statusFilter = 'all';
   currentUsername = '';
   apiUrl = environment.apiUrl;
+  
   // Chat properties
   showChatModal = false;
   selectedUser: SupportUser | null = null;
@@ -887,30 +918,31 @@ export class ClientContactComponent implements OnInit, OnDestroy {
   previewImageUrl = '';
 
   private refreshInterval: any;
-  private pollingInterval: any;  // ← FIXED: was missing ': any'
+  private pollingInterval: any;
+  private currentUserBranchId: number | null = null;
+  private allBranches: any[] = [];
 
   constructor(private http: HttpClient,
     private notificationService: NotificationService 
   ) {}
 
- ngOnInit() {
+  ngOnInit() {
     this.initUserSession();
+    this.loadBranches();
     this.loadSupportUsers();
     this.refreshInterval = setInterval(() => this.loadSupportUsers(), 60000);
     this.pollingInterval = setInterval(() => {
       if (this.showChatModal && this.selectedUser) this.loadMessages();
     }, 5000);
-    // Poll unread counts every 5 seconds (store reference for cleanup)
     this.unreadCountInterval = setInterval(() => this.loadUnreadMessageCounts(), 5000);
-    // Also load immediately
     setTimeout(() => this.loadUnreadMessageCounts(), 1000);
-}
+  }
 
   ngOnDestroy() {
     clearInterval(this.refreshInterval);
     clearInterval(this.pollingInterval);
-    clearInterval(this.unreadCountInterval);  // Add this
-}
+    clearInterval(this.unreadCountInterval);
+  }
 
   // --- Initialization ---
 
@@ -921,11 +953,38 @@ export class ClientContactComponent implements OnInit, OnDestroy {
     this.currentUserOriginalId = currentUser.id ?? 0;
     this.currentUserTable = 'new_user';
     this.currentUserCompositeId = `${this.currentUserTable}_${this.currentUserOriginalId}`;
+    this.currentUserBranchId = currentUser.branch_id || null;
+    
+    console.log('🔍 Current User Branch ID:', this.currentUserBranchId);
   }
 
   private getHeaders() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
     return { 'Authorization': `Bearer ${token}` };
+  }
+
+  // --- Load Branches ---
+
+  private loadBranches() {
+    this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+      next: (branches) => {
+        this.allBranches = branches || [];
+        console.log('📋 Branches loaded:', this.allBranches.length);
+      },
+      error: (err) => console.error('Failed to load branches:', err)
+    });
+  }
+
+  private getBranchName(branchId: number): string {
+    if (!branchId) return '';
+    const branch = this.allBranches.find(b => b.id === branchId);
+    return branch?.name || '';
+  }
+
+  private getCompanyName(branchId: number): string {
+    if (!branchId) return '';
+    const branch = this.allBranches.find(b => b.id === branchId);
+    return branch?.company_name || '';
   }
 
   // --- UI Helpers ---
@@ -952,6 +1011,7 @@ export class ClientContactComponent implements OnInit, OnDestroy {
     };
     return statusMap[status] || status;
   }
+
   formatTimeTo12Hour(timeStr: string): string {
     if (!timeStr) return '';
     if (timeStr.toLowerCase().includes('am') || timeStr.toLowerCase().includes('pm')) {
@@ -1041,57 +1101,54 @@ export class ClientContactComponent implements OnInit, OnDestroy {
   }
 
   // --- Delete Functions ---
-// Confirmation dialog
-showConfirmDialog = false;
-confirmMessage = '';
-confirmCallback: (() => void) | null = null;
- // --- Confirmation Dialog ---
+  showConfirmDialog = false;
+  confirmMessage = '';
+  confirmCallback: (() => void) | null = null;
 
-showConfirm(message: string, callback: () => void) {
-  this.confirmMessage = message;
-  this.confirmCallback = callback;
-  this.showConfirmDialog = true;
-}
-
-confirmAction() {
-  if (this.confirmCallback) {
-    this.confirmCallback();
+  showConfirm(message: string, callback: () => void) {
+    this.confirmMessage = message;
+    this.confirmCallback = callback;
+    this.showConfirmDialog = true;
   }
-  this.showConfirmDialog = false;
-  this.confirmCallback = null;
-}
 
-cancelConfirm() {
-  this.showConfirmDialog = false;
-  this.confirmCallback = null;
-}
+  confirmAction() {
+    if (this.confirmCallback) {
+      this.confirmCallback();
+    }
+    this.showConfirmDialog = false;
+    this.confirmCallback = null;
+  }
 
-// --- Delete Functions (Updated) ---
+  cancelConfirm() {
+    this.showConfirmDialog = false;
+    this.confirmCallback = null;
+  }
 
-deleteMessage(messageId: number) {
-  this.showConfirm('Are you sure you want to delete this message?', () => {
-    const headers = this.getHeaders();
-    this.http.delete(`${environment.apiUrl}/api/messages/${messageId}`, { headers }).subscribe({
-      next: () => {
-        this.chatMessages = this.chatMessages.filter(m => m.id !== messageId);
-      },
-      error: (err) => console.error('Failed to delete message:', err)
+  deleteMessage(messageId: number) {
+    this.showConfirm('Are you sure you want to delete this message?', () => {
+      const headers = this.getHeaders();
+      this.http.delete(`${environment.apiUrl}/api/messages/${messageId}`, { headers }).subscribe({
+        next: () => {
+          this.chatMessages = this.chatMessages.filter(m => m.id !== messageId);
+        },
+        error: (err) => console.error('Failed to delete message:', err)
+      });
     });
-  });
-}
+  }
 
-deleteConversation() {
-  if (!this.selectedUser) return;
-  this.showConfirm('Are you sure you want to delete the entire conversation? This cannot be undone.', () => {
-    const headers = this.getHeaders();
-    this.http.delete(`${environment.apiUrl}/api/conversation/${this.selectedUser!.username}`, { headers }).subscribe({
-      next: () => {
-        this.chatMessages = [];
-      },
-      error: (err) => console.error('Failed to delete conversation:', err)
+  deleteConversation() {
+    if (!this.selectedUser) return;
+    this.showConfirm('Are you sure you want to delete the entire conversation? This cannot be undone.', () => {
+      const headers = this.getHeaders();
+      this.http.delete(`${environment.apiUrl}/api/conversation/${this.selectedUser!.username}`, { headers }).subscribe({
+        next: () => {
+          this.chatMessages = [];
+        },
+        error: (err) => console.error('Failed to delete conversation:', err)
+      });
     });
-  });
-}
+  }
+
   // --- Parsing Helpers ---
 
   private parseDayArray(str: string): string[] {
@@ -1189,7 +1246,8 @@ deleteConversation() {
   private isWithinWorkHours(user: any): boolean {
     return this.isWithinTimeRange(user.workStart || '09:00', user.workEnd || '17:00');
   }
-calculateAvailability(user: any): SupportUser {
+
+  calculateAvailability(user: any): SupportUser {
     console.log(`\n=== CALCULATING AVAILABILITY FOR: ${user.fullname} ===`);
     
     const now = new Date();
@@ -1203,7 +1261,6 @@ calculateAvailability(user: any): SupportUser {
     console.log(`Today is: ${todayName}`);
     console.log(`Current time decimal: ${currentTimeDecimal}`);
     
-    // Check if work schedule is configured
     const hasWorkSchedule = user.workStart && user.workStart !== null && user.workStart !== 'null' && user.workStart.toString().trim() !== '' && 
                            user.workEnd && user.workEnd !== null && user.workEnd !== 'null' && user.workEnd.toString().trim() !== '';
     
@@ -1225,12 +1282,10 @@ calculateAvailability(user: any): SupportUser {
     console.log(`  lunchStart value: "${user.lunchStart}" (type: ${typeof user.lunchStart})`);
     console.log(`  lunchEnd value: "${user.lunchEnd}" (type: ${typeof user.lunchEnd})`);
     
-    // Check leave entries
     const hasLeaveEntries = user.leaveEntries && user.leaveEntries !== null && user.leaveEntries !== 'null' && user.leaveEntries.toString().trim() !== '';
     console.log(`Has leave entries? ${hasLeaveEntries}`);
     console.log(`  leaveEntries value: "${user.leaveEntries}" (type: ${typeof user.leaveEntries})`);
     
-    // If no work schedule is configured at all, show as not set
     if (!hasWorkSchedule && !hasWorkDays && !hasDayOff) {
         console.log('RESULT: SCHEDULE NOT SET');
         return {
@@ -1240,7 +1295,6 @@ calculateAvailability(user: any): SupportUser {
         };
     }
     
-    // 1. Check Leave (only if leave entries exist)
     if (hasLeaveEntries) {
         try {
             const leaves = JSON.parse(user.leaveEntries);
@@ -1269,7 +1323,6 @@ calculateAvailability(user: any): SupportUser {
         }
     }
     
-    // 2. Check Day Off (only if day off is configured)
     if (hasDayOff) {
         try {
             const daysOff = JSON.parse(user.dayOff);
@@ -1299,7 +1352,6 @@ calculateAvailability(user: any): SupportUser {
         }
     }
     
-    // 3. Check Working Days (only if work days are configured)
     if (hasWorkDays) {
         try {
             const workDays = JSON.parse(user.workDays);
@@ -1329,9 +1381,7 @@ calculateAvailability(user: any): SupportUser {
         }
     }
     
-    // 4. If work hours are not set but other schedule items are configured
     if (!hasWorkSchedule) {
-        // Check lunch break if configured
         if (hasLunchSchedule) {
             const lunchStartDecimal = this.parseTimeToDecimal(user.lunchStart);
             const lunchEndDecimal = this.parseTimeToDecimal(user.lunchEnd);
@@ -1350,7 +1400,6 @@ calculateAvailability(user: any): SupportUser {
             }
         }
         
-        // If work days are set and today is a working day, but no work hours configured
         if (hasWorkDays) {
             console.log('RESULT: ON DUTY (work hours not set)');
             return {
@@ -1368,14 +1417,12 @@ calculateAvailability(user: any): SupportUser {
         };
     }
     
-    // 5. Parse Work Hours (they are set at this point)
     const workStartDecimal = this.parseTimeToDecimal(user.workStart);
     const workEndDecimal = this.parseTimeToDecimal(user.workEnd);
     
     console.log(`Work hours: ${workStartDecimal} (${user.workStart}) to ${workEndDecimal} (${user.workEnd})`);
     console.log(`Current time: ${currentTimeDecimal}`);
     
-    // 6. Check if within work hours
     const isWorkingHour = currentTimeDecimal >= workStartDecimal && 
                          currentTimeDecimal <= workEndDecimal;
     
@@ -1392,7 +1439,6 @@ calculateAvailability(user: any): SupportUser {
         };
     }
     
-    // 7. Check Lunch Break
     if (hasLunchSchedule) {
         const lunchStartDecimal = this.parseTimeToDecimal(user.lunchStart);
         const lunchEndDecimal = this.parseTimeToDecimal(user.lunchEnd);
@@ -1411,7 +1457,6 @@ calculateAvailability(user: any): SupportUser {
         }
     }
     
-    // 8. On Duty
     const endDisplay = this.formatTimeTo12Hour(user.workEnd);
     console.log('RESULT: ON DUTY');
     return {
@@ -1419,9 +1464,9 @@ calculateAvailability(user: any): SupportUser {
         status: 'online',
         availabilityMessage: `On duty until ${endDisplay}`
     };
-}
+  }
 
-private getLeaveReason(leaveEntries: string): string {
+  private getLeaveReason(leaveEntries: string): string {
     try {
         const leaves = JSON.parse(leaveEntries);
         const today = new Date().toISOString().split('T')[0];
@@ -1431,64 +1476,104 @@ private getLeaveReason(leaveEntries: string): string {
         return 'Scheduled leave';
     }
   }
-markMessagesAsRead(fromUsername: string) {
-  this.http.put(`${environment.apiUrl}/api/messages/read/${fromUsername}`, {}, { headers: this.getHeaders() }).subscribe({ 
-    error: (err) => console.error('Error marking messages as read:', err) 
-  });
-}
+
+  markMessagesAsRead(fromUsername: string) {
+    this.http.put(`${environment.apiUrl}/api/messages/read/${fromUsername}`, {}, { headers: this.getHeaders() }).subscribe({ 
+      error: (err) => console.error('Error marking messages as read:', err) 
+    });
+  }
+
   // --- User and Chat API Actions ---
-loadUnreadMessageCounts() {
-  const headers = this.getHeaders();
-  this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${this.currentUsername}`, { headers }).subscribe({
-    next: (unread) => {
-      // Update unread counts on support users
-      this.supportUsers.forEach(user => {
-        const match = unread.find((u: any) => u.from_username === user.username);
-        user.unreadCount = match ? match.count : 0;
-      });
-      this.filterUsers(); // Refresh the filtered list
-    },
-    error: (err) => console.error('Error loading unread counts:', err)
-  });
-}
-loadSupportUsers() {
+
+  loadUnreadMessageCounts() {
     const headers = this.getHeaders();
-    this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${this.currentUsername}`, { headers }).subscribe({
+      next: (unread) => {
+        this.supportUsers.forEach(user => {
+          const match = unread.find((u: any) => u.from_username === user.username);
+          user.unreadCount = match ? match.count : 0;
+        });
+        this.filterUsers();
+      },
+      error: (err) => console.error('Error loading unread counts:', err)
+    });
+  }
+
+  loadSupportUsers() {
+    const headers = this.getHeaders();
+    
+    // ✅ Just use the main endpoint - it handles filtering based on the user's branch
+    const url = `${environment.apiUrl}/api/users`;
+    
+    console.log(`📡 Fetching users from: ${url}`);
+    
+    this.http.get<any[]>(url, { headers }).subscribe({
         next: (users) => {
-            console.log('=== ALL USERS FROM API ===');
-            console.log(JSON.stringify(users, null, 2));
+            console.log('=== USERS FROM API ===');
+            console.log(`Received ${users.length} users`);
             
-            const supportStaff = users.filter(u => u.role === 'admin' || u.role === 'Technician');
-            
-            console.log('=== SUPPORT STAFF ONLY ===');
-            supportStaff.forEach(user => {
-                console.log(`\nUser: ${user.fullname} (${user.username})`);
-                console.log(`  Role: ${user.role}`);
-                console.log(`  workDays: "${user.workDays}" (type: ${typeof user.workDays})`);
-                console.log(`  dayOff: "${user.dayOff}" (type: ${typeof user.dayOff})`);
-                console.log(`  workStart: "${user.workStart}" (type: ${typeof user.workStart})`);
-                console.log(`  workEnd: "${user.workEnd}" (type: ${typeof user.workEnd})`);
-                console.log(`  lunchStart: "${user.lunchStart}" (type: ${typeof user.lunchStart})`);
-                console.log(`  lunchEnd: "${user.lunchEnd}" (type: ${typeof user.lunchEnd})`);
-                console.log(`  leaveEntries: "${user.leaveEntries}" (type: ${typeof user.leaveEntries})`);
+            // The backend already filters based on the user's branch
+            // Just process the returned users
+            this.supportUsers = users.map(user => {
+                console.log(`\nProcessing: ${user.fullname} (${user.role}) - Branch: ${user.branch_name || 'N/A'}`);
+                const processed = this.calculateAvailability(user);
+                processed.userId = user.id;
+                processed.branch_id = user.branch_id;
+                processed.branch_name = user.branch_name || this.getBranchName(user.branch_id);
+                processed.company_name = user.company_name || this.getCompanyName(user.branch_id);
+                return processed;
             });
             
-            this.supportUsers = supportStaff.map(user => {
-    console.log(`\nProcessing availability for: ${user.fullname}`);
-    const processed = this.calculateAvailability(user);
-    processed.userId = user.id;  // Add userId
-    return processed;
-});
-            
-            console.log('=== FINAL PROCESSED USERS ===');
+            console.log(`✅ Total support users: ${this.supportUsers.length}`);
             this.supportUsers.forEach(user => {
-                console.log(`${user.fullname}: status=${user.status}, message=${user.availabilityMessage}`);
+                console.log(`  - ${user.fullname}: ${user.role} @ ${user.branch_name || 'No Branch'}`);
             });
             
             this.filterUsers();
             this.loadUnreadMessageCounts();
         },
-        error: (err) => console.error('Failed to load support staff:', err)
+        error: (err) => {
+            console.error('Failed to load support staff:', err);
+            this.supportUsers = [];
+            this.filteredUsers = [];
+        }
+    });
+}
+
+// Fallback method if the new endpoints don't work
+private loadSupportUsersFallback() {
+    const headers = this.getHeaders();
+    this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+        next: (users) => {
+            const allowedRoles = ['Technician', 'Head/Manager', 'Supervisor'];
+            const mainBranchIds = [1, 5];
+            const isMainBranch = mainBranchIds.includes(this.currentUserBranchId || 0);
+            
+            let supportStaff = users.filter(u => 
+                allowedRoles.includes(u.role) && 
+                u.user_table === 'users'
+            );
+            
+            // If not main branch, filter by branch
+            if (!isMainBranch) {
+                supportStaff = supportStaff.filter(u => 
+                    u.branch_id === this.currentUserBranchId
+                );
+            }
+            
+            this.supportUsers = supportStaff.map(user => {
+                const processed = this.calculateAvailability(user);
+                processed.userId = user.id;
+                processed.branch_id = user.branch_id;
+                processed.branch_name = user.branch_name || this.getBranchName(user.branch_id);
+                processed.company_name = user.company_name || this.getCompanyName(user.branch_id);
+                return processed;
+            });
+            
+            this.filterUsers();
+            this.loadUnreadMessageCounts();
+        },
+        error: (err) => console.error('Fallback failed:', err)
     });
 }
 
@@ -1499,7 +1584,9 @@ loadSupportUsers() {
       filtered = filtered.filter(u =>
         u.fullname?.toLowerCase().includes(term) ||
         u.department?.toLowerCase().includes(term) ||
-        u.email?.toLowerCase().includes(term)
+        u.email?.toLowerCase().includes(term) ||
+        u.branch_name?.toLowerCase().includes(term) ||
+        u.company_name?.toLowerCase().includes(term)
       );
     }
     if (this.roleFilter !== 'all') {
@@ -1511,24 +1598,22 @@ loadSupportUsers() {
     this.filteredUsers = filtered;
   }
 
-   openChat(user: SupportUser) {
+  openChat(user: SupportUser) {
     this.selectedUser = user;
     this.showChatModal = true;
     this.chatMessages = [];
     this.replyingTo = null;
     this.selectedFile = null;
     
-    // Mark messages from this user as read
     if (user.unreadCount && user.unreadCount > 0) {
       this.markMessagesAsRead(user.username);
-      user.unreadCount = 0; // Reset locally immediately
-      this.filterUsers(); // Refresh display
+      user.unreadCount = 0;
+      this.filterUsers();
     }
     
     this.loadMessages();
-    // Also refresh unread counts to sync with server
     this.loadUnreadMessageCounts();
-}
+  }
 
   closeChat() {
     this.showChatModal = false;
@@ -1539,8 +1624,7 @@ loadSupportUsers() {
     this.selectedFile = null;
   }
 
-
- loadMessages() {
+  loadMessages() {
     if (!this.selectedUser) return;
     const headers = this.getHeaders();
     const url = `${environment.apiUrl}/api/messages/${this.selectedUser.username}`;
@@ -1554,10 +1638,11 @@ loadSupportUsers() {
       }
     });
   }
-sendMessage() {
+
+  sendMessage() {
     if ((!this.newMessage.trim() && !this.selectedFile) || !this.selectedUser) return;
     
-    const messageText = this.newMessage.trim(); // Save before clearing
+    const messageText = this.newMessage.trim();
     const headers = this.getHeaders();
     const formData = new FormData();
     formData.append('to_username', this.selectedUser.username);
@@ -1582,11 +1667,11 @@ sendMessage() {
         this.replyingTo = null;
         this.selectedFile = null;
         this.loadMessages();
-        
       },
       error: (err) => console.error('Failed to send message:', err)
     });
   }
+
   scrollToBottom() {
     setTimeout(() => {
       const messagesContainer = document.querySelector('.chat-messages');

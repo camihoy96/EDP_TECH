@@ -82,12 +82,15 @@ import { AuthService } from '../../services/auth.service';
               <div class="notif-body">
                 <div class="notif-title">{{ notif.title }}</div>
                 <div class="notif-message">{{ notif.message }}</div>
-                <div class="notif-meta">
-                  <span class="notif-time">{{ getTimeAgo(notif.timestamp) }}</span>
-                  <span class="notif-ticket" *ngIf="notif.ticketNumber">
-                    {{ notif.ticketNumber }}
-                  </span>
-                </div>
+              <div class="notif-meta">
+  <span class="notif-time">{{ getTimeAgo(notif.timestamp) }}</span>
+  <span class="notif-ticket" *ngIf="notif.ticketNumber">
+    {{ notif.ticketNumber }}
+  </span>
+  <span class="notif-ticket job-order-ticket" *ngIf="notif.jobOrderNumber" style="background: #e8f0ff; color: #0a3a8c;">
+    JO: {{ notif.jobOrderNumber }}
+  </span>
+</div>
               </div>
               <button
                 class="dismiss-btn"
@@ -595,13 +598,18 @@ cancelClearAll() {
     this.notificationService.dismissNotification(id);
   }
 
-  onNotificationClick(notification: Notification) {
-    this.notificationService.markAsRead(notification.id);
-    if (notification.ticketId) {
-      this.router.navigate(['/tickets', notification.ticketId]);
-    }
-    this.showDropdown = false;
+ onNotificationClick(notification: Notification) {
+  this.notificationService.markAsRead(notification.id);
+  if (notification.ticketId) {
+    this.router.navigate(['/tickets', notification.ticketId]);
+  } else if (notification.jobOrderId || notification.jobOrderNumber) {
+    // Navigate to admin job orders
+    this.router.navigate(['/admin/job-orders'], { 
+      queryParams: { id: notification.jobOrderId } 
+    });
   }
+  this.showDropdown = false;
+}
 
   showMore() {
     this.visibleLimit += 20;

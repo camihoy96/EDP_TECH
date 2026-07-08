@@ -2254,46 +2254,567 @@ app.post('/api/assets', async (req, res) => {
 });
 
 // ============ USER ROUTES ============
-// In your server.js or routes file
+// GET - Get all users for client contact
 app.get('/api/users', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) {
-            console.log('❌ /api/users - No token provided');
             return res.status(401).json({ error: 'No token provided' });
         }
-        
-        const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader;
-        
-        let decoded;
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+
+        console.log('🔍 Decoded user ID:', decoded.id);
+
+        // ✅ Get current user from new_user table (client users)
+        let currentUser = null;
+        let userBranchId = null;
+        let userDepartmentId = null;
+
         try {
-            decoded = jwt.verify(token, 'secret_key');
-        } catch (jwtError) {
-            console.error('❌ /api/users - JWT verify failed:', jwtError.message);
-            return res.status(401).json({ error: 'Invalid token' });
+            const [currentUserRows] = await pool.query(
+                'SELECT id, branch_id, department_id, username, fullname, role FROM new_user WHERE id = ?',
+                [decoded.id]
+            );
+            
+            if (currentUserRows.length > 0) {
+                currentUser = currentUserRows[0];
+                userBranchId = currentUser.branch_id;
+                userDepartmentId = currentUser.department_id;
+                console.log('🔍 Current User from new_user:', {
+                    id: currentUser.id,
+                    username: currentUser.username,
+                    branch_id: userBranchId,
+                    department_id: userDepartmentId,
+                    role: currentUser.role
+                });
+            }
+        } catch (err) {
+            console.log('⚠️ Error querying new_user:', err.message);
         }
-        
-        console.log('📋 /api/users - Requested by:', decoded.username);
-        
-        const [users] = await pool.query(
-            `SELECT id, username, fullname, role, department, email, 
-                    avatar_color, photo_url, branch_id, department_id,
-                    workDays, dayOff, workStart, workEnd, 
-                    lunchStart, lunchEnd, leaveEntries,
-                    locked_until, failed_attempts
-             FROM users 
-             ORDER BY fullname`
-        );
-        
-        console.log('📋 /api/users - Returning', users.length, 'users');
-        res.json(users);
-        
+
+        // If not in new_user, try users table (admin users)
+        if (!currentUser) {
+            const [adminUserRows] = await pool.query(
+                'SELECT id, branch_id, department_id, username, fullname, role FROM users WHERE id = ?',
+                [decoded.id]
+            );
+            
+            if (adminUserRows.length > 0) {
+                currentUser = adminUserRows[0];
+                userBranchId = currentUser.branch_id;
+                userDepartmentId = currentUser.department_id;
+                console.log('🔍 Current User from users (admin):', {
+                    id: currentUser.id,
+                    username: currentUser.username,
+                    branch_id: userBranchId,
+                    department_id: userDepartmentId,
+                    role: currentUser.role
+                });
+            }
+        }
+
+        if (!currentUser) {
+            console.log('❌ User not found in any table');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (!userBranchId) {
+            console.log('⚠️ User has no branch_id set');
+            return res.json([]);
+        }
+
+        // Main branch IDs
+        const mainBranchIds = [1, 5];
+        const isMainBranch = mainBranchIds.includes(userBranchId);
+
+        console.log(`📍 Branch: ${userBranchId}, Main: ${isMainBranch}`);
+
+        // ✅ 1. Get IT staff from users table (admin/IT staff)
+        const [adminUsers] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                'users' as user_table,
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.role IN ('Technician', 'Head/Manager', 'Supervisor')
+            ORDER BY u.fullname ASC
+        `);
+
+        console.log(`📋 Found ${adminUsers.length} admin IT staff`);
+
+        // ✅ 2. Get client users from new_user table who are in EDP/IT department
+        const [clientEDPUsers] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                'new_user' as user_table,
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name
+            FROM new_user u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE d.name = 'EDP/IT'
+            ORDER BY u.fullname ASC
+        `);
+
+        console.log(`📋 Found ${clientEDPUsers.length} client EDP/IT users`);
+
+        // ✅ 3. Also get client users with IT-related roles
+        const [clientITRoleUsers] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                'new_user' as user_table,
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name
+            FROM new_user u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE LOWER(u.role) IN ('it technician', 'technician', 'support', 'it support')
+            ORDER BY u.fullname ASC
+        `);
+
+        console.log(`📋 Found ${clientITRoleUsers.length} client IT role users`);
+
+        let filteredUsers = [];
+
+        if (isMainBranch) {
+            // ✅ MAIN BRANCH: ONLY show admin IT staff from users table
+            // Exclude client users (new_user) entirely for main branch
+            filteredUsers = adminUsers.filter(u => 
+                u.role === 'Technician' || 
+                u.role === 'Head/Manager' || 
+                u.role === 'Supervisor'
+            );
+            console.log(`✅ Main branch: Showing ${filteredUsers.length} admin IT staff only (excluding client users)`);
+        } else {
+            // ✅ OTHER BRANCH: Show branch EDP/IT users + Main branch Head/Manager & Supervisor
+            
+            // Combine all client IT users
+            const allClientITUsers = [...clientEDPUsers, ...clientITRoleUsers];
+            
+            // Remove duplicates from client users
+            const uniqueClientMap = new Map();
+            allClientITUsers.forEach(user => {
+                if (!uniqueClientMap.has(user.id)) {
+                    uniqueClientMap.set(user.id, user);
+                }
+            });
+            const uniqueClientUsers = Array.from(uniqueClientMap.values());
+
+            // 1. Get client IT users from this branch
+            const branchClientITUsers = uniqueClientUsers.filter(u => 
+                u.branch_id === userBranchId
+            );
+            console.log(`📍 Client IT users in branch ${userBranchId}: ${branchClientITUsers.length}`);
+
+            // 2. Get admin IT staff from this branch (if any)
+            const branchAdminUsers = adminUsers.filter(u => 
+                u.branch_id === userBranchId
+            );
+            console.log(`📍 Admin IT staff in branch ${userBranchId}: ${branchAdminUsers.length}`);
+
+            // 3. Combine branch users (admin + client)
+            const branchAllUsers = [...branchAdminUsers, ...branchClientITUsers];
+
+            // 4. Get Head/Manager and Supervisor from Main Branch (admin only)
+            const mainBranchStaff = adminUsers.filter(u => 
+                mainBranchIds.includes(u.branch_id) && 
+                (u.role === 'Head/Manager' || u.role === 'Supervisor')
+            );
+            console.log(`🏢 Main branch staff (Head/Manager & Supervisor): ${mainBranchStaff.length}`);
+
+            // 5. Combine all and remove duplicates
+            const combined = [...branchAllUsers, ...mainBranchStaff];
+            const uniqueIds = new Set();
+            filteredUsers = combined.filter(u => {
+                if (uniqueIds.has(u.id)) return false;
+                uniqueIds.add(u.id);
+                return true;
+            });
+            
+            console.log(`✅ Other branch: ${branchAllUsers.length} branch users + ${mainBranchStaff.length} main staff = ${filteredUsers.length} users total`);
+        }
+
+        // Format response
+        const formattedUsers = filteredUsers.map(user => ({
+            id: user.id,
+            username: user.username,
+            fullname: user.fullname,
+            email: user.email || '',
+            role: user.role,
+            department: user.department_name || user.department || '',
+            department_id: user.department_id,
+            branch_id: user.branch_id,
+            branch_name: user.branch_name || '',
+            company_name: user.company_name || '',
+            avatar_color: user.avatar_color || '#0a3a8c',
+            photo_url: user.photo_url,
+            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
+            dayOff: user.dayOff || '["Saturday","Sunday"]',
+            workStart: user.workStart || '09:00',
+            workEnd: user.workEnd || '17:00',
+            lunchStart: user.lunchStart || '12:00',
+            lunchEnd: user.lunchEnd || '13:00',
+            leaveEntries: user.leaveEntries || '[]',
+            user_table: user.user_table || 'users',
+            created_at: user.created_at
+        }));
+
+        console.log(`📤 Returning ${formattedUsers.length} users for contact list`);
+        res.json(formattedUsers);
+
     } catch (error) {
-        console.error('❌ /api/users error:', error);
+        console.error('❌ Error fetching users:', error);
+        res.status(500).json({ 
+            error: error.message,
+            stack: error.stack
+        });
+    }
+});
+// Debug route - check all users and departments
+app.get('/api/debug/all', async (req, res) => {
+    try {
+        // Get all users with roles
+        const [allUsers] = await pool.query(`
+            SELECT id, username, fullname, role, branch_id, department_id 
+            FROM users 
+            WHERE role IN ('Technician', 'Head/Manager', 'Supervisor')
+        `);
+        
+        // Get all departments
+        const [allDepts] = await pool.query(`
+            SELECT id, branch_id, name FROM departments
+        `);
+        
+        // Get all branches
+        const [allBranches] = await pool.query(`
+            SELECT id, name, company_name FROM branches
+        `);
+        
+        res.json({
+            users: allUsers,
+            departments: allDepts,
+            branches: allBranches
+        });
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
+// Debug route - check departments for a branch
+app.get('/api/debug/branch-departments/:branchId', async (req, res) => {
+    try {
+        const { branchId } = req.params;
+        const [depts] = await pool.query(
+            'SELECT id, name FROM departments WHERE branch_id = ?',
+            [branchId]
+        );
+        const [users] = await pool.query(
+            'SELECT id, fullname, role, department_id FROM users WHERE branch_id = ? AND role = "Technician"',
+            [branchId]
+        );
+        res.json({
+            branch_id: branchId,
+            departments: depts,
+            technicians: users
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+// Debug route - test users endpoint
+app.get('/api/debug/users-test', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
 
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+
+        console.log('🔍 Debug - Decoded user ID:', decoded.id);
+
+        // Test new_user query
+        const [newUser] = await pool.query('SELECT id, username, branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]);
+        
+        // Test users query (IT staff)
+        const [itUsers] = await pool.query(`
+            SELECT id, username, role, branch_id, department_id, department 
+            FROM users 
+            WHERE role IN ('Technician', 'Head/Manager', 'Supervisor') 
+            LIMIT 10
+        `);
+        
+        // Test departments
+        const [depts] = await pool.query('SELECT id, branch_id, name FROM departments WHERE name LIKE "%edp%"');
+        
+        // Test branches
+        const [branches] = await pool.query('SELECT id, name, company_name FROM branches LIMIT 10');
+
+        res.json({
+            current_user_id: decoded.id,
+            new_user: newUser,
+            it_users: itUsers,
+            edp_departments: depts,
+            branches: branches,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Debug route error:', error);
+        res.status(500).json({ 
+            error: error.message, 
+            stack: error.stack 
+        });
+    }
+});
+// GET - Get users by branch (for contact/chat)
+app.get('/api/users/branch/:branchId', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+
+        const { branchId } = req.params;
+        const mainBranchIds = [1, 5];
+        const isMainBranch = mainBranchIds.includes(parseInt(branchId));
+
+        // Get users from specific branch
+        const [users] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                'users' as user_table,
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.role IN ('Technician', 'Head/Manager', 'Supervisor')
+            AND u.user_table = 'users'
+            ORDER BY u.fullname ASC
+        `);
+
+        let filteredUsers = [];
+
+        if (isMainBranch) {
+            // Main branch: Show all IT staff
+            filteredUsers = users.filter(u => 
+                u.branch_id === parseInt(branchId) && 
+                (u.role === 'Technician' || u.role === 'Head/Manager' || u.role === 'Supervisor')
+            );
+        } else {
+            // Other branch: Show EDP/IT users from this branch + Main branch Head/Manager & Supervisor
+            
+            // 1. Get EDP/IT department ID for this branch
+            const [deptRows] = await pool.query(
+                'SELECT id FROM departments WHERE branch_id = ? AND name = ?',
+                [branchId, 'EDP/IT']
+            );
+            const edpDeptId = deptRows.length > 0 ? deptRows[0].id : null;
+
+            // 2. Get users from this branch's EDP/IT department (Technician only)
+            const branchEdpUsers = users.filter(u => 
+                u.branch_id === parseInt(branchId) && 
+                u.department_id === edpDeptId &&
+                u.role === 'Technician'
+            );
+
+            // 3. Get Head/Manager and Supervisor from Main Branch
+            const mainBranchStaff = users.filter(u => 
+                mainBranchIds.includes(u.branch_id) && 
+                (u.role === 'Head/Manager' || u.role === 'Supervisor')
+            );
+
+            filteredUsers = [...branchEdpUsers, ...mainBranchStaff];
+        }
+
+        const formattedUsers = filteredUsers.map(user => ({
+            id: user.id,
+            username: user.username,
+            fullname: user.fullname,
+            email: user.email,
+            role: user.role,
+            department: user.department_name || user.department || '',
+            department_id: user.department_id,
+            branch_id: user.branch_id,
+            branch_name: user.branch_name || '',
+            company_name: user.company_name || '',
+            avatar_color: user.avatar_color || '#0a3a8c',
+            photo_url: user.photo_url,
+            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
+            dayOff: user.dayOff || '["Saturday","Sunday"]',
+            workStart: user.workStart || '09:00',
+            workEnd: user.workEnd || '17:00',
+            lunchStart: user.lunchStart || '12:00',
+            lunchEnd: user.lunchEnd || '13:00',
+            leaveEntries: user.leaveEntries || '[]',
+            user_table: user.user_table,
+            created_at: user.created_at
+        }));
+
+        res.json(formattedUsers);
+
+    } catch (error) {
+        console.error('❌ Error fetching users by branch:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET - Get main branch users (LSP Main)
+app.get('/api/users/main-branch', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+
+        const mainBranchIds = [1, 5];
+
+        const [users] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                'users' as user_table,
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.branch_id IN (?) 
+            AND u.role IN ('Technician', 'Head/Manager', 'Supervisor')
+            AND u.user_table = 'users'
+            ORDER BY u.fullname ASC
+        `, [mainBranchIds]);
+
+        const formattedUsers = users.map(user => ({
+            id: user.id,
+            username: user.username,
+            fullname: user.fullname,
+            email: user.email,
+            role: user.role,
+            department: user.department_name || user.department || '',
+            department_id: user.department_id,
+            branch_id: user.branch_id,
+            branch_name: user.branch_name || '',
+            company_name: user.company_name || '',
+            avatar_color: user.avatar_color || '#0a3a8c',
+            photo_url: user.photo_url,
+            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
+            dayOff: user.dayOff || '["Saturday","Sunday"]',
+            workStart: user.workStart || '09:00',
+            workEnd: user.workEnd || '17:00',
+            lunchStart: user.lunchStart || '12:00',
+            lunchEnd: user.lunchEnd || '13:00',
+            leaveEntries: user.leaveEntries || '[]',
+            user_table: user.user_table,
+            created_at: user.created_at
+        }));
+
+        res.json(formattedUsers);
+
+    } catch (error) {
+        console.error('❌ Error fetching main branch users:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 app.post('/api/users', async (req, res) => {
     try {
         const { username, password, fullname, role, department, email } = req.body;

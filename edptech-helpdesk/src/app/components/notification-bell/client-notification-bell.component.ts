@@ -65,6 +65,9 @@ import { AuthService } from '../../services/auth.service';
                 <div class="notif-meta">
                   <span class="notif-time">{{ getTimeAgo(notif.timestamp) }}</span>
                   <span class="notif-ticket" *ngIf="notif.ticketNumber">{{ notif.ticketNumber }}</span>
+                  <span class="notif-ticket job-order-ticket" *ngIf="notif.jobOrderNumber">
+                    JO: {{ notif.jobOrderNumber }}
+                  </span>
                 </div>
               </div>
               <button class="dismiss-btn" (click)="dismissNotification($event, notif.id)" title="Dismiss">✕</button>
@@ -166,9 +169,20 @@ import { AuthService } from '../../services/auth.service';
     .notif-title { font-size: 11px; font-weight: 600; color: #0f172a; margin-bottom: 2px; }
     .notif-item.unread .notif-title { color: #4f46e5; }
     .notif-message { font-size: 11px; color: #475569; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    .notif-meta { margin-top: 4px; display: flex; align-items: center; gap: 8px; }
+    .notif-meta { margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .notif-time { font-size: 10px; color: #94a3b8; }
-    .notif-ticket { font-size: 9px; background: #eef2ff; color: #4f46e5; padding: 1px 5px; border-radius: 4px; font-weight: 700; }
+    .notif-ticket { 
+      font-size: 9px; 
+      background: #eef2ff; 
+      color: #4f46e5; 
+      padding: 1px 5px; 
+      border-radius: 4px; 
+      font-weight: 700; 
+    }
+    .notif-ticket.job-order-ticket {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
     .dismiss-btn { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 11px; padding: 2px 6px; flex-shrink: 0; opacity: 0; margin-top: 1px; }
     .notif-item:hover .dismiss-btn { opacity: 1; }
     .dismiss-btn:hover { color: #ef4444; background: #fef2f2; border-radius: 4px; }
@@ -196,7 +210,7 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
   private previousUnreadCount = 0;
 
   constructor(
-     private clientNotificationService: ClientNotificationService,
+    private clientNotificationService: ClientNotificationService,
     private router: Router,
     private authService: AuthService,
     @Inject(PLATFORM_ID) private platformId: Object
@@ -274,8 +288,17 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
 
   onNotificationClick(notification: ClientNotification) {
     this.clientNotificationService.markAsRead(notification.id);
+    
     if (notification.ticketId) {
       this.router.navigate(['/client/tickets', notification.ticketId]);
+    } else if (notification.jobOrderId || notification.jobOrderNumber) {
+      if (notification.jobOrderId) {
+        this.router.navigate(['/client/job-orders'], { 
+          queryParams: { id: notification.jobOrderId } 
+        });
+      } else {
+        this.router.navigate(['/client/job-orders']);
+      }
     } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
       this.router.navigate(['/client/request']);
     }

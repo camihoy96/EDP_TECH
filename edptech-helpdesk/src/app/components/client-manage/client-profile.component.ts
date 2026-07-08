@@ -38,6 +38,20 @@ import { environment } from '../../../environments/environment';
               <span class="badge badge-dept">{{ currentUser.department || 'No Department' }}</span>
             </div>
 
+            <!-- ✅ Branch & Company Display -->
+            <div class="org-info" *ngIf="userBranch || userCompany">
+              <div class="org-row" *ngIf="userBranch">
+                <span class="org-icon">🏢</span>
+                <span class="org-label">Branch:</span>
+                <span class="org-value">{{ userBranch }}</span>
+              </div>
+              <div class="org-row" *ngIf="userCompany">
+                <span class="org-icon">🏛️</span>
+                <span class="org-label">Company:</span>
+                <span class="org-value">{{ userCompany }}</span>
+              </div>
+            </div>
+
             <div class="leave-pill active" *ngIf="isOnLeave()">🔴 On Leave</div>
             <div class="leave-pill ok" *ngIf="!isOnLeave()">✅ Active</div>
           </div>
@@ -61,8 +75,24 @@ import { environment } from '../../../environments/environment';
             <div class="info-row">
               <span class="info-icon">🏢</span>
               <div>
-                <div class="info-label">Account Type</div>
-                <div class="info-val">{{ currentUser.user_table === 'new_user' ? 'Department User' : 'Staff' }}</div>
+                <div class="info-label">Department</div>
+                <div class="info-val">{{ currentUser.department || '—' }}</div>
+              </div>
+            </div>
+            <!-- ✅ Branch Info in Quick Info -->
+            <div class="info-row" *ngIf="userBranch">
+              <span class="info-icon">📍</span>
+              <div>
+                <div class="info-label">Branch</div>
+                <div class="info-val">{{ userBranch }}</div>
+              </div>
+            </div>
+            <!-- ✅ Company Info in Quick Info -->
+            <div class="info-row" *ngIf="userCompany">
+              <span class="info-icon">🏛️</span>
+              <div>
+                <div class="info-label">Company</div>
+                <div class="info-val">{{ userCompany }}</div>
               </div>
             </div>
             <div class="info-row">
@@ -126,6 +156,15 @@ import { environment } from '../../../environments/environment';
               <div class="field">
                 <label>Role</label>
                 <input type="text" class="input" [(ngModel)]="editForm.role" disabled>
+              </div>
+              <!-- ✅ Branch & Company (Read-only) -->
+              <div class="field">
+                <label>Branch</label>
+                <input type="text" class="input" [value]="userBranch || '—'" disabled>
+              </div>
+              <div class="field">
+                <label>Company</label>
+                <input type="text" class="input" [value]="userCompany || '—'" disabled>
               </div>
             </div>
           </div>
@@ -281,33 +320,68 @@ import { environment } from '../../../environments/environment';
 
     /* ── Cards ───────────────────────────────────────────────── */
     .card {
-  background: var(--surface); 
-  border-radius: var(--radius);
-  padding: 16px; 
-  box-shadow: var(--shadow); 
-  border: 1px solid var(--border);
-  margin: 5px;
-}
+      background: var(--surface); 
+      border-radius: var(--radius);
+      padding: 16px; 
+      box-shadow: var(--shadow); 
+      border: 1px solid var(--border);
+      margin: 5px;
+    }
 
-.card-title {
-  font-size: 11px; 
-  font-weight: 700; 
-  text-transform: uppercase;
-  letter-spacing: .06em; 
-  color: var(--primary); 
-  margin-bottom: 14px;
-  padding-bottom: 8px; 
-  border-bottom: 1px solid var(--border);
-  display: flex;                    /* ADD THIS */
-  justify-content: space-between;  /* ADD THIS */
-  align-items: center;             /* ADD THIS */
-}
+    .card-title {
+      font-size: 11px; 
+      font-weight: 700; 
+      text-transform: uppercase;
+      letter-spacing: .06em; 
+      color: var(--primary); 
+      margin-bottom: 14px;
+      padding-bottom: 8px; 
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-.header-actions { 
-  display: flex; 
-  gap: 8px; 
-  align-items: center;  /* Changed from 'right' to 'center' */
-}
+    .header-actions { 
+      display: flex; 
+      gap: 8px; 
+      align-items: center;
+    }
+
+    /* ── Organization Info ──────────────────────────────────── */
+    .org-info {
+      margin: 10px 0 8px;
+      padding: 10px 12px;
+      background: #f8f9fc;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+    }
+    .org-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 0;
+      font-size: 12px;
+    }
+    .org-row:not(:last-child) {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 5px;
+      margin-bottom: 3px;
+    }
+    .org-icon {
+      font-size: 14px;
+      flex-shrink: 0;
+    }
+    .org-label {
+      font-weight: 600;
+      color: var(--text-muted);
+      min-width: 52px;
+    }
+    .org-value {
+      color: var(--text);
+      font-weight: 500;
+    }
+
     /* Avatar */
     .avatar-card { text-align: center; }
     .avatar-wrap {
@@ -464,6 +538,11 @@ export class ClientProfileComponent implements OnInit {
   showPasswordFields = false;
   uploadingPhoto = false;
 
+  // ✅ New properties for branch and company
+  userBranch: string = '';
+  userCompany: string = '';
+  allBranches: any[] = [];
+
   editForm = {
     fullname: '', email: '', username: '', department: '', role: '',
     avatar_color: '#3b5bdb', photo_url: '', birthdate: '',
@@ -480,26 +559,57 @@ export class ClientProfileComponent implements OnInit {
 
   constructor(private authService: AuthService, private router: Router, private http: HttpClient) {}
   
-  ngOnInit() {
-    this.authService.currentUser$.subscribe(user => {
-      this.currentUser = user;
-      if (user) {
-        let workDaysArr = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        let dayOffArr = ['Saturday', 'Sunday'];
+ ngOnInit() {
+  this.authService.currentUser$.subscribe(user => {
+    this.currentUser = user;
+    if (user) {
+      // ✅ Cast to any to access branch_id
+      const userAny = user as any;
+      this.loadBranchInfo(userAny.branch_id);
+      
+      let workDaysArr = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+      let dayOffArr = ['Saturday', 'Sunday'];
 
-        try { if (user.workDays) workDaysArr = JSON.parse(user.workDays); } catch(e) {}
-        try { if (user.dayOff) dayOffArr = JSON.parse(user.dayOff); } catch(e) {}
-        try { if ((user as any).leaveEntries) this.leaveEntries = JSON.parse((user as any).leaveEntries); } catch(e) { this.leaveEntries = []; }
+      try { if (userAny.workDays) workDaysArr = JSON.parse(userAny.workDays); } catch(e) {}
+      try { if (userAny.dayOff) dayOffArr = JSON.parse(userAny.dayOff); } catch(e) {}
+      try { if (userAny.leaveEntries) this.leaveEntries = JSON.parse(userAny.leaveEntries); } catch(e) { this.leaveEntries = []; }
 
-        this.editForm = {
-          fullname: user.fullname || '', email: user.email || '', username: user.username || '',
-          department: user.department || '', role: user.role || '', avatar_color: user.avatar_color || '#3b5bdb',
-          photo_url: user.photo_url || '', birthdate: (user as any).birthdate || '',
-          workDays: workDaysArr, dayOff: dayOffArr,
-          workStart: (user as any).workStart || '08:00', workEnd: (user as any).workEnd || '17:00',
-          lunchStart: (user as any).lunchStart || '12:00', lunchEnd: (user as any).lunchEnd || '13:00'
-        };
-        this.updateDayOff();
+      this.editForm = {
+        fullname: user.fullname || '', email: user.email || '', username: user.username || '',
+        department: user.department || '', role: user.role || '', avatar_color: userAny.avatar_color || '#3b5bdb',
+        photo_url: userAny.photo_url || '', birthdate: userAny.birthdate || '',
+        workDays: workDaysArr, dayOff: dayOffArr,
+        workStart: userAny.workStart || '08:00', workEnd: userAny.workEnd || '17:00',
+        lunchStart: userAny.lunchStart || '12:00', lunchEnd: userAny.lunchEnd || '13:00'
+      };
+      this.updateDayOff();
+    }
+  });
+}
+
+  // ✅ Load branch and company info
+  loadBranchInfo(branchId: number) {
+    if (!branchId) {
+      this.userBranch = '—';
+      this.userCompany = '—';
+      return;
+    }
+
+    this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
+      next: (branches) => {
+        this.allBranches = branches || [];
+        const branch = this.allBranches.find(b => b.id === Number(branchId));
+        if (branch) {
+          this.userBranch = branch.name || '—';
+          this.userCompany = branch.company_name || '—';
+        } else {
+          this.userBranch = '—';
+          this.userCompany = '—';
+        }
+      },
+      error: () => {
+        this.userBranch = '—';
+        this.userCompany = '—';
       }
     });
   }
