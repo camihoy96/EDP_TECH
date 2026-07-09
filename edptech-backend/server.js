@@ -2584,9 +2584,11 @@ app.get('/api/debug/branch-departments/:branchId', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// Middleware to update last_activity
+// =============================================
+// AUTHENTICATION MIDDLEWARE
+// =============================================
 app.use(async (req, res, next) => {
-    // Skip for non-authenticated routes
+    // Skip public routes
     if (req.path.includes('/login') || req.path.includes('/register') || req.path.includes('/public')) {
         return next();
     }
@@ -2596,38 +2598,37 @@ app.use(async (req, res, next) => {
         return next();
     }
     
+    // Skip static files
+    if (req.path.includes('.css') || req.path.includes('.js') || req.path.includes('.png') || req.path.includes('.ico')) {
+        return next();
+    }
+    
     const authHeader = req.headers['authorization'];
     if (!authHeader) {
         return next();
     }
     
-    try {
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        if (decoded && decoded.id) {
-            // Try to update in new_user table first
-            let result = await pool.query(
-                'UPDATE new_user SET last_activity = NOW() WHERE id = ?',
-                [decoded.id]
-            );
-            
-            // If no rows affected, try users table
-            if (result.affectedRows === 0) {
-                await pool.query(
-                    'UPDATE users SET last_activity = NOW() WHERE id = ?',
-                    [decoded.id]
-                );
-            }
-            
-            // Store user info in request for later use
-            req.user = decoded;
-        }
-    } catch (error) {
-        // Silently fail - don't block the request
-        console.log('⚠️ Failed to update last_activity:', error.message);
+    const tokenParts = authHeader.split(' ');
+    if (tokenParts.length !== 2 || tokenParts[0] !== 'Bearer') {
+        return next();
     }
     
+    const token = tokenParts[1];
+    if (!token || token === 'null' || token === 'undefined' || token === '' || token.length < 10) {
+        return next();
+    }
+    
+    try {
+        const decoded = jwt.verify(token, 'secret_key');
+        req.user = decoded;
+        req.userId = decoded.id;
+        console.log('✅ Auth success for:', req.path, 'User:', decoded.id);
+    } catch (error) {
+        // Silent fail - don't block the request
+        if (error.name !== 'JsonWebTokenError' && error.name !== 'TokenExpiredError') {
+            console.log('⚠️ Auth middleware error:', error.message);
+        }
+    }
     next();
 });
 // GET - Get users by branch (for contact/chat)
@@ -3566,7 +3567,7 @@ app.get('/api/job-orders/my', async (req, res) => {
         let userBranchId = null;
         let userDeptId = null;
         let userFullname = null;
-        let userDeptName = null;  // ✅ ADD THIS
+        let userDeptName = null;
         
         // Get current user info
         const [userInfo] = await pool.query(
@@ -3597,32 +3598,51 @@ app.get('/api/job-orders/my', async (req, res) => {
             }
         }
         
-        console.log('👤 User:', { id: decoded.id, branchId: userBranchId, deptId: userDeptId, deptName: userDeptName, fullname: userFullname });
+        console.log('👤 User:', { 
+            id: decoded.id, 
+            branchId: userBranchId, 
+            deptId: userDeptId, 
+            deptName: userDeptName, 
+            fullname: userFullname 
+        });
         
-        // ✅ Get ALL orders that could be relevant
-       const [allOrders] = await pool.query(
-    `SELECT jo.*, 
-            b.name as forwarder_branch_name,
-            b.company_name as forwarder_company_name
-     FROM job_orders jo
-     LEFT JOIN branches b ON jo.branch_id = b.id
-     WHERE 
-        jo.submitted_by = ?
-        OR (jo.branch_id = ? AND jo.department_id = ? AND jo.is_forwarded = 0)
-        OR (jo.is_forwarded = 1 AND jo.forwarded_to_branch_id = ? AND jo.forwarded_to_department_id = ?)
-        OR (jo.is_forwarded = 1 AND jo.forwarded_by_name = ?)
-        OR (jo.received_name = ?)
-        OR LOWER(jo.request_dept) = LOWER(?)
-     ORDER BY jo.created_at DESC`,
-    [
-        decoded.id,
-        userBranchId, userDeptId,
-        userBranchId, userDeptId,
-        userFullname,
-        userFullname,
-        userDeptName
-    ]
-);
+        // ✅ Get ALL orders with forwarded-to info (no forwarded_by JOIN)
+        const [allOrders] = await pool.query(
+            `SELECT 
+                jo.*,
+                -- Forwarded To info (for "Our Job Orders" view)
+                fb.name as forwarded_to_branch_name,
+                fb.company_name as forwarded_to_company_name,
+                fd.name as forwarded_to_department_name,
+                -- Original branch info
+                b.name as branch_name,
+                b.company_name,
+                d.name as department_name,
+                -- Forwarder branch info (same as original branch for forwarded orders)
+                b.name as forwarder_branch_name,
+                b.company_name as forwarder_company_name
+             FROM job_orders jo
+             LEFT JOIN branches b ON jo.branch_id = b.id
+             LEFT JOIN departments d ON jo.department_id = d.id
+             LEFT JOIN branches fb ON jo.forwarded_to_branch_id = fb.id
+             LEFT JOIN departments fd ON jo.forwarded_to_department_id = fd.id
+             WHERE 
+                jo.submitted_by = ?
+                OR (jo.branch_id = ? AND jo.department_id = ? AND jo.is_forwarded = 0)
+                OR (jo.is_forwarded = 1 AND jo.forwarded_to_branch_id = ? AND jo.forwarded_to_department_id = ?)
+                OR (jo.is_forwarded = 1 AND jo.forwarded_by_name = ?)
+                OR (jo.received_name = ?)
+                OR LOWER(jo.request_dept) = LOWER(?)
+             ORDER BY jo.created_at DESC`,
+            [
+                decoded.id,
+                userBranchId, userDeptId,
+                userBranchId, userDeptId,
+                userFullname,
+                userFullname,
+                userDeptName
+            ]
+        );
         
         console.log(`📋 Found ${allOrders.length} orders for user ${decoded.id} (dept: ${userDeptName})`);
         
@@ -3905,22 +3925,24 @@ app.delete('/api/job-orders/:id', async (req, res) => {
 // GET - Get all job orders (Admin)
 app.get('/api/admin/job-orders', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        // ✅ USE req.user from middleware instead of verifying token again
+        const userId = req.user?.id;
+        const userRole = req.user?.role || '';
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!userId) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
         
-        console.log('📋 Admin GET all orders - user:', decoded.id, 'role:', decoded.role);
+        console.log('📋 Admin GET all orders - user:', userId, 'role:', userRole);
         
         // ✅ More flexible role check
-        const userRole = (decoded.role || '').toLowerCase();
+        const roleLower = (userRole || '').toLowerCase();
         const allowedRoles = ['admin', 'technician', 'head/manager', 'supervisor', 'branch manager', 'staff'];
         
         // Also check if user exists in users table (EDP staff)
-        let isAllowed = allowedRoles.includes(userRole);
+        let isAllowed = allowedRoles.includes(roleLower);
         if (!isAllowed) {
-            const [userCheck] = await pool.query('SELECT id, role FROM users WHERE id = ?', [decoded.id]);
+            const [userCheck] = await pool.query('SELECT id, role FROM users WHERE id = ?', [userId]);
             if (userCheck.length > 0) {
                 isAllowed = true;
             }
@@ -3962,18 +3984,18 @@ app.get('/api/admin/job-orders', async (req, res) => {
 // GET - Get single job order by ID (Admin)
 app.get('/api/admin/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        // ✅ USE req.user from middleware
+        const userId = req.user?.id;
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!userId) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
         
         const { id } = req.params;
         
         console.log('📋 Admin GET single order - id:', id);
         
         let queryId = id;
-        // Check if id is numeric or a job_order_number string
         if (!isNaN(id)) {
             queryId = parseInt(id);
         }

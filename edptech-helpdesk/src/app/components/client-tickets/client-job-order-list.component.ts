@@ -805,15 +805,18 @@ filteredBranches: any[] = [];
 filteredFilterDepartments: any[] = [];
   constructor(private http: HttpClient, private authService: AuthService, private router: Router) {}
 
-  ngOnInit() {
+ ngOnInit() {
     this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     this.loadReadOrdersFromStorage();
     this.loadNotificationMapFromStorage();
     this.loadAllOrders();
     this.loadFilterBranches();
+    // ✅ Set default view mode to 'our' so it shows on initial load
+    this.viewMode = 'our';
+    this.activeTab = 'all';
     document.addEventListener('mousemove', this.onDragMove.bind(this));
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
-  }
+}
    loadReadOrdersFromStorage() {
     const stored = localStorage.getItem('readJobOrders');
     if (stored) {
@@ -957,11 +960,11 @@ filteredFilterDepartments: any[] = [];
   }
 
 
-  private getAuthHeaders() {
+private getAuthHeaders() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    console.log('📤 Sending token:', token ? 'Token exists' : 'No token');
     return { 'Authorization': `Bearer ${token}` };
-  }
-
+}
   // ✅ Override setViewMode to mark all as read when switching views
   setViewMode(mode: string) {
     // ✅ Mark all orders in the view as read when switching
@@ -1123,6 +1126,9 @@ applyFilters() {
     const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
     const userId = Number(this.currentUser?.id);
     
+    console.log('🔍 Applying filters - ViewMode:', this.viewMode);
+    console.log('🔍 All orders:', this.allOrders.length);
+    
     // ✅ Branch filter
     if (this.filters.branchId) {
       filtered = filtered.filter(o => 
@@ -1139,7 +1145,8 @@ applyFilters() {
       );
     }
     
-   if (this.viewMode === 'our') {
+    if (this.viewMode === 'our') {
+      // ✅ OUR JOB ORDERS: Show orders that belong to us
       filtered = filtered.filter(jo => {
         const submittedById = Number(jo.submitted_by);
         const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
@@ -1147,27 +1154,66 @@ applyFilters() {
         const orderBranchId = Number(jo.branch_id);
         const orderDeptId = Number(jo.department_id || jo.dept_id);
         
-        // ❌ EXCLUDE: Forwarded TO us FROM another department (this is incoming)
+        console.log('🔍 Checking order:', jo.job_order_number, {
+          submittedById,
+          forwardedToBranchId,
+          forwardedToDeptId,
+          orderBranchId,
+          orderDeptId,
+          userBranchId,
+          userDeptId,
+          userId
+        });
+        
+        // ✅ INCLUDE: Orders created by the current user
+        if (submittedById === userId) {
+          console.log('✅ INCLUDED: Created by user');
+          return true;
+        }
+        
+        // ✅ INCLUDE: Orders from the user's department (not forwarded)
+        if (!jo.is_forwarded && 
+            orderBranchId === userBranchId && 
+            orderDeptId === userDeptId) {
+          console.log('✅ INCLUDED: From my department');
+          return true;
+        }
+        
+        // ✅ INCLUDE: Orders forwarded FROM our department (we sent it)
+        if (jo.is_forwarded && 
+            orderBranchId === userBranchId && 
+            orderDeptId === userDeptId) {
+          console.log('✅ INCLUDED: Forwarded from my department');
+          return true;
+        }
+        
+        // ✅ INCLUDE: Orders forwarded by the current user
+        if (jo.is_forwarded && jo.forwarded_by_name === this.currentUser?.fullname) {
+          console.log('✅ INCLUDED: Forwarded by me');
+          return true;
+        }
+        
+        // ❌ EXCLUDE: Orders forwarded TO us (these are incoming)
         if (jo.is_forwarded && 
             forwardedToBranchId === userBranchId && 
             forwardedToDeptId === userDeptId &&
             !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          console.log('❌ EXCLUDED: Forwarded to my department (incoming)');
           return false;
         }
         
-        // ❌ EXCLUDE: Non-forwarded order destined for our department but NOT created by us
-        // (This is an incoming order from admin or another source)
+        // ❌ EXCLUDE: Non-forwarded orders from other departments
         if (!jo.is_forwarded && 
-            orderBranchId === userBranchId && 
-            orderDeptId === userDeptId && 
-            submittedById !== userId) {
-          return false;  // ← Exclude incoming orders
+            orderBranchId !== userBranchId) {
+          console.log('❌ EXCLUDED: From other branch');
+          return false;
         }
         
-        // ✅ INCLUDE: Everything else (my orders, dept orders, forwarded FROM us)
-        return true;
+        console.log('❌ EXCLUDED: Default exclusion');
+        return false;
       });
     } else if (this.viewMode === 'incoming') {
+      // ✅ J.O. REQUEST MANAGEMENT: Show orders FOR our department FROM other departments
       filtered = filtered.filter(jo => {
         const submittedById = Number(jo.submitted_by);
         const orderBranchId = Number(jo.branch_id);
@@ -1180,6 +1226,7 @@ applyFilters() {
             forwardedToBranchId === userBranchId && 
             forwardedToDeptId === userDeptId &&
             !(orderBranchId === userBranchId && orderDeptId === userDeptId)) {
+          console.log('✅ INCOMING: Forwarded to my department');
           return true;
         }
         
@@ -1188,7 +1235,8 @@ applyFilters() {
             orderBranchId === userBranchId && 
             orderDeptId === userDeptId && 
             submittedById !== userId) {
-          return true;  // ← Include as incoming
+          console.log('✅ INCOMING: For my department from others');
+          return true;
         }
         
         return false;
@@ -1219,6 +1267,8 @@ applyFilters() {
         o.branch_name?.toLowerCase().includes(term)
       );
     }
+    
+    console.log('🔍 Filtered orders:', filtered.length);
     this.filteredOrders = filtered;
 }
   getStatusLabel(status: string): string {

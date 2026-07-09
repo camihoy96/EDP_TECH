@@ -209,6 +209,10 @@ export const routes: Routes = [
       { path: 'shortcuts', loadComponent: () => import('./components/client-dashboard/client-shortcuts.component').then(m => m.ClientShortcutsComponent) },
       { path: 'features', component: ClientFeaturesComponent }, 
       { path: 'client/request/approve', component: ClientRequisitionFormComponent },
+      { path: 'department-stats',  // ✅ Fixed: removed 'client/' prefix
+      loadComponent: () => import('./components/client-department-stats/client-department-stats.component')
+        .then(m => m.ClientDepartmentStatsComponent) 
+    }
     ]
   },
 

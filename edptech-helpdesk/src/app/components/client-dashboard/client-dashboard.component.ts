@@ -13,6 +13,7 @@ import type { ClientNotification } from '../../services/client-notification.serv
 import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
+import { ClientCalendarModalComponent } from '../client-calendar-modal/client-calendar-modal.component';
 
 interface ClientTicket {
   id: number;
@@ -28,7 +29,7 @@ interface ClientTicket {
 @Component({
   selector: 'app-client-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, ClientNotificationBellComponent, AiAssistantComponent],
+  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, ClientNotificationBellComponent, AiAssistantComponent,  ClientCalendarModalComponent],
   template: `
     <div class="app-container" (click)="closeAllMenus()">
 
@@ -101,7 +102,7 @@ interface ClientTicket {
     <div class="dropdown" *ngIf="activeMenu === 'tools'">
       <div class="dropdown-item" (click)="goTofeature()">📚 Features</div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="goToMyStats()">📊 My Statistics</div>
+      <div class="dropdown-item" (click)="goToMyStats()">📊 Department Statistics</div>
       <div class="dropdown-item" (click)="goToCalendar()">📅 Calendar</div>
       <div class="dropdown-divider"></div>
       <div class="dropdown-item" (click)="goToNotifications()">🔔 Notification History</div>
@@ -390,10 +391,13 @@ interface ClientTicket {
 </div>
     </div>
 
-   <!-- Notifications Modal -->
+   <!-- Notifications Modal - Draggable -->
 <div class="modal-overlay" *ngIf="showNotificationsModal" (click)="closeNotificationsModal()">
-  <div class="notif-modal" (click)="$event.stopPropagation()">
-    <div class="notif-modal-header">
+  <div class="notif-modal" 
+       (click)="$event.stopPropagation()"
+       [style.transform]="'translate(' + notifModalPosition.x + 'px, ' + notifModalPosition.y + 'px)'">
+    <div class="notif-modal-header" 
+         (mousedown)="onNotifHeaderMouseDown($event)">
       <h3>🔔 My Notifications</h3>
       <div class="notif-modal-header-actions">
         <button class="notif-action-btn" *ngIf="unreadNotificationsCount > 0" (click)="markAllNotificationsRead()">
@@ -406,6 +410,7 @@ interface ClientTicket {
       </div>
     </div>
     <div class="notif-modal-body">
+      <!-- Keep the rest of your notification content unchanged -->
       <div class="clear-confirm" *ngIf="showClearConfirm">
         <span class="clear-confirm-icon">🗑️</span>
         <p class="clear-confirm-text">Clear all notifications?</p>
@@ -438,7 +443,11 @@ interface ClientTicket {
     </div>
   </div>
 </div>
-
+<!-- Calendar Modal -->
+<app-client-calendar-modal 
+  *ngIf="showCalendarModal" 
+  (close)="closeCalendar()">
+</app-client-calendar-modal>
 <!-- Session Expiry Warning Modal -->
 <div class="modal-overlay" *ngIf="showLogoutWarning">
   <div class="logout-warning-modal" (click)="$event.stopPropagation()">
@@ -1217,45 +1226,63 @@ interface ClientTicket {
     /* ═══════════════════════════════════════════════════
        NOTIFICATIONS MODAL
     ═══════════════════════════════════════════════════ */
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(13,27,62,0.6);
-      backdrop-filter: blur(4px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 2000;
-      animation: fadeIn 0.15s ease;
-    }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.15s ease;
+}
+ .notif-modal {
+  background: white;
+  border: 2px solid #808080;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  width: 90%;
+  max-width: 540px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
 
-    .notif-modal {
-      background: var(--surface);
-      border-radius: var(--radius-lg);
-      width: 90%;
-      max-width: 540px;
-      max-height: 80vh;
-      display: flex;
-      flex-direction: column;
-      box-shadow: var(--shadow-lg);
-      animation: modalIn 0.2s ease;
-    }
+.notif-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #0a246a;
+  color: white;
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.notif-modal-header:active {
+  cursor: grabbing;
+}
     @keyframes modalIn {
       from { opacity: 0; transform: scale(0.96) translateY(8px); }
       to   { opacity: 1; transform: scale(1) translateY(0); }
     }
 
-    .notif-modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 14px 18px;
-      background: var(--navy);
-      color: white;
-      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      flex-shrink: 0;
-    }
+  
+    .modal-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 10px;
+  transition: background 0.15s;
+}
+
+.modal-close-btn:hover {
+  background: rgba(239, 68, 68, 0.5);
+}
     .notif-modal-header h3 { margin: 0; font-size: 14px; font-weight: 700; }
     .notif-modal-header-actions { display: flex; align-items: center; gap: 6px; }
     .modal-close-btn {
@@ -1501,11 +1528,22 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   // ✅ New properties for notifications
   ourOrdersUnreadCount: number = 0;
   incomingOrdersUnreadCount: number = 0;
-  
+  showCalendarModal = false;
   // ✅ Track which orders have been viewed/read
   readOrderIds: Set<number> = new Set<number>();
   notificationMap: Map<number, { type: 'incoming' | 'status_update', status: string }> = new Map();
-  
+// Dragging properties for notification modal
+isDraggingNotif = false;
+dragStartXNotif = 0;
+dragStartYNotif = 0;
+notifModalPosition = { x: 0, y: 0 };
+// Dragging properties for calendar modal
+isDraggingCalendar = false;
+dragStartXCalendar = 0;
+dragStartYCalendar = 0;
+calendarModalPosition = { x: 0, y: 0 };
+private dragTargetNotif: HTMLElement | null = null;
+private dragTargetCalendar: HTMLElement | null = null;
   // ✅ Store all orders
   allOrders: any[] = [];
   clientNotifications: ClientNotification[] = [];
@@ -1542,7 +1580,70 @@ ngOnInit() {
     }
   });
 }
+// ─── CALENDAR DRAGGING METHODS ───
 
+onCalendarHeaderMouseDown(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  if (!target.closest('.notif-modal-header')) return;
+  
+  this.isDraggingCalendar = true;
+  this.dragStartXCalendar = event.clientX - this.calendarModalPosition.x;
+  this.dragStartYCalendar = event.clientY - this.calendarModalPosition.y;
+  this.dragTargetCalendar = target;
+  this.dragTargetCalendar.style.cursor = 'grabbing';
+  event.preventDefault();
+
+  document.addEventListener('mousemove', this.onCalendarMouseMove.bind(this));
+  document.addEventListener('mouseup', this.onCalendarMouseUp.bind(this));
+}
+
+onCalendarMouseMove(event: MouseEvent) {
+  if (!this.isDraggingCalendar) return;
+  this.calendarModalPosition.x = event.clientX - this.dragStartXCalendar;
+  this.calendarModalPosition.y = event.clientY - this.dragStartYCalendar;
+}
+
+onCalendarMouseUp() {
+  if (this.isDraggingCalendar && this.dragTargetCalendar) {
+    this.dragTargetCalendar.style.cursor = 'grab';
+  }
+  this.isDraggingCalendar = false;
+  this.dragTargetCalendar = null;
+  document.removeEventListener('mousemove', this.onCalendarMouseMove.bind(this));
+  document.removeEventListener('mouseup', this.onCalendarMouseUp.bind(this));
+}
+// ─── NOTIFICATION MODAL DRAGGING METHODS ───
+
+onNotifHeaderMouseDown(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  if (!target.closest('.notif-modal-header')) return;
+  
+  this.isDraggingNotif = true;
+  this.dragStartXNotif = event.clientX - this.notifModalPosition.x;
+  this.dragStartYNotif = event.clientY - this.notifModalPosition.y;
+  this.dragTargetNotif = target;
+  this.dragTargetNotif.style.cursor = 'grabbing';
+  event.preventDefault();
+
+  document.addEventListener('mousemove', this.onNotifMouseMove.bind(this));
+  document.addEventListener('mouseup', this.onNotifMouseUp.bind(this));
+}
+
+onNotifMouseMove(event: MouseEvent) {
+  if (!this.isDraggingNotif) return;
+  this.notifModalPosition.x = event.clientX - this.dragStartXNotif;
+  this.notifModalPosition.y = event.clientY - this.dragStartYNotif;
+}
+
+onNotifMouseUp() {
+  if (this.isDraggingNotif && this.dragTargetNotif) {
+    this.dragTargetNotif.style.cursor = 'grab';
+  }
+  this.isDraggingNotif = false;
+  this.dragTargetNotif = null;
+  document.removeEventListener('mousemove', this.onNotifMouseMove.bind(this));
+  document.removeEventListener('mouseup', this.onNotifMouseUp.bind(this));
+}
   // =============================================
   // AUTHENTICATION & SECURITY
   // =============================================
@@ -2011,12 +2112,30 @@ refreshAll() {
   newJobOrder() { this.router.navigate(['/client/job-orders/new']); this.activeMenu = null; }
   newRequisition() { this.router.navigate(['/client/request/new']); this.activeMenu = null; }
   searchAll() { this.showSearchModal = true; this.activeMenu = null; }
-  goToMyStats() { this.router.navigate(['/client/my-stats']); this.activeMenu = null; }
-  goToCalendar() { this.router.navigate(['/client/calendar']); this.activeMenu = null; }
+  // Update goToMyStats to navigate to department statistics
+goToMyStats() { 
+  this.router.navigate(['/client/department-stats']); 
+  this.activeMenu = null; 
+}
+
+// Update checkSystemStatus to navigate to system status
+checkSystemStatus() { 
+  this.router.navigate(['/client/system-status']); 
+  this.activeMenu = null; 
+}
+// Update the goToCalendar method
+goToCalendar() { 
+  this.showCalendarModal = true;
+  this.activeMenu = null; 
+}
+
+// Add method to close calendar
+closeCalendar() {
+  this.showCalendarModal = false;
+}
   goTofeature() { this.router.navigate(['/client/features']); this.activeMenu = null; }
   goToNotifications() { this.showNotificationsModal = true; this.activeMenu = null; }
   downloadApp() { alert('📱 Mobile App\n\nComing soon! Available for iOS and Android.'); this.activeMenu = null; }
-  checkSystemStatus() { this.router.navigate(['/client/system-status']); this.activeMenu = null; }
   goToFAQ() { this.router.navigate(['/client/faq']); this.activeMenu = null; }
   goToVideoTutorials() { window.open('https://edptech.com/tutorials', '_blank'); this.activeMenu = null; }
   reportBug() { this.router.navigate(['/client/tickets/new'], { queryParams: { type: 'bug' } }); this.activeMenu = null; }
