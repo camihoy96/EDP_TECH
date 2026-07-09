@@ -2352,6 +2352,7 @@ app.get('/api/users', async (req, res) => {
                 u.lunchEnd,
                 u.leaveEntries,
                 u.created_at,
+                u.last_activity,
                 'users' as user_table,
                 b.name as branch_name,
                 b.company_name,
@@ -2386,6 +2387,7 @@ app.get('/api/users', async (req, res) => {
                 u.lunchEnd,
                 u.leaveEntries,
                 u.created_at,
+                u.last_activity,
                 'new_user' as user_table,
                 b.name as branch_name,
                 b.company_name,
@@ -2420,6 +2422,7 @@ app.get('/api/users', async (req, res) => {
                 u.lunchEnd,
                 u.leaveEntries,
                 u.created_at,
+                u.last_activity,
                 'new_user' as user_table,
                 b.name as branch_name,
                 b.company_name,
@@ -2437,7 +2440,6 @@ app.get('/api/users', async (req, res) => {
 
         if (isMainBranch) {
             // ✅ MAIN BRANCH: ONLY show admin IT staff from users table
-            // Exclude client users (new_user) entirely for main branch
             filteredUsers = adminUsers.filter(u => 
                 u.role === 'Technician' || 
                 u.role === 'Head/Manager' || 
@@ -2494,29 +2496,32 @@ app.get('/api/users', async (req, res) => {
         }
 
         // Format response
-        const formattedUsers = filteredUsers.map(user => ({
-            id: user.id,
-            username: user.username,
-            fullname: user.fullname,
-            email: user.email || '',
-            role: user.role,
-            department: user.department_name || user.department || '',
-            department_id: user.department_id,
-            branch_id: user.branch_id,
-            branch_name: user.branch_name || '',
-            company_name: user.company_name || '',
-            avatar_color: user.avatar_color || '#0a3a8c',
-            photo_url: user.photo_url,
-            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
-            dayOff: user.dayOff || '["Saturday","Sunday"]',
-            workStart: user.workStart || '09:00',
-            workEnd: user.workEnd || '17:00',
-            lunchStart: user.lunchStart || '12:00',
-            lunchEnd: user.lunchEnd || '13:00',
-            leaveEntries: user.leaveEntries || '[]',
-            user_table: user.user_table || 'users',
-            created_at: user.created_at
-        }));
+        // Format response - DO NOT set default values, keep them as null
+const formattedUsers = filteredUsers.map(user => ({
+    id: user.id,
+    username: user.username,
+    fullname: user.fullname,
+    email: user.email || '',
+    role: user.role,
+    department: user.department_name || user.department || '',
+    department_id: user.department_id,
+    branch_id: user.branch_id,
+    branch_name: user.branch_name || '',
+    company_name: user.company_name || '',
+    avatar_color: user.avatar_color || '#0a3a8c',
+    photo_url: user.photo_url,
+    // ✅ Keep original values, don't set defaults
+    workDays: user.workDays,      // Keep as null if null
+    dayOff: user.dayOff,          // Keep as null if null
+    workStart: user.workStart,    // Keep as null if null
+    workEnd: user.workEnd,        // Keep as null if null
+    lunchStart: user.lunchStart,  // Keep as null if null
+    lunchEnd: user.lunchEnd,      // Keep as null if null
+    leaveEntries: user.leaveEntries, // Keep as null if null
+    last_activity: user.last_activity,
+    user_table: user.user_table || 'users',
+    created_at: user.created_at
+}));
 
         console.log(`📤 Returning ${formattedUsers.length} users for contact list`);
         res.json(formattedUsers);
@@ -2579,51 +2584,51 @@ app.get('/api/debug/branch-departments/:branchId', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// Debug route - test users endpoint
-app.get('/api/debug/users-test', async (req, res) => {
+// Middleware to update last_activity
+app.use(async (req, res, next) => {
+    // Skip for non-authenticated routes
+    if (req.path.includes('/login') || req.path.includes('/register') || req.path.includes('/public')) {
+        return next();
+    }
+    
+    // Skip OPTIONS requests
+    if (req.method === 'OPTIONS') {
+        return next();
+    }
+    
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+        return next();
+    }
+    
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-
-        console.log('🔍 Debug - Decoded user ID:', decoded.id);
-
-        // Test new_user query
-        const [newUser] = await pool.query('SELECT id, username, branch_id, department_id FROM new_user WHERE id = ?', [decoded.id]);
         
-        // Test users query (IT staff)
-        const [itUsers] = await pool.query(`
-            SELECT id, username, role, branch_id, department_id, department 
-            FROM users 
-            WHERE role IN ('Technician', 'Head/Manager', 'Supervisor') 
-            LIMIT 10
-        `);
-        
-        // Test departments
-        const [depts] = await pool.query('SELECT id, branch_id, name FROM departments WHERE name LIKE "%edp%"');
-        
-        // Test branches
-        const [branches] = await pool.query('SELECT id, name, company_name FROM branches LIMIT 10');
-
-        res.json({
-            current_user_id: decoded.id,
-            new_user: newUser,
-            it_users: itUsers,
-            edp_departments: depts,
-            branches: branches,
-            timestamp: new Date().toISOString()
-        });
+        if (decoded && decoded.id) {
+            // Try to update in new_user table first
+            let result = await pool.query(
+                'UPDATE new_user SET last_activity = NOW() WHERE id = ?',
+                [decoded.id]
+            );
+            
+            // If no rows affected, try users table
+            if (result.affectedRows === 0) {
+                await pool.query(
+                    'UPDATE users SET last_activity = NOW() WHERE id = ?',
+                    [decoded.id]
+                );
+            }
+            
+            // Store user info in request for later use
+            req.user = decoded;
+        }
     } catch (error) {
-        console.error('❌ Debug route error:', error);
-        res.status(500).json({ 
-            error: error.message, 
-            stack: error.stack 
-        });
+        // Silently fail - don't block the request
+        console.log('⚠️ Failed to update last_activity:', error.message);
     }
+    
+    next();
 });
 // GET - Get users by branch (for contact/chat)
 app.get('/api/users/branch/:branchId', async (req, res) => {
@@ -2661,6 +2666,7 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
                 u.lunchEnd,
                 u.leaveEntries,
                 u.created_at,
+                u.last_activity,
                 'users' as user_table,
                 b.name as branch_name,
                 b.company_name,
@@ -2707,11 +2713,12 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
             filteredUsers = [...branchEdpUsers, ...mainBranchStaff];
         }
 
+        // ✅ Format response - KEEP ORIGINAL VALUES, DO NOT SET DEFAULTS
         const formattedUsers = filteredUsers.map(user => ({
             id: user.id,
             username: user.username,
             fullname: user.fullname,
-            email: user.email,
+            email: user.email || '',
             role: user.role,
             department: user.department_name || user.department || '',
             department_id: user.department_id,
@@ -2720,14 +2727,16 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
             company_name: user.company_name || '',
             avatar_color: user.avatar_color || '#0a3a8c',
             photo_url: user.photo_url,
-            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
-            dayOff: user.dayOff || '["Saturday","Sunday"]',
-            workStart: user.workStart || '09:00',
-            workEnd: user.workEnd || '17:00',
-            lunchStart: user.lunchStart || '12:00',
-            lunchEnd: user.lunchEnd || '13:00',
-            leaveEntries: user.leaveEntries || '[]',
-            user_table: user.user_table,
+            // ✅ Keep original values - no defaults!
+            workDays: user.workDays,
+            dayOff: user.dayOff,
+            workStart: user.workStart,
+            workEnd: user.workEnd,
+            lunchStart: user.lunchStart,
+            lunchEnd: user.lunchEnd,
+            leaveEntries: user.leaveEntries,
+            last_activity: user.last_activity,
+            user_table: user.user_table || 'users',
             created_at: user.created_at
         }));
 
@@ -2738,7 +2747,7 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// GET - Get main branch users (LSP Main)
+// GET - Get main branch users only
 app.get('/api/users/main-branch', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -2771,6 +2780,7 @@ app.get('/api/users/main-branch', async (req, res) => {
                 u.lunchEnd,
                 u.leaveEntries,
                 u.created_at,
+                u.last_activity,
                 'users' as user_table,
                 b.name as branch_name,
                 b.company_name,
@@ -2788,7 +2798,7 @@ app.get('/api/users/main-branch', async (req, res) => {
             id: user.id,
             username: user.username,
             fullname: user.fullname,
-            email: user.email,
+            email: user.email || '',
             role: user.role,
             department: user.department_name || user.department || '',
             department_id: user.department_id,
@@ -2797,14 +2807,16 @@ app.get('/api/users/main-branch', async (req, res) => {
             company_name: user.company_name || '',
             avatar_color: user.avatar_color || '#0a3a8c',
             photo_url: user.photo_url,
-            workDays: user.workDays || '["Monday","Tuesday","Wednesday","Thursday","Friday"]',
-            dayOff: user.dayOff || '["Saturday","Sunday"]',
-            workStart: user.workStart || '09:00',
-            workEnd: user.workEnd || '17:00',
-            lunchStart: user.lunchStart || '12:00',
-            lunchEnd: user.lunchEnd || '13:00',
-            leaveEntries: user.leaveEntries || '[]',
-            user_table: user.user_table,
+            // ✅ Keep original values - no defaults!
+            workDays: user.workDays,
+            dayOff: user.dayOff,
+            workStart: user.workStart,
+            workEnd: user.workEnd,
+            lunchStart: user.lunchStart,
+            lunchEnd: user.lunchEnd,
+            leaveEntries: user.leaveEntries,
+            last_activity: user.last_activity,
+            user_table: user.user_table || 'users',
             created_at: user.created_at
         }));
 

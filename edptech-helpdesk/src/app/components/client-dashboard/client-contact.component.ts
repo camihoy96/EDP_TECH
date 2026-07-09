@@ -26,6 +26,7 @@ interface SupportUser {
   lunchStart: string;
   lunchEnd: string;
   leaveEntries: string;
+  last_activity?: string;
   status: 'online' | 'offline' | 'busy' | 'lunch' | 'away' | 'onLeave';
   availabilityMessage: string;
   tableName: string;
@@ -67,7 +68,6 @@ interface ChatMessage {
           placeholder="Search by name, department...">
         <select [(ngModel)]="roleFilter" (change)="filterUsers()" class="filter-select">
           <option value="all">All Roles</option>
-          <option value="admin">Administrators</option>
           <option value="Technician">Technicians</option>
           <option value="Head/Manager">Head/Manager</option>
           <option value="Supervisor">Supervisors</option>
@@ -1240,15 +1240,29 @@ export class ClientContactComponent implements OnInit, OnDestroy {
   }
 
   private isLunchBreak(user: any): boolean {
+    if (!user.lunchStart || !user.lunchEnd) return false;
     return this.isWithinTimeRange(user.lunchStart, user.lunchEnd);
   }
 
   private isWithinWorkHours(user: any): boolean {
-    return this.isWithinTimeRange(user.workStart || '09:00', user.workEnd || '17:00');
+    if (!user.workStart || !user.workEnd) return false;
+    return this.isWithinTimeRange(user.workStart, user.workEnd);
   }
 
   calculateAvailability(user: any): SupportUser {
     console.log(`\n=== CALCULATING AVAILABILITY FOR: ${user.fullname} ===`);
+    console.log('📊 RAW USER DATA:', {
+        workStart: user.workStart,
+        workEnd: user.workEnd,
+        workDays: user.workDays,
+        dayOff: user.dayOff,
+        lunchStart: user.lunchStart,
+        lunchEnd: user.lunchEnd,
+        leaveEntries: user.leaveEntries,
+        type_workStart: typeof user.workStart,
+        type_workEnd: typeof user.workEnd,
+        last_activity: user.last_activity
+    });
     
     const now = new Date();
     const currentHour = now.getHours();
@@ -1257,36 +1271,77 @@ export class ClientContactComponent implements OnInit, OnDestroy {
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const todayName = dayNames[now.getDay()];
     
-    console.log(`Current date/time: ${now.toString()}`);
-    console.log(`Today is: ${todayName}`);
-    console.log(`Current time decimal: ${currentTimeDecimal}`);
+    // ✅ CHECK 1: Does the user have a work schedule configured?
+    const hasWorkStart = user.workStart !== null && 
+                         user.workStart !== undefined && 
+                         user.workStart !== 'null' && 
+                         user.workStart !== 'NULL' &&
+                         user.workStart.toString().trim() !== '' &&
+                         user.workStart !== 'undefined';
     
-    const hasWorkSchedule = user.workStart && user.workStart !== null && user.workStart !== 'null' && user.workStart.toString().trim() !== '' && 
-                           user.workEnd && user.workEnd !== null && user.workEnd !== 'null' && user.workEnd.toString().trim() !== '';
+    const hasWorkEnd = user.workEnd !== null && 
+                       user.workEnd !== undefined && 
+                       user.workEnd !== 'null' && 
+                       user.workEnd !== 'NULL' &&
+                       user.workEnd.toString().trim() !== '' &&
+                       user.workEnd !== 'undefined';
     
-    console.log(`Has work schedule? ${hasWorkSchedule}`);
-    console.log(`  workStart value: "${user.workStart}" (type: ${typeof user.workStart})`);
-    console.log(`  workEnd value: "${user.workEnd}" (type: ${typeof user.workEnd})`);
+    const hasWorkSchedule = hasWorkStart && hasWorkEnd;
     
-    const hasWorkDays = user.workDays && user.workDays !== null && user.workDays !== 'null' && user.workDays.toString().trim() !== '';
-    console.log(`Has work days? ${hasWorkDays}`);
-    console.log(`  workDays value: "${user.workDays}" (type: ${typeof user.workDays})`);
+    const hasWorkDays = user.workDays !== null && 
+                       user.workDays !== undefined && 
+                       user.workDays !== 'null' && 
+                       user.workDays !== 'NULL' &&
+                       user.workDays.toString().trim() !== '' &&
+                       user.workDays !== 'undefined' &&
+                       user.workDays !== '[]';
     
-    const hasDayOff = user.dayOff && user.dayOff !== null && user.dayOff !== 'null' && user.dayOff.toString().trim() !== '';
-    console.log(`Has day off? ${hasDayOff}`);
-    console.log(`  dayOff value: "${user.dayOff}" (type: ${typeof user.dayOff})`);
+    const hasDayOff = user.dayOff !== null && 
+                     user.dayOff !== undefined && 
+                     user.dayOff !== 'null' && 
+                     user.dayOff !== 'NULL' &&
+                     user.dayOff.toString().trim() !== '' &&
+                     user.dayOff !== 'undefined' &&
+                     user.dayOff !== '[]';
     
-    const hasLunchSchedule = user.lunchStart && user.lunchStart !== null && user.lunchStart !== 'null' && user.lunchStart.toString().trim() !== '' && 
-                            user.lunchEnd && user.lunchEnd !== null && user.lunchEnd !== 'null' && user.lunchEnd.toString().trim() !== '';
-    console.log(`Has lunch schedule? ${hasLunchSchedule}`);
-    console.log(`  lunchStart value: "${user.lunchStart}" (type: ${typeof user.lunchStart})`);
-    console.log(`  lunchEnd value: "${user.lunchEnd}" (type: ${typeof user.lunchEnd})`);
+    const hasLunchStart = user.lunchStart !== null && 
+                          user.lunchStart !== undefined && 
+                          user.lunchStart !== 'null' && 
+                          user.lunchStart !== 'NULL' &&
+                          user.lunchStart.toString().trim() !== '' &&
+                          user.lunchStart !== 'undefined';
     
-    const hasLeaveEntries = user.leaveEntries && user.leaveEntries !== null && user.leaveEntries !== 'null' && user.leaveEntries.toString().trim() !== '';
-    console.log(`Has leave entries? ${hasLeaveEntries}`);
-    console.log(`  leaveEntries value: "${user.leaveEntries}" (type: ${typeof user.leaveEntries})`);
+    const hasLunchEnd = user.lunchEnd !== null && 
+                        user.lunchEnd !== undefined && 
+                        user.lunchEnd !== 'null' && 
+                        user.lunchEnd !== 'NULL' &&
+                        user.lunchEnd.toString().trim() !== '' &&
+                        user.lunchEnd !== 'undefined';
     
-    if (!hasWorkSchedule && !hasWorkDays && !hasDayOff) {
+    const hasLunchSchedule = hasLunchStart && hasLunchEnd;
+    
+    const hasLeaveEntries = user.leaveEntries !== null && 
+                           user.leaveEntries !== undefined && 
+                           user.leaveEntries !== 'null' && 
+                           user.leaveEntries !== 'NULL' &&
+                           user.leaveEntries.toString().trim() !== '' &&
+                           user.leaveEntries !== 'undefined' &&
+                           user.leaveEntries !== '[]';
+    
+    console.log('Schedule check:', {
+        hasWorkStart,
+        hasWorkEnd,
+        hasWorkSchedule,
+        hasWorkDays,
+        hasDayOff,
+        hasLunchSchedule,
+        hasLeaveEntries,
+        workStart_value: user.workStart,
+        workEnd_value: user.workEnd
+    });
+    
+    // ✅ If NO schedule is configured at all, mark as "Schedule not set"
+    if (!hasWorkSchedule && !hasWorkDays && !hasDayOff && !hasLeaveEntries) {
         console.log('RESULT: SCHEDULE NOT SET');
         return {
             ...user,
@@ -1295,17 +1350,24 @@ export class ClientContactComponent implements OnInit, OnDestroy {
         };
     }
     
+    // ✅ If work schedule is partially set (work days but no hours)
+    if (!hasWorkSchedule && hasWorkDays) {
+        console.log('RESULT: WORK HOURS NOT SET (has work days but no hours)');
+        return {
+            ...user,
+            status: 'offline',
+            availabilityMessage: 'Work hours not set'
+        };
+    }
+    
+    // ✅ Check Leave
     if (hasLeaveEntries) {
         try {
             const leaves = JSON.parse(user.leaveEntries);
             if (Array.isArray(leaves) && leaves.length > 0) {
                 const todayDate = now.toISOString().split('T')[0];
-                console.log(`Checking leave for date: ${todayDate}`);
-                console.log(`Leave entries:`, leaves);
-                
                 const onLeave = leaves.some((leave: any) => {
                     const leaveDate = new Date(leave.date).toISOString().split('T')[0];
-                    console.log(`  Leave date: ${leaveDate}, Status: ${leave.status}, Match: ${leaveDate === todayDate && leave.status === 'approved'}`);
                     return leaveDate === todayDate && leave.status === 'approved';
                 });
                 
@@ -1323,12 +1385,10 @@ export class ClientContactComponent implements OnInit, OnDestroy {
         }
     }
     
+    // ✅ Check Day Off
     if (hasDayOff) {
         try {
             const daysOff = JSON.parse(user.dayOff);
-            console.log(`Parsed days off:`, daysOff);
-            console.log(`Checking if ${todayName} is a day off: ${Array.isArray(daysOff) && daysOff.includes(todayName)}`);
-            
             if (Array.isArray(daysOff) && daysOff.includes(todayName)) {
                 console.log('RESULT: DAY OFF');
                 return {
@@ -1339,8 +1399,6 @@ export class ClientContactComponent implements OnInit, OnDestroy {
             }
         } catch(e) {
             const daysOff = user.dayOff.split(',').map((d: string) => d.trim());
-            console.log(`Parsed days off (comma-separated):`, daysOff);
-            
             if (daysOff.includes(todayName)) {
                 console.log('RESULT: DAY OFF');
                 return {
@@ -1352,12 +1410,10 @@ export class ClientContactComponent implements OnInit, OnDestroy {
         }
     }
     
+    // ✅ Check Working Days
     if (hasWorkDays) {
         try {
             const workDays = JSON.parse(user.workDays);
-            console.log(`Parsed work days:`, workDays);
-            console.log(`Checking if ${todayName} is a working day: ${Array.isArray(workDays) && workDays.length > 0 && workDays.includes(todayName)}`);
-            
             if (Array.isArray(workDays) && workDays.length > 0 && !workDays.includes(todayName)) {
                 console.log('RESULT: NOT A WORKING DAY');
                 return {
@@ -1368,8 +1424,6 @@ export class ClientContactComponent implements OnInit, OnDestroy {
             }
         } catch(e) {
             const workDays = user.workDays.split(',').map((d: string) => d.trim());
-            console.log(`Parsed work days (comma-separated):`, workDays);
-            
             if (workDays.length > 0 && !workDays.includes(todayName)) {
                 console.log('RESULT: NOT A WORKING DAY');
                 return {
@@ -1381,14 +1435,36 @@ export class ClientContactComponent implements OnInit, OnDestroy {
         }
     }
     
-    if (!hasWorkSchedule) {
+    // ✅ Check Work Hours - ONLY if hasWorkSchedule is true
+    if (hasWorkSchedule) {
+        const workStartDecimal = this.parseTimeToDecimal(user.workStart);
+        const workEndDecimal = this.parseTimeToDecimal(user.workEnd);
+        
+        console.log(`Work hours: ${workStartDecimal} (${user.workStart}) to ${workEndDecimal} (${user.workEnd})`);
+        console.log(`Current time: ${currentTimeDecimal}`);
+        
+        const isWorkingHour = currentTimeDecimal >= workStartDecimal && 
+                             currentTimeDecimal <= workEndDecimal;
+        
+        if (!isWorkingHour) {
+            const startDisplay = this.formatTimeTo12Hour(user.workStart);
+            const endDisplay = this.formatTimeTo12Hour(user.workEnd);
+            console.log('RESULT: OFF DUTY');
+            return {
+                ...user,
+                status: 'offline',
+                availabilityMessage: `Not available (off duty ${startDisplay} - ${endDisplay})`
+            };
+        }
+        
+        // ✅ Check Lunch Break - ONLY if hasLunchSchedule is true
         if (hasLunchSchedule) {
             const lunchStartDecimal = this.parseTimeToDecimal(user.lunchStart);
             const lunchEndDecimal = this.parseTimeToDecimal(user.lunchEnd);
             const isLunchBreak = currentTimeDecimal >= lunchStartDecimal && 
                                 currentTimeDecimal <= lunchEndDecimal;
             
-            console.log(`Lunch check (no work hours): ${currentTimeDecimal} between ${lunchStartDecimal}-${lunchEndDecimal}? ${isLunchBreak}`);
+            console.log(`Lunch check: ${currentTimeDecimal} between ${lunchStartDecimal}-${lunchEndDecimal}? ${isLunchBreak}`);
             
             if (isLunchBreak) {
                 console.log('RESULT: ON LUNCH BREAK');
@@ -1400,70 +1476,55 @@ export class ClientContactComponent implements OnInit, OnDestroy {
             }
         }
         
-        if (hasWorkDays) {
-            console.log('RESULT: ON DUTY (work hours not set)');
-            return {
-                ...user,
-                status: 'online',
-                availabilityMessage: 'Available (work hours not set)'
-            };
+        // ✅ CHECK LOGIN/LOGOUT STATUS
+        // Check if user has been active recently
+        const lastActivity = user.last_activity;
+        if (lastActivity) {
+            const lastActivityTime = new Date(lastActivity);
+            const minutesSinceActivity = (now.getTime() - lastActivityTime.getTime()) / 60000;
+            const isOnline = minutesSinceActivity < 5; // User is online if active in last 5 minutes
+            
+            if (!isOnline) {
+                console.log(`RESULT: USER OFFLINE (last active ${Math.round(minutesSinceActivity)} minutes ago)`);
+                return {
+                    ...user,
+                    status: 'offline',
+                    availabilityMessage: `Last seen ${this.getTimeAgo(lastActivityTime)}`
+                };
+            }
         }
         
-        console.log('RESULT: AVAILABLE (schedule partially set)');
+        // ✅ ON DUTY (Online)
+        const endDisplay = this.formatTimeTo12Hour(user.workEnd);
+        console.log('RESULT: ON DUTY');
         return {
             ...user,
             status: 'online',
-            availabilityMessage: 'Available'
+            availabilityMessage: `On duty until ${endDisplay}`
         };
     }
     
-    const workStartDecimal = this.parseTimeToDecimal(user.workStart);
-    const workEndDecimal = this.parseTimeToDecimal(user.workEnd);
-    
-    console.log(`Work hours: ${workStartDecimal} (${user.workStart}) to ${workEndDecimal} (${user.workEnd})`);
-    console.log(`Current time: ${currentTimeDecimal}`);
-    
-    const isWorkingHour = currentTimeDecimal >= workStartDecimal && 
-                         currentTimeDecimal <= workEndDecimal;
-    
-    console.log(`Is within work hours? ${isWorkingHour}`);
-    
-    if (!isWorkingHour) {
-        const startDisplay = this.formatTimeTo12Hour(user.workStart);
-        const endDisplay = this.formatTimeTo12Hour(user.workEnd);
-        console.log('RESULT: OFF DUTY');
-        return {
-            ...user,
-            status: 'offline',
-            availabilityMessage: `Not available (off duty ${startDisplay} - ${endDisplay})`
-        };
-    }
-    
-    if (hasLunchSchedule) {
-        const lunchStartDecimal = this.parseTimeToDecimal(user.lunchStart);
-        const lunchEndDecimal = this.parseTimeToDecimal(user.lunchEnd);
-        const isLunchBreak = currentTimeDecimal >= lunchStartDecimal && 
-                            currentTimeDecimal <= lunchEndDecimal;
-        
-        console.log(`Lunch check: ${currentTimeDecimal} between ${lunchStartDecimal}-${lunchEndDecimal}? ${isLunchBreak}`);
-        
-        if (isLunchBreak) {
-            console.log('RESULT: ON LUNCH BREAK');
-            return {
-                ...user,
-                status: 'lunch',
-                availabilityMessage: `On lunch break until ${this.formatTimeTo12Hour(user.lunchEnd)}`
-            };
-        }
-    }
-    
-    const endDisplay = this.formatTimeTo12Hour(user.workEnd);
-    console.log('RESULT: ON DUTY');
+    // ✅ If we reach here, work schedule is not properly configured
+    console.log('RESULT: WORK HOURS NOT SET (default fallback)');
     return {
         ...user,
-        status: 'online',
-        availabilityMessage: `On duty until ${endDisplay}`
+        status: 'offline',
+        availabilityMessage: 'Work hours not set'
     };
+  }
+
+  getTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
   }
 
   private getLeaveReason(leaveEntries: string): string {
@@ -1538,10 +1599,10 @@ export class ClientContactComponent implements OnInit, OnDestroy {
             this.filteredUsers = [];
         }
     });
-}
+  }
 
-// Fallback method if the new endpoints don't work
-private loadSupportUsersFallback() {
+  // Fallback method if the new endpoints don't work
+  private loadSupportUsersFallback() {
     const headers = this.getHeaders();
     this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
         next: (users) => {
@@ -1575,7 +1636,7 @@ private loadSupportUsersFallback() {
         },
         error: (err) => console.error('Fallback failed:', err)
     });
-}
+  }
 
   filterUsers() {
     let filtered = [...this.supportUsers];
