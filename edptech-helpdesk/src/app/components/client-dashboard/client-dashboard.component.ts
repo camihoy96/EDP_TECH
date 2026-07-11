@@ -119,7 +119,6 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="goToContact()">📞 Contact IT Support</div>
       <div class="dropdown-divider"></div>
       <div class="dropdown-item" (click)="goToFAQ()">❓ FAQ</div>
-      <div class="dropdown-item" (click)="goToVideoTutorials()">🎥 Video Tutorials</div>
       <div class="dropdown-divider"></div>
       <div class="dropdown-item" (click)="goToAbout()">ℹ️ About Portal</div>
       <div class="dropdown-item" (click)="goToShortcuts()">⌨️ Keyboard Shortcuts</div>
@@ -128,6 +127,19 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="submitFeedback()">💬 Submit Feedback</div>
     </div>
   </div>
+<!-- Reports - Only for Branch Manager and Head/Manager roles -->
+<div class="menu-item" 
+     [class.open]="activeMenu === 'reports'" 
+     (click)="toggleMenu('reports')"
+     *ngIf=" isBranchManager() || isHeadOrManager()">
+  Reports
+  <div class="dropdown" *ngIf="activeMenu === 'reports'">
+    <div class="dropdown-item" (click)="openReportModal('daily')">📅 Daily Report</div>
+    <div class="dropdown-item" (click)="openReportModal('weekly')">📊 Weekly Report</div>
+    <div class="dropdown-item" (click)="openReportModal('monthly')">📈 Monthly Report</div>
+    <div class="dropdown-item" (click)="openReportModal('yearly')">📆 Yearly Report</div>
+  </div>
+</div>
 
   <!-- Branch Address -->
   <div class="menu-item branch-address-item" *ngIf="currentBranch?.address">
@@ -381,8 +393,9 @@ interface ClientTicket {
     <span class="status-sep">|</span>
     <span>Reg Key: {{ registrationKey }}</span>
   </div>
+  <span>By: St4nger Dev</span>
   <div class="status-right">
-    <span>Support Portal v2.0</span>
+  <span>Support Portal v2.0</span>
     <span class="status-sep">|</span>
     <span>{{ currentDate }}</span>
     <span class="status-sep">|</span>
@@ -1215,7 +1228,7 @@ interface ClientTicket {
       display: flex;
       justify-content: space-between;
       font-size: 10px;
-      color: rgba(255,255,255,0.4);
+      color: rgba(255, 255, 255, 0.95);
       flex-shrink: 0;
       letter-spacing: 0.02em;
     }
@@ -1537,6 +1550,12 @@ isDraggingNotif = false;
 dragStartXNotif = 0;
 dragStartYNotif = 0;
 notifModalPosition = { x: 0, y: 0 };
+canViewReports = false;
+showReportModal = false;
+reportType: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'daily';
+userRole = '';
+userDepartment = '';
+
 // Dragging properties for calendar modal
 isDraggingCalendar = false;
 dragStartXCalendar = 0;
@@ -1643,6 +1662,146 @@ onNotifMouseUp() {
   this.dragTargetNotif = null;
   document.removeEventListener('mousemove', this.onNotifMouseMove.bind(this));
   document.removeEventListener('mouseup', this.onNotifMouseUp.bind(this));
+}
+// Check if current user is a Branch Manager
+isBranchManager(): boolean {
+  const currentUser = JSON.parse(
+    localStorage.getItem('currentUser') || 
+    sessionStorage.getItem('currentUser') || 
+    '{}'
+  );
+  
+  const role = (currentUser.role || 
+                currentUser.role_name || 
+                currentUser.position || 
+                currentUser.job_title || 
+                '').toLowerCase().trim();
+  
+  return role === 'branch manager';
+}
+
+// Check if current user is Head/Manager (from department_roles or user table)
+isHeadOrManager(): boolean {
+  const currentUser = JSON.parse(
+    localStorage.getItem('currentUser') || 
+    sessionStorage.getItem('currentUser') || 
+    '{}'
+  );
+  
+  const role = (currentUser.role || 
+                currentUser.role_name || 
+                currentUser.position || 
+                currentUser.job_title || 
+                '').toLowerCase().trim();
+  
+  return role === 'head/manager' || 
+         role === 'head manager';
+}
+
+// Open report modal
+openReportModal(type: 'daily' | 'weekly' | 'monthly' | 'yearly') {
+  this.reportType = type;
+  this.showReportModal = true;
+  this.activeMenu = null;
+}
+// Add this to ngOnInit or after user data is loaded
+checkReportAccess() {
+  const currentUser = JSON.parse(
+    localStorage.getItem('currentUser') || 
+    sessionStorage.getItem('currentUser') || 
+    '{}'
+  );
+  
+  console.log('🔍 Checking report access for user:', currentUser);
+  
+  // Check multiple possible field names for the role
+  const role = (currentUser.role || 
+                currentUser.role_name || 
+                currentUser.position || 
+                currentUser.job_title || 
+                '').toLowerCase().trim();
+  
+  this.userRole = role;
+  this.userDepartment = currentUser.department || 
+                        currentUser.department_name || 
+                        '';
+  
+  console.log('👤 User Role:', this.userRole);
+  console.log('🏢 User Department:', this.userDepartment);
+  
+  // ✅ Match the same logic as isHeadOrSupervisor() in the requisition component
+  // Branch Manager and Head/Manager can view reports
+  this.canViewReports = 
+    role === 'head/manager' || 
+    role === 'head manager' ||
+    role === 'supervisor' || 
+    role === 'branch manager' ||
+    role === 'admin';
+  
+  console.log('✅ Can view reports:', this.canViewReports);
+  
+  // If still false, check department_roles table via API
+  if (!this.canViewReports && currentUser.department_id) {
+    this.verifyRoleFromDepartmentRoles(currentUser.department_id);
+  }
+}
+
+// Verify role against department_roles table
+verifyRoleFromDepartmentRoles(departmentId: number) {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+  
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/department-roles?department_id=${departmentId}`, { headers })
+    .subscribe({
+      next: (roles) => {
+        console.log('📋 Department roles from API:', roles);
+        
+        // Check if any role matches Head/Manager, Supervisor, or Branch Manager
+        const hasReportAccess = (roles || []).some((r: any) => {
+          const roleName = (r.role_name || '').toLowerCase().trim();
+          return roleName === 'head/manager' || 
+                 roleName === 'head manager' ||
+                 roleName === 'supervisor' || 
+                 roleName === 'branch manager';
+        });
+        
+        if (hasReportAccess) {
+          this.canViewReports = true;
+          console.log('✅ Reports access granted via department_roles check');
+        } else {
+          console.log('❌ No report access via department_roles');
+        }
+      },
+      error: (err) => {
+        console.error('❌ Error fetching department roles:', err);
+      }
+    });
+}
+
+// Add this method to verify role from the department_roles table
+verifyRoleFromApi(departmentId: number, branchId: number) {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any>(`${environment.apiUrl}/api/check-role?department_id=${departmentId}&branch_id=${branchId}`, { headers })
+    .subscribe({
+      next: (data) => {
+        console.log('📋 Role from API:', data);
+        if (data.role_name === 'Branch Manager' || data.role_name === 'Head/Manager') {
+          this.canViewReports = true;
+          console.log('✅ Reports access granted via API check');
+        }
+      },
+      error: (err) => {
+        console.error('❌ Error checking role:', err);
+      }
+    });
+}
+// Close report modal
+closeReportModal() {
+  this.showReportModal = false;
 }
   // =============================================
   // AUTHENTICATION & SECURITY
@@ -2137,7 +2296,6 @@ closeCalendar() {
   goToNotifications() { this.showNotificationsModal = true; this.activeMenu = null; }
   downloadApp() { alert('📱 Mobile App\n\nComing soon! Available for iOS and Android.'); this.activeMenu = null; }
   goToFAQ() { this.router.navigate(['/client/faq']); this.activeMenu = null; }
-  goToVideoTutorials() { window.open('https://edptech.com/tutorials', '_blank'); this.activeMenu = null; }
   reportBug() { this.router.navigate(['/client/tickets/new'], { queryParams: { type: 'bug' } }); this.activeMenu = null; }
   submitFeedback() { this.router.navigate(['/client/feedback']); this.activeMenu = null; }
 

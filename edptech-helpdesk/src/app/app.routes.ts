@@ -212,7 +212,27 @@ export const routes: Routes = [
       { path: 'department-stats',  // ✅ Fixed: removed 'client/' prefix
       loadComponent: () => import('./components/client-department-stats/client-department-stats.component')
         .then(m => m.ClientDepartmentStatsComponent) 
-    }
+    },
+    {
+  path: 'system-status',
+  loadComponent: () => import('./components/client-system-status/client-system-status.component')
+    .then(m => m.ClientSystemStatusComponent)
+}, 
+{
+  path: 'faq',
+  loadComponent: () => import('./components/client-faq/client-faq.component')
+    .then(m => m.ClientFaqComponent)
+},
+{
+  path: 'feedback',
+  loadComponent: () => import('./components/client-feedback/client-feedback.component')
+    .then(m => m.ClientFeedbackComponent)
+},
+{
+  path: 'reports',
+  loadComponent: () => import('./components/client-reports/client-reports-modal.component')
+    .then(m => m.ClientReportsModalComponent)
+}
     ]
   },
 

@@ -12,6 +12,15 @@ interface SlaStats {
   criticalTickets: number;
   avgResolutionTime: string;
   slaCompliance: number;
+  priorities: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  requisitions: number;
+  jobOrders: number;
+  timestamp: string;
 }
 
 @Component({
@@ -37,7 +46,7 @@ interface SlaStats {
         </div>
         <div class="stat-item resolved">
           <div class="stat-value">{{ slaStats.resolvedTickets }}</div>
-          <div class="stat-label">Resolved</div>
+          <div class="stat-label">Resolved Today</div>
         </div>
         <div class="stat-item critical">
           <div class="stat-value">{{ slaStats.criticalTickets }}</div>
@@ -48,7 +57,10 @@ interface SlaStats {
           <div class="stat-label">Avg Resolution</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value sla-compliance" [class.good]="slaStats.slaCompliance >= 90" [class.warning]="slaStats.slaCompliance < 90 && slaStats.slaCompliance >= 70" [class.bad]="slaStats.slaCompliance < 70">
+          <div class="stat-value sla-compliance" 
+               [class.good]="slaStats.slaCompliance >= 90" 
+               [class.warning]="slaStats.slaCompliance >= 70 && slaStats.slaCompliance < 90" 
+               [class.bad]="slaStats.slaCompliance < 70">
             {{ slaStats.slaCompliance }}%
           </div>
           <div class="stat-label">SLA Compliance</div>
@@ -63,9 +75,49 @@ interface SlaStats {
 
       <!-- Error State -->
       <div class="error-state" *ngIf="loadError">
-        <p>⚠️ Unable to load SLA data. Showing default SLA targets.</p>
+        <p>⚠️ Unable to load live SLA data. Showing default SLA targets.</p>
+      </div>
+
+      <!-- Priority Breakdown - FIXED with optional chaining -->
+      <div class="priority-section" *ngIf="slaStats?.priorities">
+        <h3>📊 Open Tickets by Priority</h3>
+        <div class="priority-bars">
+          <div class="priority-row">
+            <span class="priority-label critical">Critical</span>
+            <span class="priority-count">{{ slaStats?.priorities?.critical || 0 }}</span>
+            <div class="priority-track">
+              <div class="priority-fill critical" 
+                   [style.width.%]="getPriorityPercent('critical')"></div>
+            </div>
+          </div>
+          <div class="priority-row">
+            <span class="priority-label high">High</span>
+            <span class="priority-count">{{ slaStats?.priorities?.high || 0 }}</span>
+            <div class="priority-track">
+              <div class="priority-fill high" 
+                   [style.width.%]="getPriorityPercent('high')"></div>
+            </div>
+          </div>
+          <div class="priority-row">
+            <span class="priority-label medium">Medium</span>
+            <span class="priority-count">{{ slaStats?.priorities?.medium || 0 }}</span>
+            <div class="priority-track">
+              <div class="priority-fill medium" 
+                   [style.width.%]="getPriorityPercent('medium')"></div>
+            </div>
+          </div>
+          <div class="priority-row">
+            <span class="priority-label low">Low</span>
+            <span class="priority-count">{{ slaStats?.priorities?.low || 0 }}</span>
+            <div class="priority-track">
+              <div class="priority-fill low" 
+                   [style.width.%]="getPriorityPercent('low')"></div>
+            </div>
+          </div>
+        </div>
       </div>
       
+      <!-- SLA Cards -->
       <div class="sla-cards">
         <div class="sla-card critical">
           <div class="sla-icon">🔴</div>
@@ -107,7 +159,6 @@ interface SlaStats {
           <div class="info-item">
             <strong>Monday - Sunday:</strong> 8:00 AM - 7:00 PM
           </div>
-          
         </div>
       </div>
 
@@ -126,16 +177,16 @@ interface SlaStats {
           </div>
         </div>
       </div>
-      
-      <div class="back-link">
-        <a routerLink="/client/dashboard">← Back to Dashboard</a>
+
+      <!-- Last Updated - FIXED with optional chaining -->
+      <div class="last-updated" *ngIf="slaStats?.timestamp">
+        Last updated: {{ slaStats?.timestamp | date:'medium' }}
       </div>
     </div>
   `,
   styles: [`
     .sla-container {
       padding: 20px;
-      max-width: 900px;
       margin: 0 auto;
     }
     .page-header {
@@ -153,7 +204,6 @@ interface SlaStats {
       font-size: 13px;
     }
 
-    /* Stats Bar */
     .stats-bar {
       display: grid;
       grid-template-columns: repeat(6, 1fr);
@@ -161,8 +211,9 @@ interface SlaStats {
       margin-bottom: 20px;
       padding: 14px;
       background: white;
-      border: 1px solid #c0c0c0;
+      border: 1px solid #e0e0e0;
       border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .stat-item {
       text-align: center;
@@ -186,7 +237,6 @@ interface SlaStats {
     .sla-compliance.warning { color: #cc7700; }
     .sla-compliance.bad { color: #cc0000; }
 
-    /* Loading */
     .loading-state {
       text-align: center;
       padding: 30px;
@@ -202,7 +252,6 @@ interface SlaStats {
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Error */
     .error-state {
       text-align: center;
       padding: 16px;
@@ -214,6 +263,61 @@ interface SlaStats {
       color: #886600;
     }
 
+    .priority-section {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .priority-section h3 {
+      margin: 0 0 12px 0;
+      font-size: 13px;
+      color: #0a246a;
+    }
+    .priority-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .priority-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .priority-label {
+      width: 60px;
+      font-weight: 600;
+      font-size: 11px;
+    }
+    .priority-label.critical { color: #cc0000; }
+    .priority-label.high { color: #ff6600; }
+    .priority-label.medium { color: #cc8800; }
+    .priority-label.low { color: #008800; }
+    .priority-count {
+      width: 24px;
+      text-align: right;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .priority-track {
+      flex: 1;
+      height: 6px;
+      background: #f0f0f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .priority-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+    .priority-fill.critical { background: #cc0000; }
+    .priority-fill.high { background: #ff6600; }
+    .priority-fill.medium { background: #ffaa00; }
+    .priority-fill.low { background: #008800; }
+
     .sla-cards {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -222,11 +326,12 @@ interface SlaStats {
     }
     .sla-card {
       background: white;
-      border: 1px solid #c0c0c0;
+      border: 1px solid #e0e0e0;
       border-radius: 8px;
       padding: 18px;
       text-align: center;
       border-top: 4px solid #ccc;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .sla-card.critical { border-top-color: #cc0000; }
     .sla-card.high { border-top-color: #ff6600; }
@@ -247,13 +352,13 @@ interface SlaStats {
       line-height: 1.4;
     }
 
-    /* Info Sections */
     .info-section {
       background: white;
-      border: 1px solid #c0c0c0;
+      border: 1px solid #e0e0e0;
       border-radius: 8px;
       padding: 16px;
       margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .info-section h3 {
       margin: 0 0 12px 0;
@@ -271,6 +376,13 @@ interface SlaStats {
     }
     .info-item strong {
       color: #333;
+    }
+
+    .last-updated {
+      text-align: center;
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 12px;
     }
 
     .back-link {
@@ -302,7 +414,6 @@ export class ClientSlaInfoComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.loadSlaStats();
-    // Refresh every 30 seconds
     this.pollingSub = interval(30000).subscribe(() => this.loadSlaStats());
   }
 
@@ -319,28 +430,46 @@ export class ClientSlaInfoComponent implements OnInit, OnDestroy {
     const headers = this.getHeaders();
     this.http.get<any>(`${environment.apiUrl}/api/stats`, { headers }).subscribe({
       next: (data) => {
+        console.log('✅ SLA Stats loaded:', data);
         this.slaStats = {
           totalTickets: data.total || 0,
           openTickets: data.open || 0,
           resolvedTickets: data.resolvedToday || 0,
           criticalTickets: data.critical || 0,
-          avgResolutionTime: '~2h',
+          avgResolutionTime: data.avgResolutionTime || 'N/A',
           slaCompliance: data.slaCompliance || 98,
+          priorities: data.priorities || { critical: 0, high: 0, medium: 0, low: 0 },
+          requisitions: data.requisitions || 0,
+          jobOrders: data.jobOrders || 0,
+          timestamp: data.timestamp || new Date().toISOString()
         };
         this.loadError = false;
       },
-      error: () => {
+      error: (err) => {
+        console.error('❌ Error loading SLA stats:', err);
         this.loadError = true;
-        // Fallback to defaults
-        this.slaStats = {
-          totalTickets: 0,
-          openTickets: 0,
-          resolvedTickets: 0,
-          criticalTickets: 0,
-          avgResolutionTime: 'N/A',
-          slaCompliance: 98,
-        };
+        if (!this.slaStats) {
+          this.slaStats = {
+            totalTickets: 0,
+            openTickets: 0,
+            resolvedTickets: 0,
+            criticalTickets: 0,
+            avgResolutionTime: 'N/A',
+            slaCompliance: 98,
+            priorities: { critical: 0, high: 0, medium: 0, low: 0 },
+            requisitions: 0,
+            jobOrders: 0,
+            timestamp: new Date().toISOString()
+          };
+        }
       }
     });
+  }
+
+  getPriorityPercent(priority: string): number {
+    if (!this.slaStats) return 0;
+    const total = this.slaStats.openTickets || 1;
+    const count = this.slaStats.priorities[priority as keyof typeof this.slaStats.priorities] || 0;
+    return (count / total) * 100;
   }
 }
