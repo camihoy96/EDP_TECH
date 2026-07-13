@@ -937,13 +937,29 @@ export class DepartmentsComponent implements OnInit {
   // ============================================
   // LOAD DATA
   // ============================================
-  loadBranches() {
+ loadBranches() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
     
     this.http.get<any[]>(`${environment.apiUrl}/api/admin/branches`, { headers }).subscribe({
       next: (data) => {
         this.branches = data || [];
+        
+        // For non-admin users, auto-select their branch
+        const currentUser = JSON.parse(
+          localStorage.getItem('currentUser') || 
+          sessionStorage.getItem('currentUser') || 
+          '{}'
+        );
+        const userRole = (currentUser.role || '').toLowerCase().trim();
+        
+        if (userRole !== 'admin' && currentUser.branch_id) {
+          // Auto-select user's branch
+          this.selectedBranchId = String(currentUser.branch_id);
+          // Optionally filter branches to only show user's branch
+          // this.branches = this.branches.filter(b => b.id === currentUser.branch_id);
+        }
+        
         this.loadDepartments();
       },
       error: (err) => {
@@ -953,7 +969,6 @@ export class DepartmentsComponent implements OnInit {
       }
     });
   }
-
   loadDepartments() {
     const headers = this.getAuthHeaders();
     this.http.get<any[]>(`${environment.apiUrl}/api/departments`, { headers }).subscribe({

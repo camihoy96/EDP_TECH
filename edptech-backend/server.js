@@ -3079,7 +3079,6 @@ app.delete('/api/users/:table/:id', async (req, res) => {
 // ============================================
 // DEPARTMENTS API ENDPOINTS
 // ============================================
-
 // GET - Fetch all departments
 app.get('/api/departments', async (req, res) => {
     try {
@@ -3090,14 +3089,31 @@ app.get('/api/departments', async (req, res) => {
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
+        const userId = decoded.id;
         
         const { branch_id } = req.query;
         let query = 'SELECT * FROM departments';
         const params = [];
+        const conditions = [];
         
         if (branch_id) {
-            query += ' WHERE branch_id = ?';
+            conditions.push('branch_id = ?');
             params.push(branch_id);
+        }
+        
+        // Get user's role and branch for filtering
+        const [users] = await pool.query('SELECT role, branch_id FROM new_user WHERE id = ?', [userId]);
+        if (users.length > 0) {
+            const userRole = (users[0].role || '').toLowerCase();
+            // Non-admin users only see their branch
+            if (userRole !== 'admin') {
+                conditions.push('branch_id = ?');
+                params.push(users[0].branch_id);
+            }
+        }
+        
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
         }
         query += ' ORDER BY name ASC';
         
@@ -3119,9 +3135,10 @@ app.post('/api/departments', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const { name, location, branch_id } = req.body;
         
@@ -3164,9 +3181,10 @@ app.put('/api/departments/:id', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const { name, location, branch_id } = req.body;
         const deptId = req.params.id;
@@ -3214,9 +3232,10 @@ app.delete('/api/departments/:id', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const deptId = req.params.id;
         
@@ -3296,7 +3315,8 @@ app.post('/api/department-roles', async (req, res) => {
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
         const { department_id, department_name, role_name } = req.body;
         
@@ -3322,7 +3342,8 @@ app.put('/api/department-roles/:id', async (req, res) => {
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
         const { department_id, department_name, role_name } = req.body;
         
@@ -3348,7 +3369,8 @@ app.delete('/api/department-roles/:id', async (req, res) => {
         
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
         console.log('🗑️ Deleting role ID:', req.params.id);
         
@@ -6191,7 +6213,10 @@ app.get('/api/admin/branches', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const [rows] = await pool.query(
             'SELECT id, name, company_name, registration_key, address, is_active, created_at, updated_at FROM branches ORDER BY name'
@@ -6210,7 +6235,10 @@ app.get('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const [rows] = await pool.query(
             'SELECT id, name, company_name, registration_key, address, is_active, created_at, updated_at FROM branches WHERE id = ?',
@@ -6234,7 +6262,10 @@ app.post('/api/admin/branches', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const { name, company_name, registration_key, address, is_active } = req.body;
         
@@ -6276,7 +6307,10 @@ app.put('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const { name, company_name, registration_key, address, is_active } = req.body;
         const branchId = req.params.id;
@@ -6330,7 +6364,10 @@ app.delete('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const branchId = req.params.id;
         
@@ -6478,7 +6515,10 @@ app.get('/api/admin/database/info', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied. Admin only.' });
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const [tables] = await pool.query(`
             SELECT 
@@ -6548,7 +6588,10 @@ app.post('/api/admin/database/optimize/:table', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         await pool.query(`OPTIMIZE TABLE \`${req.params.table}\``);
         res.json({ success: true, message: 'Table optimized' });
@@ -6564,7 +6607,10 @@ app.post('/api/admin/database/repair/:table', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         await pool.query(`REPAIR TABLE \`${req.params.table}\``);
         res.json({ success: true, message: 'Table repaired' });
@@ -6580,7 +6626,10 @@ app.post('/api/admin/database/truncate/:table', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         await pool.query(`TRUNCATE TABLE \`${req.params.table}\``);
         res.json({ success: true, message: 'Table truncated' });
@@ -6596,7 +6645,10 @@ app.post('/api/admin/database/optimize-all', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const [tables] = await pool.query(
             `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'edptech_helpdesk'`
