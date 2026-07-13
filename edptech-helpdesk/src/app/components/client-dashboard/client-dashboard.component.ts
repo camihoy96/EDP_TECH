@@ -14,7 +14,7 @@ import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ClientCalendarModalComponent } from '../client-calendar-modal/client-calendar-modal.component';
-
+import { ClientReportsModalComponent } from '../client-reports/client-reports-modal.component';
 interface ClientTicket {
   id: number;
   ticket_number: string;
@@ -29,7 +29,7 @@ interface ClientTicket {
 @Component({
   selector: 'app-client-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, ClientNotificationBellComponent, AiAssistantComponent,  ClientCalendarModalComponent],
+  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, ClientNotificationBellComponent, AiAssistantComponent,  ClientCalendarModalComponent,  ClientReportsModalComponent ],
   template: `
     <div class="app-container" (click)="closeAllMenus()">
 
@@ -456,6 +456,12 @@ interface ClientTicket {
     </div>
   </div>
 </div>
+<!-- Reports Modal -->
+<app-client-reports-modal 
+  *ngIf="showReportModal" 
+  [reportType]="reportType"
+  (closeModal)="closeReportModal()">
+</app-client-reports-modal>
 <!-- Calendar Modal -->
 <app-client-calendar-modal 
   *ngIf="showCalendarModal" 

@@ -11,7 +11,7 @@ const fs = require('fs');
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 6001;
 const { createProxyMiddleware } = require('http-proxy-middleware');
 // These MUST be before your routes
 app.use(express.json());
@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:4200', 'http://192.168.10.250:4200', 'http://127.0.0.1:4200'],
+    origin: ['http://localhost:4000', 'http://192.168.10.250:4000', 'http://127.0.0.1:4000'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -27,11 +27,11 @@ app.use(cors({
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 const pool = mysql.createPool({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'edptech_helpdesk',
-    port: 3307,
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3307,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -8031,7 +8031,7 @@ app.post('/api/feedback', async (req, res) => {
     }
 });
 
-// GET - Reports (Branch Manager / Head Manager only)
+// GET - Reports (Branch Manager or Head/Manager only)
 app.get('/api/reports/:type', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -8040,31 +8040,39 @@ app.get('/api/reports/:type', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         const userId = decoded.id;
+        const reportType = req.params.type;
+        const scope = req.query.scope || 'department';
         
         // Get user info
         const [users] = await pool.query(
-            `SELECT u.id, u.department_id, u.branch_id, dr.role_name
+            `SELECT u.id, u.department_id, u.branch_id, u.role, u.department,
+                    b.name as branch_name, d.name as dept_name
              FROM new_user u
-             LEFT JOIN department_roles dr ON u.department_id = dr.department_id AND dr.role_name IN ('Branch Manager', 'Head/Manager')
+             LEFT JOIN branches b ON u.branch_id = b.id
+             LEFT JOIN departments d ON u.department_id = d.id
              WHERE u.id = ?`,
             [userId]
         );
         
-        if (users.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        if (users.length === 0) return res.status(404).json({ error: 'User not found' });
         
         const user = users[0];
+        const branchId = user.branch_id;
+        const departmentId = user.department_id;
+        const userRole = (user.role || '').toLowerCase().trim();
         
-        // Check if user has permission (Branch Manager or Head/Manager)
-        if (!user.role_name) {
-            return res.status(403).json({ error: 'Access denied. Only Branch Managers and Department Heads can view reports.' });
+        // Verify permissions
+        const isBranchManager = userRole === 'branch manager';
+        const isHeadManager = userRole === 'head/manager' || userRole === 'head manager';
+        
+        if (!isBranchManager && !isHeadManager) {
+            return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
         }
         
-        const branchId = user.branch_id;
-        const reportType = req.params.type;
+        // Determine scope
+        const isBranchScope = scope === 'branch' && isBranchManager;
         
-        // Calculate date range based on report type
+        // Calculate date range
         const now = new Date();
         let dateFrom = '';
         
@@ -8075,6 +8083,7 @@ app.get('/api/reports/:type', async (req, res) => {
             case 'weekly':
                 const weekStart = new Date(now);
                 weekStart.setDate(now.getDate() - now.getDay() + 1);
+                weekStart.setHours(0, 0, 0, 0);
                 dateFrom = weekStart.toISOString().split('T')[0];
                 break;
             case 'monthly':
@@ -8084,88 +8093,138 @@ app.get('/api/reports/:type', async (req, res) => {
                 dateFrom = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
                 break;
             default:
-                dateFrom = new Date().toISOString().split('T')[0];
+                dateFrom = now.toISOString().split('T')[0];
         }
         
-        // Fetch tickets for the branch
+        // Build WHERE clause and params
+        let ticketWhere = 'branch_id = ? AND DATE(created_at) >= ?';
+        let reqWhere = 'branch_id = ? AND DATE(created_at) >= ?';
+        let joWhere = 'branch_id = ? AND DATE(created_at) >= ?';
+        const queryParams = [branchId, dateFrom];
+        
+        if (!isBranchScope) {
+            ticketWhere += ' AND department_id = ?';
+            reqWhere += ' AND department_id = ?';
+            joWhere += ' AND department_id = ?';
+            queryParams.push(departmentId);
+        }
+        
+        // Fetch data
         const [tickets] = await pool.query(
-            `SELECT * FROM tickets WHERE branch_id = ? AND DATE(created_at) >= ?`,
-            [branchId, dateFrom]
+            `SELECT * FROM tickets WHERE ${ticketWhere}`, queryParams
         );
         
-        // Fetch requisitions
         const [requisitions] = await pool.query(
-            `SELECT * FROM requisitions WHERE branch_id = ? AND DATE(created_at) >= ?`,
-            [branchId, dateFrom]
+            `SELECT * FROM requisitions WHERE ${reqWhere}`, queryParams
         );
         
-        // Fetch job orders
         const [jobOrders] = await pool.query(
-            `SELECT * FROM job_orders WHERE branch_id = ? AND DATE(created_at) >= ?`,
-            [branchId, dateFrom]
+            `SELECT * FROM job_orders WHERE ${joWhere}`, queryParams
         );
         
-        // Fetch departments for this branch
-        const [departments] = await pool.query(
-            `SELECT DISTINCT d.id, d.name FROM departments d
-             JOIN tickets t ON t.department_id = d.id
-             WHERE t.branch_id = ? AND DATE(t.created_at) >= ?`,
-            [branchId, dateFrom]
-        );
+        // Fetch departments for branch (only for branch scope)
+        let departmentBreakdown = [];
+        if (isBranchScope) {
+            const [depts] = await pool.query(
+                `SELECT DISTINCT d.id, d.name FROM departments d
+                 JOIN tickets t ON t.department_id = d.id
+                 WHERE t.branch_id = ? AND DATE(t.created_at) >= ?`,
+                [branchId, dateFrom]
+            );
+            departmentBreakdown = depts.map((d) => ({
+                name: d.name,
+                count: tickets.filter((t) => t.department_id === d.id).length
+            }));
+        }
+        
+        // Calculate average resolution time
+        const resolvedTickets = tickets.filter((t) => t.status === 'resolved' && t.resolved_at);
+        let avgResolutionTime = 'N/A';
+        let slaCompliance = 0;
+        
+        if (resolvedTickets.length > 0) {
+            const totalHours = resolvedTickets.reduce((sum, t) => {
+                const created = new Date(t.created_at).getTime();
+                const resolved = new Date(t.resolved_at).getTime();
+                return sum + (resolved - created) / (1000 * 60 * 60);
+            }, 0);
+            
+            const avgHours = totalHours / resolvedTickets.length;
+            
+            if (avgHours < 1) {
+                avgResolutionTime = Math.round(avgHours * 60) + 'm';
+            } else if (avgHours < 24) {
+                avgResolutionTime = Math.round(avgHours) + 'h';
+            } else {
+                avgResolutionTime = (avgHours / 24).toFixed(1) + 'd';
+            }
+            
+            const compliant = resolvedTickets.filter((t) => {
+                const created = new Date(t.created_at).getTime();
+                const resolved = new Date(t.resolved_at).getTime();
+                return (resolved - created) / (1000 * 60 * 60) <= 24;
+            }).length;
+            
+            slaCompliance = Math.round((compliant / resolvedTickets.length) * 100);
+        }
         
         // Process tickets
         const ticketStats = {
             total: tickets.length,
-            open: tickets.filter(t => !['resolved', 'closed'].includes(t.status)).length,
-            resolved: tickets.filter(t => t.status === 'resolved').length,
+            open: tickets.filter((t) => !['resolved', 'closed'].includes(t.status)).length,
+            resolved: tickets.filter((t) => t.status === 'resolved').length,
+            closed: tickets.filter((t) => t.status === 'closed').length,
             byPriority: {
-                critical: tickets.filter(t => t.priority === 'critical').length,
-                high: tickets.filter(t => t.priority === 'high').length,
-                medium: tickets.filter(t => t.priority === 'medium').length,
-                low: tickets.filter(t => t.priority === 'low').length
+                critical: tickets.filter((t) => t.priority === 'critical').length,
+                high: tickets.filter((t) => t.priority === 'high').length,
+                medium: tickets.filter((t) => t.priority === 'medium').length,
+                low: tickets.filter((t) => t.priority === 'low').length
             },
             byStatus: {
-                new: tickets.filter(t => t.status === 'new').length,
-                assigned: tickets.filter(t => t.status === 'assigned').length,
-                in_progress: tickets.filter(t => t.status === 'in_progress').length,
-                pending: tickets.filter(t => t.status === 'pending').length,
-                resolved: tickets.filter(t => t.status === 'resolved').length,
-                closed: tickets.filter(t => t.status === 'closed').length
+                new: tickets.filter((t) => t.status === 'new').length,
+                assigned: tickets.filter((t) => t.status === 'assigned').length,
+                in_progress: tickets.filter((t) => t.status === 'in_progress').length,
+                pending: tickets.filter((t) => t.status === 'pending').length,
+                resolved: tickets.filter((t) => t.status === 'resolved').length,
+                closed: tickets.filter((t) => t.status === 'closed').length
             },
-            byDepartment: departments.map(d => ({
-                name: d.name,
-                count: tickets.filter(t => t.department_id === d.id).length
-            })),
-            avgResolutionTime: '2 hours', // Simplified
-            slaCompliance: 85 // Simplified
+            byDepartment: departmentBreakdown,
+            avgResolutionTime: avgResolutionTime,
+            slaCompliance: slaCompliance
         };
         
         // Process requisitions
         const reqStats = {
             total: requisitions.length,
-            pending: requisitions.filter(r => r.status === 'pending').length,
-            approved: requisitions.filter(r => r.status === 'approved').length,
-            released: requisitions.filter(r => r.status === 'released').length,
-            forwarded: requisitions.filter(r => r.is_forwarded === 1 || r.status === 'forwarded').length,
+            pending: requisitions.filter((r) => r.status === 'pending').length,
+            approved: requisitions.filter((r) => r.status === 'approved').length,
+            processing: requisitions.filter((r) => r.status === 'processing').length,
+            released: requisitions.filter((r) => r.status === 'released').length,
+            rejected: requisitions.filter((r) => r.status === 'rejected').length,
+            forwarded: requisitions.filter((r) => r.is_forwarded === 1 || r.status === 'forwarded').length,
             byDepartment: []
         };
         
         // Process job orders
         const joStats = {
             total: jobOrders.length,
-            pending: jobOrders.filter(j => j.status === 'pending').length,
-            approved: jobOrders.filter(j => j.status === 'approved' || j.status === 'received').length,
-            assigned: jobOrders.filter(j => j.status === 'assigned').length,
-            forwarded: jobOrders.filter(j => j.is_forwarded === 1 || j.status === 'forwarded').length,
-            done: jobOrders.filter(j => j.status === 'done').length,
+            pending: jobOrders.filter((j) => j.status === 'pending').length,
+            approved: jobOrders.filter((j) => j.status === 'approved' || j.status === 'received').length,
+            assigned: jobOrders.filter((j) => j.status === 'assigned').length,
+            forwarded: jobOrders.filter((j) => j.is_forwarded === 1 || j.status === 'forwarded').length,
+            done: jobOrders.filter((j) => j.status === 'done').length,
             byDepartment: []
         };
         
         // Summary
         const totalRequests = tickets.length + requisitions.length + jobOrders.length;
-        const completedRequests = ticketStats.resolved + reqStats.released + joStats.done;
+        const completedRequests = ticketStats.resolved + ticketStats.closed + reqStats.released + joStats.done;
         
         const response = {
+            period: reportType,
+            branch_name: user.branch_name || '',
+            department_name: user.dept_name || '',
+            scope: isBranchScope ? 'branch' : 'department',
             tickets: ticketStats,
             requisitions: reqStats,
             jobOrders: joStats,
@@ -8173,8 +8232,9 @@ app.get('/api/reports/:type', async (req, res) => {
                 totalRequests,
                 completedRequests,
                 completionRate: totalRequests > 0 ? Math.round((completedRequests / totalRequests) * 100) : 0,
-                departments: departments.length
-            }
+                departments: departmentBreakdown.length
+            },
+            generatedAt: new Date().toISOString()
         };
         
         res.json(response);

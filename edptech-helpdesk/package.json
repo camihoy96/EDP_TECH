@@ -4,8 +4,8 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "start:network": "ng serve --host 0.0.0.0 --port 4200",
-    "start:open": "ng serve --host 0.0.0.0 --port 4200 --open",
+    "start:network": "ng serve --host 0.0.0.0 --port 4000",
+    "start:open": "ng serve --host 0.0.0.0 --port 4000 --open",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
