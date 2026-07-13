@@ -227,26 +227,27 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
 </ng-container>
     
     <!-- System Section (admin only) -->
-    <ng-container *ngIf="currentUser?.role === 'admin'">
-      <div class="sidebar-divider"></div>
-      <div class="sidebar-section-title">System</div>
-      
-      <a routerLink="/admin/settings" routerLinkActive="active" class="sidebar-link">
-        <span class="nav-icon">⚙️</span> System Settings
-      </a>
-      
-      <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link">
-        <span class="nav-icon">🗄️</span> Database
-      </a>
-      
-      <a routerLink="/admin/logs" routerLinkActive="active" class="sidebar-link">
-        <span class="nav-icon">📋</span> System Logs
-      </a>
-      
-      <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">🩺</span> System Health
-</a>
-    </ng-container>
+   <!-- System Section (admin, head/manager, supervisor) -->
+<ng-container *ngIf="hasSystemAccess()">
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-section-title">System</div>
+  
+  <a routerLink="/admin/settings" routerLinkActive="active" class="sidebar-link">
+    <span class="nav-icon">⚙️</span> System Settings
+  </a>
+  
+  <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link">
+    <span class="nav-icon">🗄️</span> Database
+  </a>
+  
+  <a routerLink="/admin/logs" routerLinkActive="active" class="sidebar-link">
+    <span class="nav-icon">📋</span> System Logs
+  </a>
+  
+  <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link">
+    <span class="nav-icon">🩺</span> System Health
+  </a>
+</ng-container>
   </div>
   
   <div class="sidebar-footer">
@@ -3538,7 +3539,37 @@ resetCacheSelection() {
     allData: false
   };
 }
-
+hasSystemAccess(): boolean {
+  if (!this.currentUser) {
+    // Also check localStorage directly
+    const storedUser = JSON.parse(
+      localStorage.getItem('currentUser') || 
+      sessionStorage.getItem('currentUser') || 
+      '{}'
+    );
+    if (!storedUser.role) return false;
+    
+    const role = (storedUser.role || '').toLowerCase().trim();
+    
+    console.log('🔍 hasSystemAccess check - role:', role);
+    
+    return role === 'admin' || 
+           role === 'head/manager' || 
+           role === 'head manager' ||
+           role === 'supervisor' || 
+           role === 'branch manager';
+  }
+  
+  const role = (this.currentUser.role || '').toLowerCase().trim();
+  
+  console.log('🔍 hasSystemAccess check - role:', role);
+  
+  return role === 'admin' || 
+         role === 'head/manager' || 
+         role === 'head manager' ||
+         role === 'supervisor' || 
+         role === 'branch manager';
+}
 performCacheClear() {
   this.cacheClearing = true;
   this.cacheStatus = 'Clearing...';
