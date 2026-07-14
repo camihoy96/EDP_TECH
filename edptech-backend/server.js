@@ -2663,39 +2663,298 @@ app.get('/api/departments-with-roles', async (req, res) => {
     }
 });
 
-// Get all new_user users
-app.get('/api/new-users', async (req, res) => {
+// ============================================
+// USER MANAGEMENT API ENDPOINTS
+// ============================================
+async function checkUserPermission(userId) {
+    const [adminUsers] = await pool.query(
+        'SELECT id, role, branch_id, department_id FROM users WHERE id = ?',
+        [userId]
+    );
+    
+    if (adminUsers.length > 0) {
+        const user = adminUsers[0];
+        const role = (user.role || '').toLowerCase().trim();
+        return {
+            user: { ...user, user_table: 'users' },
+            role,
+            isAdmin: role === 'admin',
+            isHeadManager: role === 'head/manager' || role === 'head manager',
+            isSupervisor: role === 'supervisor',
+            isBranchManager: role === 'branch manager',
+            isTechnician: role === 'technician',
+            canView: true,
+            canManage: ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'technician'].includes(role),
+            canEdit: ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'].includes(role),
+            canDelete: ['admin', 'head/manager', 'head manager'].includes(role),
+            branchId: user.branch_id,
+            departmentId: user.department_id
+        };
+    }
+    
+    const [clientUsers] = await pool.query(
+        'SELECT id, role, branch_id, department_id FROM new_user WHERE id = ?',
+        [userId]
+    );
+    
+    if (clientUsers.length > 0) {
+        const user = clientUsers[0];
+        const role = (user.role || '').toLowerCase().trim();
+        return {
+            user: { ...user, user_table: 'new_user' },
+            role,
+            isAdmin: false,
+            isHeadManager: role === 'head/manager' || role === 'head manager',
+            isSupervisor: role === 'supervisor',
+            isBranchManager: role === 'branch manager',
+            isTechnician: false,
+            canView: true,
+            canManage: ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'].includes(role),
+            canEdit: ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'].includes(role),
+            canDelete: ['admin', 'head/manager', 'head manager'].includes(role),
+            branchId: user.branch_id,
+            departmentId: user.department_id
+        };
+    }
+    
+    return null;
+}
+
+async function canModifyUser(permission, targetTable, targetId) {
+    const [targetUsers] = await pool.query(
+        `SELECT id, role, branch_id FROM ${targetTable} WHERE id = ?`,
+        [targetId]
+    );
+    
+    if (targetUsers.length === 0) return { allowed: false, error: 'User not found' };
+    
+    const target = targetUsers[0];
+    
+    if (target.role === 'admin' && !permission.isAdmin) {
+        return { allowed: false, error: 'Cannot modify admin users.' };
+    }
+    
+    if (!permission.isAdmin && target.branch_id !== permission.branchId) {
+        return { allowed: false, error: 'Access denied. Different branch.' };
+    }
+    
+    return { allowed: true, target };
+}
+
+// ✅ GET - Fetch all users from users table (Team) - Admin
+app.get('/api/admin/users', async (req, res) => {
     try {
-        const [users] = await pool.query(
-            `SELECT id, username, fullname, role, department, email, 
-                    avatar_color, photo_url, branch_id, department_id,
-                    registration_key, created_at,
-                    locked_until, failed_attempts, is_verified
-             FROM new_user 
-             ORDER BY created_at DESC`
-        );
-        res.json(users);
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        
+        let query = `SELECT id, username, fullname, email, role, department, branch_id, 
+                            avatar_color, photo_url, locked_until, failed_attempts,
+                            workStart, workEnd, lunchStart, lunchEnd, dayOff, leaveEntries
+                     FROM users`;
+        const params = [];
+        
+        // ✅ Admin, Head/Manager, Supervisor can see ALL branches
+        const canSeeAllBranches = permission.isAdmin || 
+                                   permission.isHeadManager || 
+                                   permission.isSupervisor;
+        
+        if (!canSeeAllBranches && permission.branchId) {
+            query += ' WHERE branch_id = ?';
+            params.push(permission.branchId);
+        }
+        
+        query += ' ORDER BY fullname ASC';
+        
+        const [teamUsers] = await pool.query(query, params);
+        console.log('✅ Team users found:', teamUsers.length);
+        res.json(teamUsers);
+        
     } catch (error) {
+        console.error('❌ Error fetching team users:', error);
         res.status(500).json({ error: error.message });
     }
 });
-// Admin unlock user
-app.post('/api/users/:table/:id/unlock', async (req, res) => {
+// ✅ GET - Fetch all users from new_user table (Clients) - Admin
+app.get('/api/admin/new-users', async (req, res) => {
     try {
-        const { table, id } = req.params;
-        if (table !== 'users' && table !== 'new_user') {
-            return res.status(400).json({ message: 'Invalid table' });
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        
+        const { branch_id, department_id } = req.query;
+        
+        let query = `SELECT id, username, fullname, role, department, department_id, email, 
+                            avatar_color, photo_url, branch_id, registration_key, created_at,
+                            locked_until, failed_attempts, is_verified
+                     FROM new_user`;
+        const conditions = [];
+        const params = [];
+        
+        // ✅ Admin, Head/Manager, Supervisor can see ALL branches
+        // Only Technician and Branch Manager are restricted to their branch
+        const canSeeAllBranches = permission.isAdmin || 
+                                   permission.isHeadManager || 
+                                   permission.isSupervisor;
+        
+        if (!canSeeAllBranches) {
+            if (permission.branchId) {
+                conditions.push('branch_id = ?');
+                params.push(permission.branchId);
+            }
         }
-        await pool.query(`UPDATE ${table} SET locked_until = NULL WHERE id = ?`, [id]);
-        res.json({ success: true });
+        
+        // Optional filters
+        if (branch_id && canSeeAllBranches) {
+            conditions.push('branch_id = ?');
+            params.push(branch_id);
+        }
+        if (department_id) {
+            conditions.push('department_id = ?');
+            params.push(department_id);
+        }
+        
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+        
+        query += ' ORDER BY branch_id ASC, department ASC, fullname ASC';
+        
+        const [clientUsers] = await pool.query(query, params);
+        console.log('✅ Client users found:', clientUsers.length);
+        res.json(clientUsers);
+        
     } catch (error) {
+        console.error('❌ Error fetching client users:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Admin Reset Password (for admins resetting other users' passwords)
+// ✅ POST - Lock user - Admin
+app.post('/api/admin/users/:table/:id/lock', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        if (!permission.canManage) return res.status(403).json({ error: 'Access denied.' });
+        
+        const { table, id } = req.params;
+        if (table !== 'users' && table !== 'new_user') {
+            return res.status(400).json({ message: 'Invalid table' });
+        }
+        
+        const check = await canModifyUser(permission, table, id);
+        if (!check.allowed) return res.status(403).json({ error: check.error });
+        
+        const lockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await pool.query(
+            `UPDATE ${table} SET locked_until = ?, failed_attempts = 5 WHERE id = ?`, 
+            [lockUntil, id]
+        );
+        
+        res.json({ success: true, message: 'User locked for 24 hours' });
+        
+    } catch (error) {
+        console.error('❌ Error locking user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ POST - Unlock user - Admin
+app.post('/api/admin/users/:table/:id/unlock', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        if (!permission.canManage) return res.status(403).json({ error: 'Access denied.' });
+        
+        const { table, id } = req.params;
+        if (table !== 'users' && table !== 'new_user') {
+            return res.status(400).json({ message: 'Invalid table' });
+        }
+        
+        const check = await canModifyUser(permission, table, id);
+        if (!check.allowed) return res.status(403).json({ error: check.error });
+        
+        await pool.query(
+            `UPDATE ${table} SET locked_until = NULL, failed_attempts = 0 WHERE id = ?`, 
+            [id]
+        );
+        
+        res.json({ success: true, message: 'User unlocked successfully' });
+        
+    } catch (error) {
+        console.error('❌ Error unlocking user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ✅ DELETE - Delete user - Admin
+app.delete('/api/admin/users/:table/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        if (!permission.canDelete) {
+            return res.status(403).json({ error: 'Access denied. Only Admin and Head/Manager can delete users.' });
+        }
+        
+        const { table, id } = req.params;
+        if (table !== 'users' && table !== 'new_user') {
+            return res.status(400).json({ message: 'Invalid table' });
+        }
+        
+        const check = await canModifyUser(permission, table, id);
+        if (!check.allowed) return res.status(403).json({ error: check.error });
+        
+        await pool.query(`DELETE FROM ${table} WHERE id = ?`, [id]);
+        
+        res.json({ success: true, message: 'User deleted successfully' });
+        
+    } catch (error) {
+        console.error('❌ Error deleting user:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Admin Reset Password
 app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        if (!permission.canEdit) return res.status(403).json({ error: 'Access denied.' });
+        
         const { table, id } = req.params;
         const { newPassword } = req.body;
         
@@ -2704,6 +2963,9 @@ app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
         if (table !== 'users' && table !== 'new_user') {
             return res.status(400).json({ message: 'Invalid table' });
         }
+        
+        const check = await canModifyUser(permission, table, id);
+        if (!check.allowed) return res.status(403).json({ error: check.error });
         
         const userId = parseInt(id);
         if (isNaN(userId)) {
@@ -2718,7 +2980,6 @@ app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
             return res.status(400).json({ message: 'Password must be at least 6 characters' });
         }
         
-        // Hash the new password (no current password check for admin)
         const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
         const [result] = await pool.query(
             `UPDATE ${table} SET password = ? WHERE id = ?`, 
@@ -2737,124 +2998,57 @@ app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-// Admin reset password (without current password)
-app.post('/api/profile/:table/:id/change-password', async (req, res) => {
+
+// PUT - Update user profile
+app.put('/api/profile/:table/:id', async (req, res) => {
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const permission = await checkUserPermission(decoded.id);
+        if (!permission) return res.status(404).json({ error: 'User not found' });
+        if (!permission.canEdit) return res.status(403).json({ error: 'Access denied.' });
+        
         const { table, id } = req.params;
-        const { newPassword, adminReset } = req.body;
+        const { username, fullname, email, department, role, avatar_color } = req.body;
         
-        console.log(`🔒 Password change request for: ${table} user ID: ${id}`);
-        console.log('Request body:', req.body);
-        
-        // Validate table
-        if (table !== 'users' && table !== 'new_user') {
-            console.log('❌ Invalid table:', table);
-            return res.status(400).json({ message: 'Invalid table' });
+        if (!['users', 'new_user'].includes(table)) {
+            return res.status(400).json({ error: 'Invalid table' });
         }
         
-        // Validate ID
-        const userId = parseInt(id);
-        if (isNaN(userId)) {
-            console.log('❌ Invalid user ID:', id);
-            return res.status(400).json({ message: 'Invalid user ID' });
+        const check = await canModifyUser(permission, table, id);
+        if (!check.allowed) return res.status(403).json({ error: check.error });
+        
+        const updateFields = [];
+        const updateParams = [];
+        
+        if (username !== undefined) { updateFields.push('username = ?'); updateParams.push(username); }
+        if (fullname !== undefined) { updateFields.push('fullname = ?'); updateParams.push(fullname); }
+        if (email !== undefined) { updateFields.push('email = ?'); updateParams.push(email); }
+        if (department !== undefined) { updateFields.push('department = ?'); updateParams.push(department); }
+        if (role !== undefined) { updateFields.push('role = ?'); updateParams.push(role); }
+        if (avatar_color !== undefined) { updateFields.push('avatar_color = ?'); updateParams.push(avatar_color); }
+        
+        if (updateFields.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
         }
         
-        // Validate password
-        if (!newPassword || newPassword.trim() === '') {
-            console.log('❌ No password provided');
-            return res.status(400).json({ message: 'New password is required' });
-        }
+        updateParams.push(id);
+        await pool.query(
+            `UPDATE ${table} SET ${updateFields.join(', ')} WHERE id = ?`,
+            updateParams
+        );
         
-        // Check if this is an admin reset
-        const isAdminReset = adminReset === true || adminReset === 'true';
-        
-        if (isAdminReset) {
-            // ADMIN RESET - No password comparison needed
-            console.log('✅ Admin reset - hashing new password...');
-            
-            // Hash the new password
-            const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
-            console.log('✅ Password hashed successfully');
-            
-            // Update the password directly
-            const query = `UPDATE ${table} SET password = ? WHERE id = ?`;
-            const [result] = await pool.query(query, [hashedPassword, userId]);
-            
-            if (result.affectedRows === 0) {
-                console.log('❌ User not found');
-                return res.status(404).json({ message: 'User not found' });
-            }
-            
-            console.log('✅ Password reset successful for user ID:', userId);
-            return res.json({ success: true, message: 'Password reset by admin' });
-            
-        } else {
-            // USER CHANGE PASSWORD - Need current password verification
-            const { currentPassword } = req.body;
-            
-            if (!currentPassword) {
-                console.log('❌ Current password required for password change');
-                return res.status(400).json({ message: 'Current password is required' });
-            }
-            
-            // Get user's current password from database
-            const [users] = await pool.query(`SELECT password FROM ${table} WHERE id = ?`, [userId]);
-            
-            if (users.length === 0) {
-                return res.status(404).json({ message: 'User not found' });
-            }
-            
-            // Verify current password
-            const validPassword = await bcrypt.compare(currentPassword, users[0].password);
-            
-            if (!validPassword) {
-                return res.status(401).json({ message: 'Current password is incorrect' });
-            }
-            
-            // Hash and update new password
-            const hashedPassword = await bcrypt.hash(newPassword.trim(), 10);
-            await pool.query(`UPDATE ${table} SET password = ? WHERE id = ?`, [hashedPassword, userId]);
-            
-            console.log('✅ Password changed successfully for user ID:', userId);
-            return res.json({ success: true, message: 'Password changed successfully' });
-        }
+        res.json({ success: true, message: 'User updated successfully' });
         
     } catch (error) {
-        console.error('Password change error:', error);
-        console.error('Error stack:', error.stack);
-        return res.status(500).json({ message: error.message });
-    }
-});
-// Lock user
-app.post('/api/users/:table/:id/lock', async (req, res) => {
-    try {
-        const { table, id } = req.params;
-        if (table !== 'users' && table !== 'new_user') {
-            return res.status(400).json({ message: 'Invalid table' });
-        }
-        // Lock for 24 hours
-        const lockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await pool.query(`UPDATE ${table} SET locked_until = ? WHERE id = ?`, [lockUntil, id]);
-        res.json({ success: true });
-    } catch (error) {
+        console.error('❌ Error updating user:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
-// Delete user
-app.delete('/api/users/:table/:id', async (req, res) => {
-    try {
-        const { table, id } = req.params;
-        if (table !== 'users' && table !== 'new_user') {
-            return res.status(400).json({ message: 'Invalid table' });
-        }
-        await pool.query(`DELETE FROM ${table} WHERE id = ?`, [id]);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // ============================================
 // DEPARTMENTS API ENDPOINTS
 // ============================================
@@ -5249,11 +5443,255 @@ app.delete('/api/requisitions/:id', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
+// ============================================
+// SYSTEM HEALTH API ENDPOINTS
+// ============================================
 
+// GET - System Health Status
+app.get('/api/admin/health', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        // Get Node.js process info
+        const memoryUsage = process.memoryUsage();
+        const uptime = process.uptime();
+        
+        // Format uptime
+        const days = Math.floor(uptime / 86400);
+        const hours = Math.floor((uptime % 86400) / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        let uptimeStr = '';
+        if (days > 0) uptimeStr += `${days}d `;
+        if (hours > 0) uptimeStr += `${hours}h `;
+        uptimeStr += `${minutes}m`;
+        
+        // Memory
+        const memoryUsedMB = (memoryUsage.heapUsed / 1024 / 1024).toFixed(1);
+        const memoryTotalMB = (memoryUsage.heapTotal / 1024 / 1024).toFixed(1);
+        const memoryPercent = Math.round((memoryUsage.heapUsed / memoryUsage.heapTotal) * 100);
+        
+        // Get database stats
+        let dbStats = {
+            db_host: process.env.DB_HOST || 'localhost',
+            db_name: process.env.DB_NAME || 'edptech_helpdesk',
+            db_tables: 0,
+            db_size: 'N/A',
+            db_connections: 0
+        };
+        
+        try {
+            // Count tables
+            const [tables] = await pool.query(
+                `SELECT COUNT(*) as count FROM information_schema.TABLES 
+                 WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'`,
+                [process.env.DB_NAME || 'edptech_helpdesk']
+            );
+            dbStats.db_tables = tables[0].count;
+            
+            // Get database size
+            const [dbSize] = await pool.query(
+                `SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) AS size_mb 
+                 FROM information_schema.TABLES 
+                 WHERE TABLE_SCHEMA = ?`,
+                [process.env.DB_NAME || 'edptech_helpdesk']
+            );
+            dbStats.db_size = dbSize[0].size_mb ? `${dbSize[0].size_mb} MB` : '0 MB';
+            
+            // Get connection count
+            const [connections] = await pool.query('SHOW STATUS LIKE "Threads_connected"');
+            dbStats.db_connections = connections[0]?.Value || 0;
+        } catch (dbError) {
+            console.warn('Could not get some DB stats:', dbError.message);
+        }
+        
+        // Get disk usage (if available)
+        let diskUsage = { total: 'N/A', used: 'N/A', percent: 0 };
+        try {
+            const { execSync } = require('child_process');
+            const result = execSync('df -h / | tail -1').toString();
+            const parts = result.trim().split(/\s+/);
+            if (parts.length >= 5) {
+                diskUsage = {
+                    total: parts[1],
+                    used: parts[2],
+                    percent: parseInt(parts[4].replace('%', ''))
+                };
+            }
+        } catch (diskError) {
+            // Disk info not available (Windows or no permission)
+        }
+        
+        // Get CPU load
+        let cpuLoad = 0;
+        try {
+            const os = require('os');
+            const cpus = os.cpus();
+            const totalIdle = cpus.reduce((acc, cpu) => acc + cpu.times.idle, 0);
+            const totalTick = cpus.reduce((acc, cpu) => 
+                acc + cpu.times.user + cpu.times.nice + cpu.times.sys + cpu.times.idle + cpu.times.irq, 0);
+            cpuLoad = Math.round(((totalTick - totalIdle) / totalTick) * 100);
+        } catch (cpuError) {
+            // CPU info not available
+        }
+        
+        const healthData = {
+            // Uptime
+            uptime: uptimeStr,
+            uptime_seconds: Math.round(uptime),
+            
+            // Memory
+            memory_usage: `${memoryUsedMB} / ${memoryTotalMB} MB`,
+            memory_percent: memoryPercent,
+            memory_used_mb: parseFloat(memoryUsedMB),
+            memory_total_mb: parseFloat(memoryTotalMB),
+            
+            // Disk
+            disk_usage: diskUsage.used !== 'N/A' ? `${diskUsage.used} / ${diskUsage.total}` : 'N/A',
+            disk_percent: diskUsage.percent,
+            
+            // CPU
+            cpu_usage: cpuLoad > 0 ? `${cpuLoad}%` : 'N/A',
+            cpu_percent: cpuLoad,
+            
+            // Database
+            db_host: dbStats.db_host,
+            db_name: dbStats.db_name,
+            db_tables: dbStats.db_tables,
+            db_size: dbStats.db_size,
+            db_connections: dbStats.db_connections,
+            
+            // Services
+            api: 'online',
+            database: 'connected',
+            python_monitor: 'running',
+            
+            // Node.js info
+            node_version: process.version,
+            platform: process.platform,
+            pid: process.pid,
+            
+            // Timestamp
+            timestamp: new Date().toISOString()
+        };
+        
+        res.json(healthData);
+        
+    } catch (error) {
+        console.error('Error getting health status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Clear System Cache
+app.post('/api/admin/clear-cache', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        // Clear query cache
+        try {
+            await pool.query('RESET QUERY CACHE');
+        } catch (e) {
+            // Query cache might be disabled
+        }
+        
+        // Clear table cache
+        try {
+            await pool.query('FLUSH TABLES');
+        } catch (e) {
+            // May not have permission
+        }
+        
+        console.log('🗑️ System cache cleared by:', decoded.username);
+        
+        // Log the event
+        await logSystemEvent('info', 'system', 'System cache cleared', decoded.id, decoded.username);
+        
+        res.json({ success: true, message: 'Cache cleared successfully' });
+        
+    } catch (error) {
+        console.error('Error clearing cache:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Restart Services
+app.post('/api/admin/restart', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        console.log('🔄 Service restart requested by:', decoded.username);
+        
+        // Log before restart
+        try {
+            await logSystemEvent('warning', 'system', 'Service restart initiated', decoded.id, decoded.username);
+        } catch (e) {}
+        
+        // Send response immediately
+        res.json({ success: true, message: 'Services restarting...' });
+        
+        // Flush the response before exiting
+        if (res.flushHeaders) {
+            res.flushHeaders();
+        }
+        
+        // Give more time for the response to be sent
+        setTimeout(() => {
+            console.log('🔄 Restarting services...');
+            process.exit(0);
+        }, 2000); // Increased to 2 seconds
+        
+    } catch (error) {
+        console.error('Error restarting services:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Helper function to log system events (if not already defined)
+async function logSystemEvent(level, type, action, userId, username, ip) {
+    try {
+        await pool.query(
+            `INSERT INTO system_logs (level, type, action, user_id, user_name, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [level.toUpperCase(), type, action, userId, username || 'System', ip || '127.0.0.1']
+        );
+    } catch (error) {
+        console.error('Failed to log system event:', error.message);
+    }
+}
 // ============================================
 // COMPUTER MONITORING - Optimized
 // ============================================
-
 // ✅ NEW: GET - Distinct Locations (fast, direct from DB)
 app.get('/api/computers/locations', async (req, res) => {
     try {
@@ -7411,7 +7849,7 @@ app.get('/api/new-users', async (req, res) => {
 });
 
 // ============================================
-// SYSTEM LOGS API
+// SYSTEM LOGS API ENDPOINTS
 // ============================================
 
 // GET - Fetch system logs
@@ -7422,22 +7860,82 @@ app.get('/api/admin/logs', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
         }
         
-        const [logs] = await pool.query(
-            'SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 500'
-        );
+        // Support optional query params for filtering
+        const { level, type, date, search, limit } = req.query;
         
+        let query = 'SELECT * FROM system_logs';
+        const conditions = [];
+        const params = [];
+        
+        if (level && level !== 'all') {
+            conditions.push('level = ?');
+            params.push(level.toUpperCase());
+        }
+        
+        if (type && type !== 'all') {
+            conditions.push('LOWER(type) = LOWER(?)');
+            params.push(type);
+        }
+        
+        if (date && date !== 'all') {
+            const now = new Date();
+            let fromDate;
+            switch (date) {
+                case 'today':
+                    fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                    break;
+                case 'yesterday':
+                    fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                    break;
+                case 'week':
+                    fromDate = new Date(now);
+                    fromDate.setDate(now.getDate() - now.getDay());
+                    fromDate.setHours(0, 0, 0, 0);
+                    break;
+                case 'month':
+                    fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+                    break;
+            }
+            if (fromDate) {
+                conditions.push('created_at >= ?');
+                params.push(fromDate);
+            }
+        }
+        
+        if (search) {
+            conditions.push('(action LIKE ? OR user_name LIKE ? OR ip_address LIKE ? OR type LIKE ?)');
+            const searchTerm = `%${search}%`;
+            params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+        }
+        
+        if (conditions.length > 0) {
+            query += ' WHERE ' + conditions.join(' AND ');
+        }
+        
+        const logLimit = limit ? parseInt(limit) : 500;
+        query += ' ORDER BY created_at DESC LIMIT ?';
+        params.push(logLimit);
+        
+        console.log('📋 Logs query:', query, params);
+        
+        const [logs] = await pool.query(query, params);
         res.json(logs);
+        
     } catch (error) {
         console.error('Error loading logs:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// DELETE - Clear all logs
+// DELETE - Clear all system logs
 app.delete('/api/admin/logs', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -7445,18 +7943,80 @@ app.delete('/api/admin/logs', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
         }
         
-        await pool.query('TRUNCATE TABLE system_logs');
+        // Log who cleared the logs
+        console.log(`🗑️ System logs cleared by user: ${decoded.id} (${decoded.username})`);
         
-        res.json({ success: true, message: 'All logs cleared' });
+        const [result] = await pool.query('DELETE FROM system_logs');
+        
+        // Insert a log about clearing logs (using direct insert to avoid the log function)
+        await pool.query(
+            `INSERT INTO system_logs (level, type, action, user_id, user_name, ip_address)
+             VALUES ('WARNING', 'system', 'All system logs cleared', ?, ?, ?)`,
+            [decoded.id, decoded.username || 'Unknown', req.ip]
+        );
+        
+        res.json({ 
+            success: true, 
+            message: `Cleared ${result.affectedRows} log entries`,
+            cleared: result.affectedRows
+        });
+        
     } catch (error) {
+        console.error('Error clearing logs:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
+// GET - System log statistics
+app.get('/api/admin/logs/stats', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const userRole = (decoded.role || '').toLowerCase().trim();
+        
+        if (!allowedRoles.includes(userRole)) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        const [totalCount] = await pool.query('SELECT COUNT(*) as count FROM system_logs');
+        const [levelCounts] = await pool.query(
+            'SELECT level, COUNT(*) as count FROM system_logs GROUP BY level'
+        );
+        const [typeCounts] = await pool.query(
+            'SELECT type, COUNT(*) as count FROM system_logs GROUP BY type ORDER BY count DESC LIMIT 10'
+        );
+        const [todayCount] = await pool.query(
+            'SELECT COUNT(*) as count FROM system_logs WHERE DATE(created_at) = CURDATE()'
+        );
+        const [latestLog] = await pool.query(
+            'SELECT created_at FROM system_logs ORDER BY created_at DESC LIMIT 1'
+        );
+        
+        res.json({
+            total: totalCount[0].count,
+            today: todayCount[0].count,
+            byLevel: levelCounts,
+            byType: typeCounts,
+            latestEntry: latestLog.length > 0 ? latestLog[0].created_at : null
+        });
+        
+    } catch (error) {
+        console.error('Error loading log stats:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // Helper function to log system events
 async function logSystemEvent(level, type, userId, userName, userTable, action, ip) {
     try {

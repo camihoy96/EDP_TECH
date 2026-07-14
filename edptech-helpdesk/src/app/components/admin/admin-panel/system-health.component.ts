@@ -1,237 +1,470 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { interval, Subscription } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
 @Component({
   selector: 'app-system-health',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="health-container">
+      <!-- Header -->
       <div class="page-header">
-        <h2>🩺 System Health</h2>
-        <span class="header-sub">Monitor system performance and status</span>
-      </div>
-
-      <!-- Overall Status -->
-      <div class="status-banner" [class.healthy]="systemStatus === 'healthy'" [class.warning]="systemStatus === 'warning'" [class.critical]="systemStatus === 'critical'">
-        <span class="status-icon">{{ systemStatus === 'healthy' ? '✅' : systemStatus === 'warning' ? '⚠️' : '🚨' }}</span>
-        <span class="status-text">System Status: <strong>{{ systemStatus === 'healthy' ? 'All Systems Operational' : systemStatus === 'warning' ? 'Degraded Performance' : 'Critical Issues Detected' }}</strong></span>
-        <span class="status-time">Last checked: {{ lastChecked | date:'h:mm:ss a' }}</span>
-      </div>
-
-      <!-- Stats Grid -->
-      <div class="stats-grid">
-        <div class="health-card">
-          <div class="card-icon">⏱️</div>
-          <div class="card-info">
-            <div class="card-value">{{ healthData.uptime || '—' }}</div>
-            <div class="card-label">Uptime</div>
-          </div>
+        <div>
+          <h2>🩺 System Health</h2>
+          <span class="header-sub">Real-time system performance monitoring</span>
         </div>
-        <div class="health-card">
-          <div class="card-icon">🧠</div>
-          <div class="card-info">
-            <div class="card-value">{{ healthData.memory_usage || '—' }}</div>
-            <div class="card-label">Memory Usage</div>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" [style.width.%]="healthData.memory_percent || 0" [class.warning]="(healthData.memory_percent || 0) > 70" [class.critical]="(healthData.memory_percent || 0) > 90"></div></div>
-        </div>
-        <div class="health-card">
-          <div class="card-icon">💿</div>
-          <div class="card-info">
-            <div class="card-value">{{ healthData.disk_usage || '—' }}</div>
-            <div class="card-label">Disk Usage</div>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" [style.width.%]="healthData.disk_percent || 0" [class.warning]="(healthData.disk_percent || 0) > 70" [class.critical]="(healthData.disk_percent || 0) > 90"></div></div>
-        </div>
-        <div class="health-card">
-          <div class="card-icon">⚡</div>
-          <div class="card-info">
-            <div class="card-value">{{ healthData.cpu_usage || '—' }}</div>
-            <div class="card-label">CPU Usage</div>
-          </div>
-          <div class="progress-bar"><div class="progress-fill" [style.width.%]="healthData.cpu_percent || 0" [class.warning]="(healthData.cpu_percent || 0) > 70" [class.critical]="(healthData.cpu_percent || 0) > 90"></div></div>
+        <div class="header-actions">
+          <label class="auto-refresh-label">
+            <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+            Auto-refresh (30s)
+          </label>
+          <span class="last-updated" *ngIf="lastChecked">
+            Updated: {{ lastChecked | date:'medium' }}
+          </span>
         </div>
       </div>
 
-      <!-- Services Status -->
-      <div class="health-section">
-        <h3>🔌 Services Status</h3>
-        <div class="services-grid">
-          <div class="service-item" *ngFor="let service of services">
-            <div class="service-dot" [class.online]="service.status === 'online'" [class.offline]="service.status === 'offline'"></div>
-            <div class="service-info">
-              <strong>{{ service.name }}</strong>
-              <span>{{ service.status === 'online' ? 'Running' : 'Stopped' }}</span>
+      <!-- Overall Status Banner -->
+      <div class="status-banner" [class.healthy]="systemStatus === 'healthy'" 
+           [class.warning]="systemStatus === 'warning'" 
+           [class.critical]="systemStatus === 'critical'">
+        <div class="banner-left">
+          <span class="status-icon">{{ statusIcon }}</span>
+          <div>
+            <div class="status-title">{{ statusTitle }}</div>
+            <div class="status-desc">{{ statusDescription }}</div>
+          </div>
+        </div>
+        <div class="banner-right">
+          <span class="status-dot" [class.pulse]="systemStatus === 'healthy'"></span>
+          <span>{{ systemStatus === 'healthy' ? 'Operational' : systemStatus === 'warning' ? 'Degraded' : 'Critical' }}</span>
+        </div>
+      </div>
+
+      <!-- Loading -->
+      <div class="loading-bar" *ngIf="isLoading">
+        <div class="spinner"></div>
+        <span>Checking system health...</span>
+      </div>
+
+      <!-- Metrics Grid -->
+      <div class="metrics-grid">
+        <!-- Uptime -->
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">⏱️</span>
+            <span class="metric-label">Uptime</span>
+          </div>
+          <div class="metric-value">{{ healthData.uptime || '—' }}</div>
+          <div class="metric-sub">Since last restart</div>
+        </div>
+
+        <!-- Memory -->
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">🧠</span>
+            <span class="metric-label">Memory</span>
+            <span class="metric-badge" [class.warning]="(healthData.memory_percent || 0) > 70" 
+                                        [class.critical]="(healthData.memory_percent || 0) > 90">
+              {{ healthData.memory_percent || 0 }}%
+            </span>
+          </div>
+          <div class="metric-value">{{ healthData.memory_usage || '—' }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="healthData.memory_percent || 0" 
+                 [class.warning]="(healthData.memory_percent || 0) > 70" 
+                 [class.critical]="(healthData.memory_percent || 0) > 90"></div>
+          </div>
+        </div>
+
+        <!-- Disk -->
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">💿</span>
+            <span class="metric-label">Disk</span>
+            <span class="metric-badge" [class.warning]="(healthData.disk_percent || 0) > 70" 
+                                        [class.critical]="(healthData.disk_percent || 0) > 90">
+              {{ healthData.disk_percent || 0 }}%
+            </span>
+          </div>
+          <div class="metric-value">{{ healthData.disk_usage || '—' }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="healthData.disk_percent || 0" 
+                 [class.warning]="(healthData.disk_percent || 0) > 70" 
+                 [class.critical]="(healthData.disk_percent || 0) > 90"></div>
+          </div>
+        </div>
+
+        <!-- CPU -->
+        <div class="metric-card">
+          <div class="metric-header">
+            <span class="metric-icon">⚡</span>
+            <span class="metric-label">CPU</span>
+            <span class="metric-badge" [class.warning]="(healthData.cpu_percent || 0) > 70" 
+                                        [class.critical]="(healthData.cpu_percent || 0) > 90">
+              {{ healthData.cpu_percent || 0 }}%
+            </span>
+          </div>
+          <div class="metric-value">{{ healthData.cpu_usage || '—' }}</div>
+          <div class="progress-bar">
+            <div class="progress-fill" [style.width.%]="healthData.cpu_percent || 0" 
+                 [class.warning]="(healthData.cpu_percent || 0) > 70" 
+                 [class.critical]="(healthData.cpu_percent || 0) > 90"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Services & Database Row -->
+      <div class="info-row">
+        <!-- Services Status -->
+        <div class="health-section">
+          <h3>🔌 Services</h3>
+          <div class="services-list">
+            <div class="service-row" *ngFor="let service of services">
+              <div class="service-indicator" [class.online]="service.status === 'online'" 
+                                             [class.offline]="service.status === 'offline'"
+                                             [class.warning]="service.status === 'degraded'"></div>
+              <div class="service-info">
+                <span class="service-name">{{ service.name }}</span>
+                <span class="service-status">{{ service.status === 'online' ? 'Running' : service.status === 'degraded' ? 'Slow' : 'Stopped' }}</span>
+              </div>
+              <code class="service-port">{{ service.port }}</code>
+              <span class="service-latency" *ngIf="service.latency">{{ service.latency }}ms</span>
             </div>
-            <span class="service-port">{{ service.port }}</span>
           </div>
         </div>
-      </div>
 
-      <!-- Database Info -->
-      <div class="health-section">
-        <h3>🗄️ Database</h3>
-        <div class="db-grid">
-          <div class="db-item">
-            <span class="db-label">Status</span>
-            <span class="db-value online">● Connected</span>
-          </div>
-          <div class="db-item">
-            <span class="db-label">Host</span>
-            <span class="db-value">{{ healthData.db_host || 'localhost' }}</span>
-          </div>
-          <div class="db-item">
-            <span class="db-label">Database</span>
-            <span class="db-value">{{ healthData.db_name || 'edptech_helpdesk' }}</span>
-          </div>
-          <div class="db-item">
-            <span class="db-label">Tables</span>
-            <span class="db-value">{{ healthData.db_tables || 0 }}</span>
-          </div>
-          <div class="db-item">
-            <span class="db-label">Size</span>
-            <span class="db-value">{{ healthData.db_size || '—' }}</span>
-          </div>
-          <div class="db-item">
-            <span class="db-label">Connections</span>
-            <span class="db-value">{{ healthData.db_connections || 0 }}</span>
+        <!-- Database Info -->
+        <div class="health-section">
+          <h3>🗄️ Database</h3>
+          <div class="db-list">
+            <div class="db-row">
+              <span class="db-label">Status</span>
+              <span class="db-value">
+                <span class="status-indicator online"></span> Connected
+              </span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Host</span>
+              <span class="db-value">{{ healthData.db_host || '—' }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Database</span>
+              <span class="db-value">{{ healthData.db_name || '—' }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Tables</span>
+              <span class="db-value">{{ healthData.db_tables || 0 }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Size</span>
+              <span class="db-value">{{ healthData.db_size || '—' }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Connections</span>
+              <span class="db-value">{{ healthData.db_connections || 0 }}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Recent Events -->
-      <div class="health-section">
-        <h3>📋 Recent System Events</h3>
-        <table class="events-table">
-          <thead>
-            <tr><th>Time</th><th>Event</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let event of recentEvents">
-              <td>{{ event.time | date:'h:mm:ss a' }}</td>
-              <td>{{ event.message }}</td>
-              <td><span class="event-status" [class.success]="event.type === 'success'" [class.error]="event.type === 'error'">{{ event.type }}</span></td>
-            </tr>
-            <tr *ngIf="recentEvents.length === 0">
-              <td colspan="3" class="empty-row">No recent events</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- System Info -->
+        <div class="health-section">
+          <h3>💻 System</h3>
+          <div class="db-list">
+            <div class="db-row">
+              <span class="db-label">Node.js</span>
+              <span class="db-value">{{ healthData.node_version || '—' }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Platform</span>
+              <span class="db-value">{{ healthData.platform || '—' }}</span>
+            </div>
+            <div class="db-row">
+              <span class="db-label">Process ID</span>
+              <span class="db-value"><code>{{ healthData.pid || '—' }}</code></span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Actions -->
-      <div class="action-buttons">
-        <button class="btn btn-primary" (click)="refreshHealth()">🔄 Refresh</button>
-        <button class="btn btn-secondary" (click)="clearCache()">🗑️ Clear System Cache</button>
-        <button class="btn btn-secondary" (click)="restartService()">🔄 Restart Services</button>
+      <div class="action-bar">
+        <button class="btn btn-primary" (click)="refreshHealth()" [disabled]="isLoading">
+          {{ isLoading ? '⏳ Checking...' : '🔄 Refresh Now' }}
+        </button>
+        <button class="btn" (click)="clearCache()" [disabled]="isLoading">
+          🗑️ Clear Cache
+        </button>
+        <button class="btn btn-danger" (click)="restartService()" [disabled]="isLoading">
+          🔄 Restart Services
+        </button>
       </div>
 
-      <div class="toast-notification" [class.show]="showToast" [class.success]="toastType==='success'" [class.error]="toastType==='error'">
+      <!-- Toast -->
+      <div class="toast" [class.show]="showToast" [class.success]="toastType==='success'" [class.error]="toastType==='error'">
+        <span>{{ toastType === 'success' ? '✅' : '❌' }}</span>
         <span>{{ toastMessage }}</span>
+        <button class="toast-close" (click)="showToast = false">✕</button>
       </div>
     </div>
+    <!-- Restart Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showRestartModal" (click)="cancelRestart()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header danger">
+      <span>🔄 Restart System Services</span>
+      <button class="modal-close" (click)="cancelRestart()" [disabled]="restarting">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-message">
+          <h3>Restart all system services?</h3>
+          <p>This action will temporarily interrupt the following services:</p>
+          <ul class="affected-services">
+            <li>🔌 <strong>Node.js API</strong> - Port 8000</li>
+            <li>🗄️ <strong>MySQL Database</strong> - Port 3306</li>
+            <li>📁 <strong>File Storage</strong></li>
+          </ul>
+          <div class="warning-note">
+            <span class="note-icon">⏱️</span>
+            <span>Estimated downtime: <strong>10-30 seconds</strong>. Active users may experience brief interruptions.</span>
+          </div>
+          <p class="warning-text">Are you sure you want to continue?</p>
+        </div>
+      </div>
+      
+      <!-- Progress -->
+      <div class="restart-progress" *ngIf="restarting">
+        <div class="spinner"></div>
+        <p>Restarting services... Please wait.</p>
+        <p class="progress-note">Do not close this window.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" (click)="cancelRestart()" [disabled]="restarting">Cancel</button>
+      <button class="btn btn-danger" (click)="confirmRestart()" [disabled]="restarting">
+        {{ restarting ? '⏳ Restarting...' : '🔄 Yes, Restart Services' }}
+      </button>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
-    .health-container { padding: 20px; font-family: 'Segoe UI', sans-serif; font-size: 11px; }
-    .page-header { margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #e0e0e0; }
-    .page-header h2 { margin: 0 0 2px 0; color: #0a246a; font-size: 18px; }
+    .health-container { padding: 20px; font-family: 'Segoe UI', sans-serif; font-size: 12px; max-width: 1200px; margin: 0 auto; }
+    
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e0e0e0; flex-wrap: wrap; gap: 12px; }
+    .page-header h2 { margin: 0 0 4px 0; color: #0a246a; font-size: 20px; }
     .header-sub { color: #666; font-size: 11px; }
+    .header-actions { display: flex; align-items: center; gap: 16px; }
+    .auto-refresh-label { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #888; cursor: pointer; }
+    .last-updated { font-size: 10px; color: #aaa; font-style: italic; }
 
-    .status-banner { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-radius: 8px; margin-bottom: 20px; color: white; }
-    .status-banner.healthy { background: linear-gradient(135deg, #008800, #00aa44); }
-    .status-banner.warning { background: linear-gradient(135deg, #cc6600, #ee8833); }
-    .status-banner.critical { background: linear-gradient(135deg, #cc0000, #ee3333); }
-    .status-icon { font-size: 28px; }
-    .status-text { font-size: 14px; flex: 1; }
-    .status-time { font-size: 10px; opacity: 0.8; }
+    /* Status Banner */
+    .status-banner { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-radius: 10px; margin-bottom: 16px; color: white; }
+    .status-banner.healthy { background: linear-gradient(135deg, #059669, #10b981); }
+    .status-banner.warning { background: linear-gradient(135deg, #d97706, #f59e0b); }
+    .status-banner.critical { background: linear-gradient(135deg, #dc2626, #ef4444); }
+    .banner-left { display: flex; align-items: center; gap: 12px; }
+    .status-icon { font-size: 32px; }
+    .status-title { font-size: 15px; font-weight: 700; }
+    .status-desc { font-size: 11px; opacity: 0.9; margin-top: 2px; }
+    .banner-right { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: white; }
+    .status-dot.pulse { animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.4); } 50% { box-shadow: 0 0 0 8px rgba(255,255,255,0); } }
 
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 20px; }
-    .health-card { background: white; border: 1px solid #c0c0c0; border-radius: 8px; padding: 16px; display: flex; gap: 12px; flex-wrap: wrap; }
-    .card-icon { font-size: 28px; }
-    .card-info { flex: 1; }
-    .card-value { font-size: 18px; font-weight: 700; color: #333; }
-    .card-label { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
-    .progress-bar { width: 100%; height: 6px; background: #e8e8e8; border-radius: 3px; overflow: hidden; margin-top: 8px; }
-    .progress-fill { height: 100%; border-radius: 3px; background: #008800; transition: width 0.5s; }
-    .progress-fill.warning { background: #cc6600; }
-    .progress-fill.critical { background: #cc0000; }
+    .loading-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #f0f4ff; border: 1px solid #c0d0f0; border-radius: 6px; margin-bottom: 16px; font-size: 11px; color: #0a246a; }
+    .spinner { width: 16px; height: 16px; border: 2px solid #c0d0f0; border-top-color: #0a246a; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .health-section { background: white; border: 1px solid #c0c0c0; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-    .health-section h3 { margin: 0 0 14px 0; color: #0a246a; font-size: 14px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
+    /* Metrics Grid */
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .metric-card { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .metric-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .metric-icon { font-size: 18px; }
+    .metric-label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; flex: 1; }
+    .metric-badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; background: #dcfce7; color: #166534; }
+    .metric-badge.warning { background: #fef3c7; color: #92400e; }
+    .metric-badge.critical { background: #fee2e2; color: #991b1b; }
+    .metric-value { font-size: 16px; font-weight: 700; color: #1a1d24; margin-bottom: 4px; }
+    .metric-sub { font-size: 10px; color: #999; }
+    .progress-bar { width: 100%; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; margin-top: 8px; }
+    .progress-fill { height: 100%; border-radius: 3px; background: #22c55e; transition: width 0.5s ease; }
+    .progress-fill.warning { background: #f59e0b; }
+    .progress-fill.critical { background: #ef4444; }
 
-    .services-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; }
-    .service-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f9f9f9; border-radius: 6px; }
-    .service-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-    .service-dot.online { background: #008800; }
-    .service-dot.offline { background: #cc0000; }
-    .service-info { flex: 1; }
-    .service-info strong { display: block; font-size: 11px; color: #333; }
-    .service-info span { font-size: 10px; color: #888; }
-    .service-port { font-size: 10px; color: #0a246a; font-weight: 600; }
+    /* Info Row */
+    .info-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 18px; }
+    .health-section { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+    .health-section h3 { margin: 0 0 14px 0; color: #0a246a; font-size: 13px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0; }
 
-    .db-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
-    .db-item { padding: 10px 14px; background: #f9f9f9; border-radius: 6px; }
-    .db-label { display: block; font-size: 9px; color: #888; text-transform: uppercase; margin-bottom: 2px; }
-    .db-value { font-size: 12px; font-weight: 600; color: #333; }
-    .db-value.online { color: #008800; }
+    /* Services */
+    .services-list { display: flex; flex-direction: column; gap: 8px; }
+    .service-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+    .service-row:last-child { border-bottom: none; }
+    .service-indicator { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .service-indicator.online { background: #22c55e; }
+    .service-indicator.offline { background: #ef4444; }
+    .service-indicator.warning { background: #f59e0b; }
+    .service-info { flex: 1; display: flex; flex-direction: column; }
+    .service-name { font-size: 11px; font-weight: 600; color: #333; }
+    .service-status { font-size: 10px; color: #888; }
+    .service-port { font-size: 10px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; color: #666; }
+    .service-latency { font-size: 10px; color: #0a246a; font-weight: 600; }
 
-    .events-table { width: 100%; border-collapse: collapse; }
-    .events-table th { background: #f0f4f8; padding: 8px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: left; }
-    .events-table td { padding: 7px 12px; border-bottom: 1px solid #eee; font-size: 11px; color: #333; }
-    .event-status { padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: capitalize; }
-    .event-status.success { background: #eeffee; color: #008800; }
-    .event-status.error { background: #ffecec; color: #cc0000; }
-    .empty-row { text-align: center; padding: 20px; color: #888; }
+    /* Database */
+    .db-list { display: flex; flex-direction: column; gap: 6px; }
+    .db-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f5f5f5; }
+    .db-row:last-child { border-bottom: none; }
+    .db-label { font-size: 10px; color: #888; text-transform: uppercase; font-weight: 600; }
+    .db-value { font-size: 11px; font-weight: 600; color: #333; display: flex; align-items: center; gap: 6px; }
+    .status-indicator { width: 7px; height: 7px; border-radius: 50%; }
+    .status-indicator.online { background: #22c55e; }
+    code { font-family: monospace; font-size: 10px; background: #f5f5f5; padding: 2px 5px; border-radius: 2px; }
+    /* Modal */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+  z-index: 3000; animation: fadeIn 0.2s ease; padding: 20px;
+}
+.modal-dialog {
+  background: white; border-radius: 12px; width: 100%; max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3); animation: slideUp 0.3s ease;
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 14px 20px; color: white; border-radius: 12px 12px 0 0;
+  font-size: 13px; font-weight: 700;
+}
+.modal-header.danger { background: linear-gradient(135deg, #dc2626, #b91c1c); }
+.modal-close {
+  background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+  color: white; cursor: pointer; padding: 4px 10px; border-radius: 4px; font-size: 14px;
+}
+.modal-close:hover:not(:disabled) { background: rgba(255,255,255,0.25); }
+.modal-close:disabled { opacity: 0.5; cursor: not-allowed; }
+.modal-body { padding: 20px; }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px; background: #f9fafb; border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 12px 12px;
+}
 
-    .action-buttons { display: flex; gap: 8px; }
-    .btn { padding: 8px 16px; border: 1px solid #c0c0c0; background: white; cursor: pointer; border-radius: 4px; font-size: 11px; }
+.warning-content { display: flex; gap: 14px; align-items: flex-start; }
+.warning-icon { font-size: 40px; flex-shrink: 0; }
+.warning-message h3 { margin: 0 0 8px 0; font-size: 15px; color: #1a1d24; }
+.warning-message p { margin: 0 0 8px 0; font-size: 12px; color: #555; line-height: 1.5; }
+.affected-services {
+  list-style: none; padding: 0; margin: 0 0 12px 0;
+  background: #f9fafb; border-radius: 6px; padding: 10px 14px;
+}
+.affected-services li { padding: 4px 0; font-size: 11px; color: #333; }
+.warning-note {
+  display: flex; gap: 8px; align-items: flex-start;
+  background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.note-icon { font-size: 16px; flex-shrink: 0; }
+.warning-note span { font-size: 11px; color: #92400e; line-height: 1.5; }
+.warning-text { font-weight: 600; color: #dc2626 !important; }
+
+.restart-progress { text-align: center; padding: 16px; margin-top: 12px; }
+.restart-progress .spinner {
+  width: 32px; height: 32px; border: 3px solid #e0e0e0;
+  border-top-color: #dc2626; border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin: 0 auto 10px;
+}
+.restart-progress p { margin: 0; font-size: 12px; color: #555; }
+.progress-note { color: #dc2626 !important; font-size: 10px !important; margin-top: 6px !important; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    /* Actions */
+    .action-bar { display: flex; gap: 8px; }
+    .btn { padding: 8px 16px; border: 1px solid #d0d0d0; background: white; cursor: pointer; border-radius: 6px; font-size: 11px; font-weight: 500; transition: all 0.15s; }
+    .btn:hover:not(:disabled) { background: #f5f5f5; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primary { background: #0a246a; color: white; border-color: #0a246a; }
-    .btn-primary:hover { background: #0a3a8c; }
-    .btn-secondary { background: #f0f0f0; color: #333; }
-    .btn-secondary:hover { background: #e0e0e0; }
+    .btn-primary:hover:not(:disabled) { background: #0d2f8a; }
+    .btn-danger { background: #fff5f5; color: #dc2626; border-color: #fca5a5; }
+    .btn-danger:hover:not(:disabled) { background: #dc2626; color: white; }
 
-    .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 10px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 3000; }
-    .toast-notification.show { transform: translateY(0); opacity: 1; }
-    .toast-notification.success { background: #008800; }
-    .toast-notification.error { background: #cc0000; }
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 12px 18px; border-radius: 8px; display: flex; align-items: center; gap: 8px; transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 3000; font-size: 11px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { background: #059669; }
+    .toast.error { background: #dc2626; }
+    .toast-close { background: rgba(255,255,255,0.2); border: none; color: white; cursor: pointer; padding: 2px 6px; border-radius: 3px; font-size: 12px; margin-left: 8px; }
+
+    @media (max-width: 600px) {
+      .metrics-grid { grid-template-columns: 1fr 1fr; }
+      .info-row { grid-template-columns: 1fr; }
+    }
   `]
 })
 export class SystemHealthComponent implements OnInit, OnDestroy {
   systemStatus: string = 'healthy';
-  lastChecked: Date = new Date();
+  isLoading = false;
+  lastChecked: Date | null = null;
   healthData: any = {};
+  autoRefresh = true;
   services: any[] = [
-    { name: 'Node.js API', status: 'online', port: '8000' },
-    { name: 'MySQL Database', status: 'online', port: '3307' },
-    { name: 'Python Monitor', status: 'offline', port: '5000' },
-    { name: 'File Storage', status: 'online', port: 'N/A' }
+    { name: 'Node.js API', status: 'online', port: ':8000', latency: null },
+    { name: 'MySQL Database', status: 'online', port: ':3306', latency: null },
+    { name: 'File Storage', status: 'online', port: 'N/A', latency: null },
   ];
-  recentEvents: any[] = [
-    { time: new Date(), message: 'System started successfully', type: 'success' },
-    { time: new Date(Date.now() - 3600000), message: 'Database backup completed', type: 'success' },
-    { time: new Date(Date.now() - 7200000), message: 'High memory usage detected', type: 'error' }
-  ];
+  showRestartModal = false;
+restarting = false;
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
   private toastTimer: any;
-  private healthInterval: any;
+  private refreshSub: Subscription | null = null;
 
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
     this.refreshHealth();
-    this.healthInterval = setInterval(() => this.refreshHealth(), 30000);
+    this.refreshSub = interval(30000).subscribe(() => this.refreshHealth());
   }
 
   ngOnDestroy() {
-    if (this.healthInterval) clearInterval(this.healthInterval);
+    if (this.refreshSub) this.refreshSub.unsubscribe();
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+  }
+
+  get statusIcon(): string {
+    if (this.systemStatus === 'healthy') return '✅';
+    if (this.systemStatus === 'warning') return '⚠️';
+    return '🚨';
+  }
+
+  get statusTitle(): string {
+    if (this.systemStatus === 'healthy') return 'All Systems Operational';
+    if (this.systemStatus === 'warning') return 'Degraded Performance';
+    return 'Critical Issues Detected';
+  }
+
+  get statusDescription(): string {
+    if (this.systemStatus === 'healthy') return 'All services are running normally';
+    if (this.systemStatus === 'warning') return 'Some services are experiencing issues';
+    return 'Immediate attention required';
+  }
+
+  toggleAutoRefresh() {
+    if (this.autoRefresh) {
+      this.refreshSub = interval(30000).subscribe(() => this.refreshHealth());
+    } else {
+      if (this.refreshSub) this.refreshSub.unsubscribe();
+    }
   }
 
   refreshHealth() {
+    this.isLoading = true;
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
     
@@ -240,38 +473,34 @@ export class SystemHealthComponent implements OnInit, OnDestroy {
         this.healthData = data || {};
         this.lastChecked = new Date();
         
-        // Determine system status
         const memoryPercent = data?.memory_percent || 0;
         const cpuPercent = data?.cpu_percent || 0;
-        if (memoryPercent > 90 || cpuPercent > 90) {
+        const diskPercent = data?.disk_percent || 0;
+        
+        if (memoryPercent > 90 || cpuPercent > 90 || diskPercent > 95) {
           this.systemStatus = 'critical';
-        } else if (memoryPercent > 70 || cpuPercent > 70) {
+        } else if (memoryPercent > 70 || cpuPercent > 70 || diskPercent > 80) {
           this.systemStatus = 'warning';
         } else {
           this.systemStatus = 'healthy';
         }
         
-        // Update services status
         this.services[0].status = data?.api === 'online' ? 'online' : 'offline';
         this.services[1].status = data?.database === 'connected' ? 'online' : 'offline';
-        this.services[2].status = data?.python_monitor === 'running' ? 'online' : 'offline';
+        
+        this.isLoading = false;
       },
       error: () => {
         this.healthData = {
-          uptime: 'N/A',
-          memory_usage: 'N/A',
-          memory_percent: 0,
-          disk_usage: 'N/A',
-          disk_percent: 0,
-          cpu_usage: 'N/A',
-          cpu_percent: 0,
-          db_host: 'localhost',
-          db_name: 'edptech_helpdesk',
-          db_tables: 'N/A',
-          db_size: 'N/A',
-          db_connections: 'N/A'
+          uptime: 'N/A', memory_usage: 'N/A', memory_percent: 0,
+          disk_usage: 'N/A', disk_percent: 0, cpu_usage: 'N/A', cpu_percent: 0,
+          db_host: '—', db_name: '—', db_tables: '—', db_size: '—', db_connections: '—',
+          node_version: '—', platform: '—', pid: '—'
         };
         this.systemStatus = 'warning';
+        this.services.forEach(s => s.status = 'offline');
+        this.lastChecked = new Date();
+        this.isLoading = false;
       }
     });
   }
@@ -280,21 +509,41 @@ export class SystemHealthComponent implements OnInit, OnDestroy {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
     this.http.post(`${environment.apiUrl}/api/admin/clear-cache`, {}, { headers }).subscribe({
-      next: () => this.showToastMsg('✅ Cache cleared!', 'success'),
+      next: () => this.showToastMsg('Cache cleared successfully!', 'success'),
       error: () => this.showToastMsg('Failed to clear cache', 'error')
     });
   }
 
-  restartService() {
-    if (confirm('Restart system services? This may cause brief downtime.')) {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-      this.http.post(`${environment.apiUrl}/api/admin/restart`, {}, { headers }).subscribe({
-        next: () => this.showToastMsg('✅ Services restarted!', 'success'),
-        error: () => this.showToastMsg('Failed to restart', 'error')
-      });
-    }
+ restartService() {
+  this.showRestartModal = true;
+}
+
+cancelRestart() {
+  if (!this.restarting) {
+    this.showRestartModal = false;
   }
+}
+
+confirmRestart() {
+  this.restarting = true;
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.post(`${environment.apiUrl}/api/admin/restart`, {}, { headers }).subscribe({
+    next: () => {
+      this.showRestartModal = false;
+      this.restarting = false;
+      this.showToastMsg('✅ Services restarting... Please wait.', 'success');
+      setTimeout(() => this.refreshHealth(), 5000);
+    },
+    error: () => {
+      this.showRestartModal = false;
+      this.restarting = false;
+      this.showToastMsg('❌ Failed to restart services', 'error');
+    }
+  });
+}
 
   showToastMsg(msg: string, type: 'success' | 'error') {
     this.toastMessage = msg; this.toastType = type; this.showToast = true;

@@ -30,13 +30,16 @@ import { environment } from '../../../../environments/environment';
         </button>
       </div>
 
-      <!-- Filters - Only show for Client Users tab -->
+     <!-- Filters - Only show for Client Users tab -->
 <div class="filter-bar" *ngIf="activeTab === 'users'">
   <div class="filter-group">
     <label>Branch:</label>
     <select class="retro-select" [(ngModel)]="filterBranch" (change)="onBranchChange()">
       <option value="">All Branches</option>
-      <option *ngFor="let branch of branches" [value]="branch.id">{{ branch.name }}</option>
+      <option *ngFor="let branch of branches" [value]="branch.id">
+        🏢 {{ branch.name }}
+        <ng-container *ngIf="branch.company_name"> — {{ branch.company_name }}</ng-container>
+      </option>
     </select>
   </div>
   <div class="filter-group">
@@ -56,24 +59,24 @@ import { environment } from '../../../../environments/environment';
   </button>
 </div>
 
-<!-- Simple Search for Team tab -->
-<div class="filter-bar" *ngIf="activeTab === 'team'">
-  <div class="filter-group search-group">
-    <label>Search:</label>
-    <input type="text" class="retro-input" placeholder="Name, username, email..." 
-           [(ngModel)]="searchTerm" (input)="applyFilters()">
-  </div>
-  <button class="retro-btn" (click)="clearFilters()">
-    <span>🔄</span> Clear
-  </button>
-</div>
+      <!-- Simple Search for Team tab -->
+      <div class="filter-bar" *ngIf="activeTab === 'team'">
+        <div class="filter-group search-group">
+          <label>Search:</label>
+          <input type="text" class="retro-input" placeholder="Name, username, email..." 
+                 [(ngModel)]="searchTerm" (input)="applyFilters()">
+        </div>
+        <button class="retro-btn" (click)="clearFilters()">
+          <span>🔄</span> Clear
+        </button>
+      </div>
 
-    <!-- Summary Bar -->
-<div class="retro-status-bar">
-  <span>Showing: {{ activeTab === 'team' ? paginatedTeamUsers.length : paginatedClientUsers.length }} of {{ activeTab === 'team' ? filteredTeamUsers.length : filteredClientUsers.length }} users</span>
-  <span *ngIf="filterBranch && activeTab === 'users'">| Branch: <strong>{{ getBranchName(filterBranch) }}</strong></span>
-  <span *ngIf="filterDepartment && activeTab === 'users'">| Dept: <strong>{{ getDeptName(filterDepartment) }}</strong></span>
-</div>
+      <!-- Summary Bar -->
+      <div class="retro-status-bar">
+        <span>Showing: {{ activeTab === 'team' ? paginatedTeamUsers.length : paginatedClientUsers.length }} of {{ activeTab === 'team' ? filteredTeamUsers.length : filteredClientUsers.length }} users</span>
+        <span *ngIf="filterBranch && activeTab === 'users'">| Branch: <strong>{{ getBranchName(filterBranch) }}</strong></span>
+        <span *ngIf="filterDepartment && activeTab === 'users'">| Dept: <strong>{{ getDeptName(filterDepartment) }}</strong></span>
+      </div>
 
       <!-- Team Table (users table) -->
       <div class="retro-table-container" *ngIf="activeTab === 'team'">
@@ -89,22 +92,26 @@ import { environment } from '../../../../environments/environment';
               <th>Branch</th>
               <th>Email</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th *ngIf="canManageUsers">Actions</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let user of paginatedTeamUsers">
               <td>{{ user.id }}</td>
-              <td>
-                <div class="user-avatar-sm" [style.background]="user.avatar_color || '#0a3a8c'">
-                  <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
-                  <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
-                </div>
-              </td>
+            <td>
+ <div class="user-avatar-sm" 
+     [style.background]="user.avatar_color || '#3b82f6'"
+     [class.clickable-avatar]="canViewProfile"
+     (click)="openProfileModal(user, 'users')"
+     [title]="canViewProfile ? 'Click to view profile' : ''">
+    <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
+    <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
+  </div>
+</td>
               <td>{{ user.username }}</td>
               <td>{{ user.fullname }}</td>
               <td>
-                <span class="role-badge" [class]="'role-' + user.role">{{ user.role | titlecase }}</span>
+                <span class="role-badge" [class]="'role-' + (user.role || '').toLowerCase()">{{ user.role | titlecase }}</span>
               </td>
               <td>{{ user.department || '—' }}</td>
               <td>{{ getBranchName(user.branch_id) || '—' }}</td>
@@ -115,28 +122,25 @@ import { environment } from '../../../../environments/environment';
                   <span class="status-text" [class]="getStatusClass(user)">{{ getAvailabilityStatus(user) }}</span>
                 </div>
               </td>
-              <td class="action-cell">
+              <td class="action-cell" *ngIf="canManageUsers">
                 <span *ngIf="currentUser?.id === user.id" class="you-label">You</span>
+                <!-- Admin user - no actions for non-admin managers -->
                 <ng-container *ngIf="currentUser?.id !== user.id && user.role === 'admin'">
                   <span class="you-label">Admin</span>
                 </ng-container>
-                <ng-container *ngIf="currentUser?.id !== user.id && user.role !== 'admin' && !isAdminUser">
+                <!-- Non-admin team users - Head/Manager has full access, Supervisor no delete -->
+                <ng-container *ngIf="currentUser?.id !== user.id && user.role !== 'admin'">
+                  <button class="action-btn" *ngIf="canEditUsers" (click)="editUser(user, 'users')" title="Edit">✏️</button>
+                  <button class="action-btn" *ngIf="canEditUsers" (click)="resetPassword(user, 'users')" title="Reset Password">🔑</button>
                   <button class="action-btn lock-btn" (click)="toggleLockUser(user, 'users')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
                     {{ user.locked_until ? '🗝️' : '🔒' }}
                   </button>
-                </ng-container>
-                <ng-container *ngIf="currentUser?.id !== user.id && user.role !== 'admin' && isAdminUser">
-                  <button class="action-btn" (click)="editUser(user, 'users')" title="Edit">✏️</button>
-                  <button class="action-btn" (click)="resetPassword(user, 'users')" title="Reset Password">🔑</button>
-                  <button class="action-btn lock-btn" (click)="toggleLockUser(user, 'users')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
-                    {{ user.locked_until ? '🗝️' : '🔒' }}
-                  </button>
-                  <button class="action-btn delete-btn" (click)="deleteUser(user, 'users')" title="Delete">🗑️</button>
+                  <button class="action-btn delete-btn" *ngIf="canDeleteUsers" (click)="deleteUser(user, 'users')" title="Delete">🗑️</button>
                 </ng-container>
               </td>
             </tr>
             <tr *ngIf="filteredTeamUsers.length === 0">
-              <td colspan="10" class="empty-row">No team members found</td>
+              <td [attr.colspan]="canManageUsers ? 10 : 9" class="empty-row">No team members found</td>
             </tr>
           </tbody>
         </table>
@@ -147,78 +151,101 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-      <!-- Client Users Table (new_user table) -->
-      <div class="retro-table-container" *ngIf="activeTab === 'users'">
-        <table class="retro-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Avatar</th>
-              <th>Username</th>
-              <th>Full Name</th>
-              <th>Role</th>
-              <th>Department</th>
-              <th>Branch</th>
-              <th>Email</th>
-              <th>Reg Key</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let user of paginatedClientUsers">
-              <td>{{ user.id }}</td>
-              <td>
-                <div class="user-avatar-sm" [style.background]="user.avatar_color || '#3b82f6'">
-                  <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
-                  <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
-                </div>
-              </td>
-              <td>{{ user.username }}</td>
-              <td>{{ user.fullname }}</td>
-              <td>{{ user.role || '—' }}</td>
-              <td>{{ user.department || '—' }}</td>
-              <td>{{ getBranchName(user.branch_id) || '—' }}</td>
-              <td>{{ user.email || '—' }}</td>
-              <td><code class="key-code">{{ user.registration_key || '—' }}</code></td>
-              <td>
-                <div class="status-with-dot">
-                  <span class="status-dot" [class]="getClientStatusClass(user)"></span>
-                  <span class="status-text" [class]="getClientStatusClass(user)">{{ getClientAvailabilityStatus(user) }}</span>
-                </div>
-              </td>
-              <td class="action-cell">
-                <ng-container *ngIf="isAdminUser">
-                  <button class="action-btn" (click)="editUser(user, 'new_user')" title="Edit">✏️</button>
-                  <button class="action-btn" (click)="resetPassword(user, 'new_user')" title="Reset Password">🔑</button>
-                  <button class="action-btn lock-btn" (click)="toggleLockUser(user, 'new_user')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
-                    {{ user.locked_until ? '🗝️' : '🔒' }}
-                  </button>
-                  <button class="action-btn delete-btn" (click)="deleteUser(user, 'new_user')" title="Delete">🗑️</button>
-                </ng-container>
-                <ng-container *ngIf="!isAdminUser">
-                  <button class="action-btn lock-btn" (click)="toggleLockUser(user, 'new_user')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
-                    {{ user.locked_until ? '🗝️' : '🔒' }}
-                  </button>
-                </ng-container>
-              </td>
-            </tr>
-            <tr *ngIf="filteredClientUsers.length === 0">
-              <td colspan="11" class="empty-row">No users found</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="pagination-bar" *ngIf="clientTotalPages > 1">
-          <button class="page-btn" (click)="goToPage('users', clientPage - 1)" [disabled]="clientPage === 1">◀ Prev</button>
-          <span class="page-info">Page {{ clientPage }} of {{ clientTotalPages }}</span>
-          <button class="page-btn" (click)="goToPage('users', clientPage + 1)" [disabled]="clientPage === clientTotalPages">Next ▶</button>
-        </div>
-      </div>
+     <!-- Client Users Table (new_user table) - Organized by Branch/Department -->
+<div class="retro-table-container" *ngIf="activeTab === 'users'">
+  <table class="retro-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Avatar</th>
+        <th>Username</th>
+        <th>Full Name</th>
+        <th>Role</th>
+        <th>Department</th>
+        <th>Branch</th>
+        <th>Email</th>
+        <th>Reg Key</th>
+        <th>Status</th>
+        <th *ngIf="canManageUsers">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <ng-container *ngFor="let branchGroup of groupedClientUsers">
+        <!-- Branch Header Row -->
+        <tr class="branch-group-header">
+          <td [attr.colspan]="canManageUsers ? 11 : 10" style="background:#e8edf8; font-weight:bold; text-align:left; padding:8px;">
+            🏢 {{ branchGroup.branchName }} 
+            <!-- ✅ Count total users in this branch across all departments -->
+            <span style="color:#888; font-weight:normal;">
+              ({{ getBranchUserCount(branchGroup) }} users)
+            </span>
+          </td>
+        </tr>
+        <!-- Department sub-groups within branch -->
+        <ng-container *ngFor="let deptGroup of branchGroup.departments">
+          <!-- Only show dept header if there are multiple departments -->
+          <tr class="dept-group-header" *ngIf="branchGroup.departments.length > 1">
+            <td [attr.colspan]="canManageUsers ? 11 : 10" style="background:#f0f4f8; font-weight:600; text-align:left; padding:6px 8px 6px 24px;">
+              📂 {{ deptGroup.deptName }}
+              <span style="color:#888; font-weight:normal;">({{ deptGroup.users.length }} users)</span>
+            </td>
+          </tr>
+          <!-- Users in this department -->
+          <tr *ngFor="let user of deptGroup.users">
+            <td>{{ user.id }}</td>
+           <td>
+  <div class="user-avatar-sm" 
+       [style.background]="user.avatar_color || '#3b82f6'"
+       [class.clickable-avatar]="canViewProfile"
+       (click)="onAvatarClick(user, 'new_user')"
+       [title]="canViewProfile ? 'Click to view profile' : ''">
+    <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
+    <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
+  </div>
+</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.fullname }}</td>
+            <td>{{ user.role || '—' }}</td>
+            <td>{{ user.department || '—' }}</td>
+            <td>{{ getBranchName(user.branch_id) || '—' }}</td>
+            <td>{{ user.email || '—' }}</td>
+            <td><code class="key-code">{{ user.registration_key || '—' }}</code></td>
+            <td>
+              <div class="status-with-dot">
+                <span class="status-dot" [class]="getClientStatusClass(user)"></span>
+                <span class="status-text" [class]="getClientStatusClass(user)">{{ getClientAvailabilityStatus(user) }}</span>
+              </div>
+            </td>
+           <td class="action-cell" *ngIf="canManageUsers">
+  <ng-container *ngIf="canEditUsers">
+    <button class="action-btn" (click)="editUser(user, 'new_user')" title="Edit">✏️</button>
+    <button class="action-btn" (click)="resetPassword(user, 'new_user')" title="Reset Password">🔑</button>
+  </ng-container>
+  <button class="action-btn lock-btn" *ngIf="canLockUsers" (click)="toggleLockUser(user, 'new_user')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
+    {{ user.locked_until ? '🗝️' : '🔒' }}
+  </button>
+  <button class="action-btn delete-btn" *ngIf="canDeleteUsers" (click)="deleteUser(user, 'new_user')" title="Delete">🗑️</button>
+</td>
+          </tr>
+        </ng-container>
+      </ng-container>
+      <tr *ngIf="filteredClientUsers.length === 0">
+        <td [attr.colspan]="canManageUsers ? 11 : 10" class="empty-row">No users found</td>
+      </tr>
+    </tbody>
+  </table>
+  <!-- ✅ Pagination for client users -->
+  <div class="pagination-bar" *ngIf="clientTotalPages > 1">
+    <button class="page-btn" (click)="goToPage('users', clientPage - 1)" [disabled]="clientPage === 1">◀ Prev</button>
+    <span class="page-info">Page {{ clientPage }} of {{ clientTotalPages }}</span>
+    <button class="page-btn" (click)="goToPage('users', clientPage + 1)" [disabled]="clientPage === clientTotalPages">Next ▶</button>
+  </div>
+</div>
     </div>
     <!-- Edit User Modal -->
 <div class="modal-overlay" *ngIf="showEditModal" (click)="closeEditModal()">
-  <div class="modal-window" (click)="$event.stopPropagation()">
-    <div class="modal-titlebar">
+  <div class="modal-window" id="editUserModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" (mousedown)="startDrag($event, 'editUserModal')">
       <span>✏️ Edit User: {{ editUserData?.username }}</span>
       <button type="button" (click)="closeEditModal()" class="modal-close">✕</button>
     </div>
@@ -271,11 +298,11 @@ import { environment } from '../../../../environments/environment';
 </div>
     <!-- Reset Password Modal - FIXED -->
     <div class="modal-overlay" *ngIf="showPasswordModal" (click)="closePasswordModal()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar">
-          <span>🔑 Reset Password: {{ resetPasswordUser?.username }}</span>
-          <button type="button" (click)="closePasswordModal()" class="modal-close">✕</button>
-        </div>
+  <div class="modal-window" id="resetPasswordModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" (mousedown)="startDrag($event, 'resetPasswordModal')">
+      <span>🔑 Reset Password: {{ resetPasswordUser?.username }}</span>
+      <button type="button" (click)="closePasswordModal()" class="modal-close">✕</button>
+    </div>
         <div class="modal-body">
           <div class="form-field">
             <label>New Password</label>
@@ -296,12 +323,15 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Lock/Unlock Confirmation Modal -->
-    <div class="modal-overlay" *ngIf="showLockModal" (click)="closeLockModal()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar" [class.warning]="!lockUserData?.locked_until" [class.success]="lockUserData?.locked_until">
-          <span>{{ lockUserData?.locked_until ? '🔓 Unlock User' : '🔒 Lock User' }}</span>
-          <button type="button" (click)="closeLockModal()" class="modal-close">✕</button>
-        </div>
+  <div class="modal-overlay" *ngIf="showLockModal" (click)="closeLockModal()">
+  <div class="modal-window" id="lockModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" 
+         [class.warning]="!lockUserData?.locked_until" 
+         [class.success]="lockUserData?.locked_until"
+         (mousedown)="startDrag($event, 'lockModal')">
+      <span>{{ lockUserData?.locked_until ? '🔓 Unlock User' : '🔒 Lock User' }}</span>
+      <button type="button" (click)="closeLockModal()" class="modal-close">✕</button>
+    </div>
         <div class="modal-body">
           <div class="warning-content">
             <span class="warning-icon">{{ lockUserData?.locked_until ? '🔓' : '🔒' }}</span>
@@ -326,12 +356,12 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Delete User Confirmation Modal -->
-    <div class="modal-overlay" *ngIf="showDeleteUserModal" (click)="closeDeleteUserModal()">
-      <div class="modal-window" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar danger">
-          <span>🗑️ Delete User</span>
-          <button type="button" (click)="closeDeleteUserModal()" class="modal-close">✕</button>
-        </div>
+   <div class="modal-overlay" *ngIf="showDeleteUserModal" (click)="closeDeleteUserModal()">
+  <div class="modal-window" id="deleteUserModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar danger" (mousedown)="startDrag($event, 'deleteUserModal')">
+      <span>🗑️ Delete User</span>
+      <button type="button" (click)="closeDeleteUserModal()" class="modal-close">✕</button>
+    </div>
         <div class="modal-body">
           <div class="warning-content">
             <span class="warning-icon">⚠️</span>
@@ -350,11 +380,11 @@ import { environment } from '../../../../environments/environment';
     </div>
     <!-- Custom Notification Modal -->
 <div class="modal-overlay" *ngIf="showNotificationModal" (click)="closeNotificationModal()">
-    <div class="modal-window notification-modal" (click)="$event.stopPropagation()">
-        <div class="modal-titlebar" [class]="notificationType">
-            <span>{{ notificationTitle }}</span>
-            <button type="button" (click)="closeNotificationModal()" class="modal-close">✕</button>
-        </div>
+  <div class="modal-window notification-modal" id="notificationModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" [class]="notificationType" (mousedown)="startDrag($event, 'notificationModal')">
+      <span>{{ notificationTitle }}</span>
+      <button type="button" (click)="closeNotificationModal()" class="modal-close">✕</button>
+    </div>
         <div class="modal-body">
             <div class="notification-content">
                 <div class="notification-icon" [class]="notificationType">
@@ -376,6 +406,124 @@ import { environment } from '../../../../environments/environment';
             </div>
         </div>
     </div>
+</div>
+<!-- User Profile Modal -->
+<div class="modal-overlay" *ngIf="showProfileModal" (click)="closeProfileModal()">
+  <div class="modal-window profile-modal" id="profileModal" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" (mousedown)="startDrag($event, 'profileModal')">
+      <span>👤 User Profile: {{ profileUser?.fullname }}</span>
+      <button type="button" (click)="closeProfileModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body profile-body">
+      <div class="profile-header">
+        <!-- Avatar -->
+        <div class="profile-avatar-lg" [style.background]="profileUser?.avatar_color || '#0a3a8c'">
+          <img *ngIf="profileUser?.photo_url" [src]="apiUrl + profileUser.photo_url" class="profile-avatar-img">
+          <span *ngIf="!profileUser?.photo_url" class="profile-avatar-text">
+            {{ profileUser?.fullname?.charAt(0)?.toUpperCase() || '?' }}
+          </span>
+        </div>
+        <div class="profile-header-info">
+          <h3>{{ profileUser?.fullname || '—' }}</h3>
+          <span class="profile-role-badge" [class]="'role-' + (profileUser?.role || '').toLowerCase()">
+            {{ profileUser?.role || '—' }}
+          </span>
+          <span class="profile-status" [class.active]="!profileUser?.locked_until" [class.locked]="profileUser?.locked_until">
+            {{ profileUser?.locked_until ? '🔒 Locked' : '🟢 Active' }}
+          </span>
+        </div>
+      </div>
+
+      <div class="profile-divider"></div>
+
+      <!-- Profile Details Grid -->
+      <div class="profile-details-grid">
+        <div class="profile-field">
+          <label>Username</label>
+          <span>{{ profileUser?.username || '—' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>Email</label>
+          <span>{{ profileUser?.email || '—' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>Department</label>
+          <span>{{ profileUser?.department || '—' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>Branch</label>
+          <span>🏢 {{ getBranchName(profileUser?.branch_id) || '—' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>Role</label>
+          <span>{{ profileUser?.role || '—' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>User ID</label>
+          <span><code>#{{ profileUser?.id }}</code></span>
+        </div>
+        <div class="profile-field">
+          <label>Account Type</label>
+          <span>{{ profileTable === 'users' ? '👨‍💻 Team (Admin/Technician)' : '👤 Client User' }}</span>
+        </div>
+        <div class="profile-field">
+          <label>Registered</label>
+          <span>{{ profileUser?.created_at | date:'MMM d, yyyy h:mm a' }}</span>
+        </div>
+        
+        <!-- Client-specific fields -->
+        <ng-container *ngIf="profileTable === 'new_user'">
+          <div class="profile-field">
+            <label>Registration Key</label>
+            <span><code class="key-code">{{ profileUser?.registration_key || '—' }}</code></span>
+          </div>
+          <div class="profile-field">
+            <label>Verified</label>
+            <span>{{ profileUser?.is_verified ? '✅ Yes' : '❌ No' }}</span>
+          </div>
+        </ng-container>
+
+        <!-- Lock Status -->
+        <div class="profile-field full-width" *ngIf="profileUser?.locked_until">
+          <label>Locked Until</label>
+          <span class="locked-info">🔒 {{ profileUser?.locked_until | date:'MMM d, yyyy h:mm a' }}</span>
+        </div>
+
+        <!-- Failed Attempts -->
+        <div class="profile-field" *ngIf="profileUser?.failed_attempts > 0">
+          <label>Failed Login Attempts</label>
+          <span class="failed-attempts">⚠️ {{ profileUser?.failed_attempts }}</span>
+        </div>
+      </div>
+
+      <!-- Team-specific working hours -->
+      <ng-container *ngIf="profileTable === 'users'">
+        <div class="profile-divider"></div>
+        <h4 class="profile-section-title">🕐 Working Schedule</h4>
+        <div class="profile-details-grid">
+          <div class="profile-field">
+            <label>Work Hours</label>
+            <span>{{ profileUser?.workStart || '—' }} - {{ profileUser?.workEnd || '—' }}</span>
+          </div>
+          <div class="profile-field">
+            <label>Lunch Break</label>
+            <span>{{ profileUser?.lunchStart || '—' }} - {{ profileUser?.lunchEnd || '—' }}</span>
+          </div>
+          <div class="profile-field">
+            <label>Day Off</label>
+            <span>{{ profileUser?.dayOff || '—' }}</span>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+    <div class="modal-footer">
+      <button class="retro-btn" (click)="closeProfileModal()">Close</button>
+      <button class="retro-btn primary" *ngIf="canEditUsers && profileUser?.id !== currentUser?.id && profileUser?.role !== 'admin'" 
+              (click)="closeProfileModal(); editUser(profileUser, profileTable)">
+        ✏️ Edit User
+      </button>
+    </div>
+  </div>
 </div>
   `,
   styles: [`
@@ -519,6 +667,93 @@ import { environment } from '../../../../environments/environment';
       font-size: 10px;
       color: #000;
     }
+      .modal-titlebar {
+  cursor: grab;
+  user-select: none;
+}
+.modal-titlebar:active {
+  cursor: grabbing;
+}
+      /* Clickable Avatar */
+.clickable-avatar {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.clickable-avatar:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 8px rgba(10,36,106,0.4);
+}
+
+/* Profile Modal */
+.profile-modal {
+  max-width: 550px;
+}
+.profile-body {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0;
+}
+.profile-avatar-lg {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 700; color: white;
+  flex-shrink: 0; overflow: hidden;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+.profile-avatar-img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.profile-avatar-text {
+  user-select: none;
+}
+.profile-header-info h3 {
+  margin: 0 0 4px 0; font-size: 16px; color: #1a1d24;
+}
+.profile-role-badge {
+  display: inline-block;
+  padding: 2px 8px; border-radius: 3px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  margin-right: 6px;
+}
+.profile-status {
+  font-size: 10px; font-weight: 600;
+}
+.profile-status.active { color: #008800; }
+.profile-status.locked { color: #cc0000; }
+
+.profile-divider {
+  height: 1px; background: #ddd; margin: 14px 0;
+}
+.profile-section-title {
+  margin: 0 0 10px 0; font-size: 12px; color: #0a3a8c;
+}
+
+.profile-details-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.profile-field {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.profile-field.full-width {
+  grid-column: 1 / -1;
+}
+.profile-field label {
+  font-size: 9px; font-weight: 700; color: #888;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.profile-field span {
+  font-size: 12px; color: #333; font-weight: 500;
+}
+.locked-info { color: #cc0000 !important; }
+.failed-attempts { color: #cc6600 !important; font-weight: 700 !important; }
     .page-btn:hover { background: #e8f0ff; }
     .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
     .page-info { font-size: 10px; color: #333; font-weight: bold; }
@@ -554,6 +789,31 @@ import { environment } from '../../../../environments/environment';
 .retro-status-bar {
     color: #333;
 
+}
+    /* Branch & Department Group Headers */
+.branch-group-header td {
+  background: #e8edf8 !important;
+  font-weight: bold;
+  text-align: left;
+  padding: 8px !important;
+  border-bottom: 2px solid #c0d0e8 !important;
+}
+
+.dept-group-header td {
+  background: #f0f4f8 !important;
+  font-weight: 600;
+  text-align: left;
+  padding: 6px 8px 6px 24px !important;
+  border-bottom: 1px solid #d0d8e8 !important;
+}
+
+.key-code {
+  font-family: 'Courier New', monospace;
+  font-size: 9px;
+  background: #f5f5f5;
+  padding: 2px 5px;
+  border-radius: 2px;
+  color: #0a3a8c;
 }
     .notification-content {
         display: flex;
@@ -646,11 +906,15 @@ export class UserManagementComponent implements OnInit {
   showLockModal = false;
   lockUserData: any = null;
   lockTable = '';
-
+  canManageUsers = false;
+  canEditUsers = false;
+  canDeleteUsers = false;
+  canLockUsers = false;  
+  userRole = '';
   showDeleteUserModal = false;
   deleteUserData: any = null;
   deleteTable = '';
- filteredDepartments: any[] = [];
+  filteredDepartments: any[] = [];
   teamPage = 1;
   clientPage = 1;
   pageSize = 15;
@@ -677,25 +941,218 @@ errorDetails: any = null;
   resetPasswordInput = '';
   confirmPasswordInput = '';
   isResetting = false;
-
+  // Dragging properties
+private isDragging = false;
+private dragOffsetX = 0;
+private dragOffsetY = 0;
+private currentDragModal: HTMLElement | null = null;
+// User Profile Modal
+showProfileModal = false;
+profileUser: any = null;
+profileTable = '';
+canViewProfile = false;
   constructor(private http: HttpClient, private router: Router) {}
 
  ngOnInit() {
     try {
       this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
       this.isAdminUser = this.currentUser?.role === 'admin';
+      this.checkPermissions();
     } catch {}
-    
-    // Load branches and departments first, then users
+    document.addEventListener('mousemove', this.onDragMove.bind(this));
+    document.addEventListener('mouseup', this.onDragEnd.bind(this));
     this.loadBranchesAndDepartments();
     this.loadAllUsers();
     
-    // Refresh status every minute
     setInterval(() => {
       this.applyFilters();
     }, 60000);
   }
+checkPermissions() {
+    const role = (this.currentUser?.role || '').toLowerCase().trim();
+    this.userRole = role;
+    
+    switch (role) {
+      case 'admin':
+        this.canManageUsers = true;
+        this.canEditUsers = true;
+        this.canDeleteUsers = true;
+        this.canLockUsers = true;
+        this.canViewProfile = true;  // ✅ Admin can view profile
+        break;
+      
+      case 'head/manager':
+      case 'head manager':
+        this.canManageUsers = true;
+        this.canEditUsers = true;
+        this.canDeleteUsers = true;
+        this.canLockUsers = false;
+        this.canViewProfile = true;  // ✅ Head/Manager can view profile
+        break;
+      
+      case 'supervisor':
+        this.canManageUsers = true;
+        this.canEditUsers = true;
+        this.canDeleteUsers = false;
+        this.canLockUsers = true;
+        this.canViewProfile = false; // ❌ Supervisor cannot view profile
+        break;
+      
+      case 'branch manager':
+        this.canManageUsers = true;
+        this.canEditUsers = true;
+        this.canDeleteUsers = false;
+        this.canLockUsers = true;
+        this.canViewProfile = false; // ❌ Branch Manager cannot view profile
+        break;
+      
+      case 'technician':
+        this.canManageUsers = true;
+        this.canEditUsers = false;
+        this.canDeleteUsers = false;
+        this.canLockUsers = false;
+        this.canViewProfile = false; // ❌ Technician cannot view profile
+        break;
+      
+      default:
+        this.canManageUsers = false;
+        this.canEditUsers = false;
+        this.canDeleteUsers = false;
+        this.canLockUsers = false;
+        this.canViewProfile = false;
+        break;
+    }
+    
+    console.log('🔑 Permissions:', {
+      role: this.userRole,
+      canManage: this.canManageUsers,
+      canEdit: this.canEditUsers,
+      canDelete: this.canDeleteUsers,
+      canLock: this.canLockUsers,
+      canViewProfile: this.canViewProfile
+    });
+}
+// ✅ Group client users by branch and department
+get groupedClientUsers(): any[] {
+  const groups: any[] = [];
+  const branchMap = new Map<number, any>();
+  
+  // Sort users by branch then department
+  const sortedUsers = [...this.filteredClientUsers].sort((a: any, b: any) => {
+    const branchA = this.getBranchName(a.branch_id) || '';
+    const branchB = this.getBranchName(b.branch_id) || '';
+    if (branchA !== branchB) return branchA.localeCompare(branchB);
+    const deptA = a.department || '';
+    const deptB = b.department || '';
+    return deptA.localeCompare(deptB);
+  });
+  
+  // Group by branch
+  sortedUsers.forEach((user: any) => {
+    const branchId = user.branch_id || 0;
+    const branchName = this.getBranchName(user.branch_id) || 'Unassigned';
+    
+    if (!branchMap.has(branchId)) {
+      branchMap.set(branchId, {
+        branchId,
+        branchName,
+        departments: new Map<string, any[]>()
+      });
+    }
+    
+    const branchGroup = branchMap.get(branchId)!;
+    const deptName = user.department || 'Unassigned';
+    
+    if (!branchGroup.departments.has(deptName)) {
+      branchGroup.departments.set(deptName, []);
+    }
+    branchGroup.departments.get(deptName)!.push(user);
+  });
+  
+  // Convert maps to arrays with proper type annotations
+  branchMap.forEach((branchGroup: any) => {
+    const departments: any[] = [];
+    branchGroup.departments.forEach((users: any[], deptName: string) => {
+      departments.push({ deptName, users });
+    });
+    groups.push({
+      branchId: branchGroup.branchId,
+      branchName: branchGroup.branchName,
+      departments
+    });
+  });
+  
+  return groups;
+}
+// ✅ Helper to count total users in a branch group
+getBranchUserCount(branchGroup: any): number {
+  let count = 0;
+  if (branchGroup.departments) {
+    branchGroup.departments.forEach((dept: any) => {
+      count += dept.users?.length || 0;
+    });
+  }
+  return count;
+}
+openProfileModal(user: any, table: string) {
+  console.log('🖱️ Avatar clicked!', { user: user.fullname, table, canViewProfile: this.canViewProfile });
+  this.profileUser = user;
+  this.profileTable = table;
+  this.showProfileModal = true;
+}
 
+closeProfileModal() {
+  this.showProfileModal = false;
+  this.profileUser = null;
+}
+// Draggable Modal Methods
+startDrag(event: MouseEvent, modalId: string) {
+  const target = event.currentTarget as HTMLElement;
+  if (!target.closest('.modal-titlebar')) return;
+  
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  this.isDragging = true;
+  this.currentDragModal = modal;
+  
+  const rect = modal.getBoundingClientRect();
+  this.dragOffsetX = event.clientX - rect.left;
+  this.dragOffsetY = event.clientY - rect.top;
+  
+  modal.style.cursor = 'grabbing';
+  modal.style.transition = 'none';
+  modal.style.position = 'fixed';
+  modal.style.left = rect.left + 'px';
+  modal.style.top = rect.top + 'px';
+  modal.style.transform = 'none';
+  
+  event.preventDefault();
+}
+
+onDragMove(event: MouseEvent) {
+  if (!this.isDragging || !this.currentDragModal) return;
+  
+  const x = event.clientX - this.dragOffsetX;
+  const y = event.clientY - this.dragOffsetY;
+  
+  this.currentDragModal.style.left = x + 'px';
+  this.currentDragModal.style.top = y + 'px';
+}
+
+onDragEnd() {
+  if (this.currentDragModal) {
+    this.currentDragModal.style.cursor = '';
+    this.currentDragModal.style.transition = '';
+  }
+  this.isDragging = false;
+  this.currentDragModal = null;
+}
+onAvatarClick(user: any, table: string) {
+  if (this.canViewProfile) {
+    this.openProfileModal(user, table);
+  }
+}
   loadBranchesAndDepartments() {
     const headers = this.getHeaders();
     
@@ -910,15 +1367,17 @@ errorDetails: any = null;
     });
   }
 
-  loadAllUsers() {
+ // In UserManagementComponent - loadAllUsers()
+loadAllUsers() {
     const headers = this.getHeaders();
-    console.log('🔍 Loading team users with token...');
+    console.log('🔍 Loading team users...');
     
-    this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+    // ✅ Updated endpoints with /api/admin/ prefix
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
       next: (users) => {
         console.log('✅ Team users loaded:', users.length);
         this.teamUsers = users;
-        this.applySearch();
+        this.applyFilters();
       },
       error: (err: HttpErrorResponse) => {
         console.error('❌ Error loading team:', err.status, err.error);
@@ -929,15 +1388,15 @@ errorDetails: any = null;
       }
     });
 
-    this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/new-users`, { headers }).subscribe({
       next: (users) => {
         console.log('✅ Client users loaded:', users.length);
         this.clientUsers = users;
-        this.applySearch();
+        this.applyFilters();
       },
       error: (err: HttpErrorResponse) => console.error('❌ Error loading client users:', err.status, err.error)
     });
-  }
+}
   
    setActiveTab(tab: 'team' | 'users') {
     this.activeTab = tab;
@@ -979,7 +1438,7 @@ errorDetails: any = null;
     const user = this.lockUserData;
     
     if (user.locked_until) {
-      this.http.post(`${environment.apiUrl}/api/users/${table}/${user.id}/unlock`, {}, { headers: this.getHeaders() }).subscribe({
+     this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/lock`, {}, { headers: this.getHeaders() }).subscribe({
         next: () => {
           user.locked_until = null;
           user.failed_attempts = 0;
@@ -992,7 +1451,7 @@ errorDetails: any = null;
         }
       });
     } else {
-      this.http.post(`${environment.apiUrl}/api/users/${table}/${user.id}/lock`, {}, { headers: this.getHeaders() }).subscribe({
+      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/unlock`, {}, { headers: this.getHeaders() }).subscribe({
         next: () => {
           user.locked_until = new Date(Date.now() + 24 * 60 * 60 * 1000);
           this.closeLockModal();
@@ -1019,7 +1478,7 @@ errorDetails: any = null;
 
   confirmDeleteUser() {
     if (!this.deleteUserData) return;
-    this.http.delete(`${environment.apiUrl}/api/users/${this.deleteTable}/${this.deleteUserData.id}`, { headers: this.getHeaders() }).subscribe({
+   this.http.delete(`${environment.apiUrl}/api/admin/users/${this.deleteTable}/${this.deleteUserData.id}`, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.closeDeleteUserModal();
         this.loadAllUsers();
@@ -1052,7 +1511,7 @@ errorDetails: any = null;
   saveUser() {
     if (!this.editUserData) return;
     this.saving = true;
-    this.http.put(`${environment.apiUrl}/api/profile/${this.editTable}/${this.editUserData.id}`, this.editForm, { headers: this.getHeaders() }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/admin/profile/${this.editTable}/${this.editUserData.id}`, this.editForm, { headers: this.getHeaders() }).subscribe({
       next: () => {
         this.saving = false;
         this.closeEditModal();
@@ -1242,4 +1701,8 @@ debugFormValues() {
     this.confirmPasswordInput = '';
     this.isResetting = false;
   }
+  ngOnDestroy() {
+    document.removeEventListener('mousemove', this.onDragMove.bind(this));
+    document.removeEventListener('mouseup', this.onDragEnd.bind(this));
+}
 }
