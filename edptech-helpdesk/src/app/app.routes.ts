@@ -50,7 +50,7 @@ export const routes: Routes = [
       path: '',
       component: DashboardComponent,
       canActivate: [RoleGuard],
-      data: { role: ['admin', 'Technician', 'Head/Manager','Staff'] },
+      data: { role: ['admin', 'Technician', 'Head/Manager', 'Supervisor', 'Staff'] },
       children: [
       { path: 'dashboard', component: TicketListComponent },
       { path: 'tickets', component: TicketListComponent },
@@ -84,7 +84,7 @@ export const routes: Routes = [
       {
         path: 'admin',
         canActivate: [RoleGuard],
-        data: { role: ['admin', 'Technician', 'Head/Manager','Staff'] },
+        data: { role: ['admin', 'Technician', 'Supervisor', 'Head/Manager','Staff'] },
         children: [
           { 
             path: 'users-management', 
@@ -137,7 +137,7 @@ export const routes: Routes = [
           {
             path: 'settings',
             canActivate: [RoleGuard],
-            data: { role: ['admin'] },
+           data: { roles: ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'] },
             loadComponent: () => import('./components/admin/admin-panel/settings.component').then(m => m.SettingsComponent)
           },
           { 

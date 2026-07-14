@@ -15,27 +15,29 @@ import { environment } from '../../../../environments/environment';
       <!-- ============================================ -->
       <!-- HEADER -->
       <!-- ============================================ -->
-      <header class="board-header">
-        <div class="header-text">
-          <span class="eyebrow">Org Directory</span>
-          <h2 class="board-title">Departments &amp; Positions</h2>
-          <p class="board-sub">Manage departments, locations and roles</p>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-board" (click)="loadData()" title="Refresh">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M4 4v6h6M20 20v-6h-6M5.5 9a7 7 0 0 1 12.6-2.3M18.5 15a7 7 0 0 1-12.6 2.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Refresh
-          </button>
-          <button class="btn btn-board" (click)="openCreateRoleForm()" [disabled]="!selectedBranchId">
-            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Position
-          </button>
-          <button class="btn btn-primary" (click)="openCreateDeptForm()" [disabled]="!selectedBranchId">
-            <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            Department
-          </button>
-        </div>
-      </header>
+     <header class="board-header">
+  <div class="header-text">
+    <span class="eyebrow">Org Directory</span>
+    <h2 class="board-title">Departments &amp; Positions</h2>
+    <p class="board-sub">Manage departments, locations and roles</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-board" (click)="loadData()" title="Refresh">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M4 4v6h6M20 20v-6h-6M5.5 9a7 7 0 0 1 12.6-2.3M18.5 15a7 7 0 0 1-12.6 2.3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Refresh
+    </button>
+    <!-- ✅ Only show if user can edit -->
+    <button class="btn btn-board" *ngIf="canEdit" (click)="openCreateRoleForm()" [disabled]="!selectedBranchId">
+      <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Position
+    </button>
+    <!-- ✅ Only show if user can edit -->
+    <button class="btn btn-primary" *ngIf="canEdit" (click)="openCreateDeptForm()" [disabled]="!selectedBranchId">
+      <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Department
+    </button>
+  </div>
+</header>
 
       <!-- Branch Filter - Now required -->
       <div class="branch-filter" *ngIf="branches.length > 0">
@@ -101,27 +103,30 @@ import { environment } from '../../../../environments/environment';
               </div>
 
               <div class="plaque-meta">
-                <span class="role-tally">{{ getRoleCount(dept.id) }} position{{ getRoleCount(dept.id) === 1 ? '' : 's' }}</span>
-                <button class="icon-btn" (click)="$event.stopPropagation(); openEditDeptForm(dept)" title="Edit department" aria-label="Edit department">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 21l3.6-.9L19.5 7.2a1.5 1.5 0 0 0 0-2.1l-1.6-1.6a1.5 1.5 0 0 0-2.1 0L2.9 16.4 3 21Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-                </button>
-                <button class="icon-btn danger" (click)="$event.stopPropagation(); confirmDeleteDept(dept)" title="Delete department" aria-label="Delete department">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M4 7h16M9 7V4.8c0-.4.3-.8.8-.8h4.4c.5 0 .8.4.8.8V7M6 7l1 13.2c0 .5.4.8.9.8h8.2c.5 0 .9-.3.9-.8L18 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
-                <span class="chevron" [class.open]="expandedDept === dept.id">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </span>
-              </div>
+  <span class="role-tally">{{ getRoleCount(dept.id) }} position{{ getRoleCount(dept.id) === 1 ? '' : 's' }}</span>
+  <!-- ✅ Only show if user can edit -->
+  <button class="icon-btn" *ngIf="canEdit" (click)="$event.stopPropagation(); openEditDeptForm(dept)" title="Edit department" aria-label="Edit department">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M3 21l3.6-.9L19.5 7.2a1.5 1.5 0 0 0 0-2.1l-1.6-1.6a1.5 1.5 0 0 0-2.1 0L2.9 16.4 3 21Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+  </button>
+  <!-- ✅ Only show if user can edit -->
+  <button class="icon-btn danger" *ngIf="canEdit" (click)="$event.stopPropagation(); confirmDeleteDept(dept)" title="Delete department" aria-label="Delete department">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M4 7h16M9 7V4.8c0-.4.3-.8.8-.8h4.4c.5 0 .8.4.8.8V7M6 7l1 13.2c0 .5.4.8.9.8h8.2c.5 0 .9-.3.9-.8L18 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </button>
+  <span class="chevron" [class.open]="expandedDept === dept.id">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </span>
+</div>
             </div>
 
             <div class="roster" *ngIf="expandedDept === dept.id">
               <div class="roster-bar">
-                <span class="roster-label">Positions in {{ dept.name }}</span>
-                <button class="btn btn-board btn-sm" (click)="openCreateRoleForm(dept.id)">
-                  <svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                  Add position
-                </button>
-              </div>
+            <span class="roster-label">Positions in {{ dept.name }}</span>
+            <!-- ✅ Only show if user can edit -->
+            <button class="btn btn-board btn-sm" *ngIf="canEdit" (click)="openCreateRoleForm(dept.id)">
+              <svg viewBox="0 0 24 24" width="12" height="12"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              Add position
+            </button>
+          </div>
 
               <ng-container *ngIf="getRolesByDepartment(dept.id).length > 0; else noRoles">
                 <div class="slat" *ngFor="let role of getRolesByDepartment(dept.id)">
@@ -129,21 +134,25 @@ import { environment } from '../../../../environments/environment';
                     <span class="slat-name">{{ role.role_name }}</span>
                   </div>
                   <div class="slat-actions">
-                    <button class="icon-btn" (click)="openEditRoleForm(role)" title="Edit position" aria-label="Edit position">
-                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M3 21l3.6-.9L19.5 7.2a1.5 1.5 0 0 0 0-2.1l-1.6-1.6a1.5 1.5 0 0 0-2.1 0L2.9 16.4 3 21Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
-                    </button>
-                    <button class="icon-btn danger" (click)="confirmDeleteRole(role)" title="Delete position" aria-label="Delete position">
-                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M4 7h16M9 7V4.8c0-.4.3-.8.8-.8h4.4c.5 0 .8.4.8.8V7M6 7l1 13.2c0 .5.4.8.9.8h8.2c.5 0 .9-.3.9-.8L18 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    </button>
-                  </div>
+                  <!-- ✅ Only show if user can edit -->
+                  <button class="icon-btn" *ngIf="canEdit" (click)="openEditRoleForm(role)" title="Edit position" aria-label="Edit position">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M3 21l3.6-.9L19.5 7.2a1.5 1.5 0 0 0 0-2.1l-1.6-1.6a1.5 1.5 0 0 0-2.1 0L2.9 16.4 3 21Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                  </button>
+                  <!-- ✅ Only show if user can edit -->
+                  <button class="icon-btn danger" *ngIf="canEdit" (click)="confirmDeleteRole(role)" title="Delete position" aria-label="Delete position">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none"><path d="M4 7h16M9 7V4.8c0-.4.3-.8.8-.8h4.4c.5 0 .8.4.8.8V7M6 7l1 13.2c0 .5.4.8.9.8h8.2c.5 0 .9-.3.9-.8L18 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                </div>
                 </div>
               </ng-container>
               <ng-template #noRoles>
-                <div class="empty-roster">
-                  <p>No positions added to this department yet.</p>
-                  <button class="btn btn-primary btn-sm" (click)="openCreateRoleForm(dept.id)">Add the first position</button>
-                </div>
-              </ng-template>
+              <div class="empty-roster">
+                <p>No positions added to this department yet.</p>
+                <!-- ✅ Only show if user can edit -->
+                <button class="btn btn-primary btn-sm" *ngIf="canEdit" (click)="openCreateRoleForm(dept.id)">Add the first position</button>
+                <p *ngIf="!canEdit" style="color:#888; font-style:italic;">Contact your administrator to add positions.</p>
+              </div>
+            </ng-template>
             </div>
           </div>
         </div>
@@ -956,8 +965,7 @@ export class DepartmentsComponent implements OnInit {
         if (userRole !== 'admin' && currentUser.branch_id) {
           // Auto-select user's branch
           this.selectedBranchId = String(currentUser.branch_id);
-          // Optionally filter branches to only show user's branch
-          // this.branches = this.branches.filter(b => b.id === currentUser.branch_id);
+          
         }
         
         this.loadDepartments();
@@ -1028,7 +1036,19 @@ export class DepartmentsComponent implements OnInit {
   onBranchChange() {
     this.expandedDept = null;
   }
-
+// Check if current user can perform CRUD operations
+get canEdit(): boolean {
+  const currentUser = JSON.parse(
+    localStorage.getItem('currentUser') || 
+    sessionStorage.getItem('currentUser') || 
+    '{}'
+  );
+  const role = (currentUser.role || '').toLowerCase().trim();
+  
+  // Only these roles can edit/delete
+  const editRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+  return editRoles.includes(role);
+}
   // ============================================
   // DEPARTMENT METHODS
   // ============================================

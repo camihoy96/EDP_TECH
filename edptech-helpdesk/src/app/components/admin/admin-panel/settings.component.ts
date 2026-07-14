@@ -1375,11 +1375,161 @@ removeLogo() {
     });
   }
 
-  backupNow() { 
-    this.showToastMsg('💾 Backup started...', 'success'); 
+// ============================================
+// BACKUP & RESTORE
+// ============================================
+
+backupNow() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) {
+    this.showToastMsg('❌ No authentication token found', 'error');
+    return;
   }
   
-  restoreBackup() { 
-    this.showToastMsg('🔄 Restore feature coming soon', 'error'); 
-  }
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.showToastMsg('💾 Starting database backup...', 'success');
+  
+  // Use the existing export endpoint
+  this.http.get(`${environment.apiUrl}/api/admin/database/export`, { 
+    headers,
+    responseType: 'text',  // SQL is text
+    observe: 'response'
+  }).subscribe({
+    next: (response: any) => {
+      // Get filename from Content-Disposition header
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `edptech_helpdesk_backup_${new Date().toISOString().split('T')[0]}.sql`;
+      
+      if (contentDisposition) {
+        const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      // Create blob and trigger download
+      const sqlContent = response.body;
+      const blob = new Blob([sqlContent], { type: 'application/sql' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      // Calculate file size
+      const fileSizeKB = (blob.size / 1024).toFixed(1);
+      const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+      const sizeDisplay = blob.size > 1048576 ? `${fileSizeMB} MB` : `${fileSizeKB} KB`;
+      
+      this.showToastMsg(`✅ Backup completed! 📁 ${filename} (${sizeDisplay})`, 'success');
+    },
+    error: (err) => {
+      console.error('❌ Backup failed:', err);
+      
+      let errorMsg = 'Failed to export database.';
+      if (err.status === 403) {
+        errorMsg = 'Access denied. Admin privileges required.';
+      } else if (err.status === 0) {
+        errorMsg = 'Cannot connect to server. Check if backend is running.';
+      } else if (err.status === 404) {
+        errorMsg = 'Backup endpoint not found.';
+      } else {
+        errorMsg = `Backup failed (Error ${err.status}).`;
+      }
+      
+      this.showToastMsg('❌ ' + errorMsg, 'error');
+    }
+  });
+}
+
+restoreBackup() {
+  // Create file input for SQL file selection
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.sql,.txt';
+  
+  input.onchange = (event: any) => {
+    const file = event.target.files[0];
+    
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.name.endsWith('.sql') && !file.name.endsWith('.txt')) {
+      this.showToastMsg('❌ Please select a valid SQL backup file (.sql or .txt)', 'error');
+      return;
+    }
+    
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      this.showToastMsg('❌ File is too large. Maximum size is 50MB.', 'error');
+      return;
+    }
+    
+    // Confirm restoration
+    if (!confirm(`⚠️ WARNING: This will overwrite your current database!\n\nFile: ${file.name}\nSize: ${(file.size / 1024).toFixed(1)} KB\n\nAre you sure you want to proceed?`)) {
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e: any) => {
+      const sqlContent = e.target.result;
+      
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const headers = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      this.showToastMsg('🔄 Restoring database... This may take a few moments.', 'success');
+      
+      // Send to import endpoint
+      this.http.post(`${environment.apiUrl}/api/admin/database/import`, 
+        { sql: sqlContent, filename: file.name }, 
+        { headers }
+      ).subscribe({
+        next: (response: any) => {
+          this.showToastMsg('✅ Database restored successfully! Refreshing page...', 'success');
+          
+          // Reload after delay
+          setTimeout(() => {
+            window.location.reload();
+          }, 2000);
+        },
+        error: (err) => {
+          console.error('❌ Restore failed:', err);
+          
+          let errorMsg = 'Failed to restore database.';
+          if (err.status === 403) {
+            errorMsg = 'Access denied. Admin privileges required.';
+          } else if (err.status === 413) {
+            errorMsg = 'File is too large for server to process.';
+          } else if (err.status === 400) {
+            errorMsg = err.error?.error || 'Invalid SQL file format.';
+          } else if (err.status === 404) {
+            errorMsg = 'Import endpoint not found. Please add /api/admin/database/import to server.js';
+          } else {
+            errorMsg = `Restore failed (Error ${err.status}).`;
+          }
+          
+          this.showToastMsg('❌ ' + errorMsg, 'error');
+        }
+      });
+    };
+    
+    reader.onerror = () => {
+      this.showToastMsg('❌ Failed to read file. Please try again.', 'error');
+    };
+    
+    reader.readAsText(file);
+  };
+  
+  input.click();
+}
+
 }

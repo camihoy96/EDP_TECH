@@ -648,229 +648,8 @@ app.post('/api/auth/validate-key', async (req, res) => {
 });
 
 // ============================================
-// REGISTRATION KEYS API ENDPOINTS
+// function for profile components
 // ============================================
-
-// GET - Fetch all registration keys (Admin only - returns full keys)
-app.get('/api/admin/registration-keys', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        // Only admin and Technician can see full keys
-        if (decoded.role !== 'admin' && decoded.role !== 'Technician') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
-        
-        console.log('🔑 Fetching registration keys for admin...');
-        
-        const [keys] = await pool.query(
-            'SELECT id, key_code, used, created_at FROM registration_keys ORDER BY created_at DESC'
-        );
-        
-        console.log('✅ Keys found:', keys.length);
-        res.json(keys);
-        
-    } catch (error) {
-        console.error('❌ Error fetching keys:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// GET - Public registration key info (for client dashboard - returns masked keys)
-app.get('/api/registration-keys/public', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        // Any authenticated user can access this
-        console.log('🔑 Fetching public key info for user:', decoded.username);
-        
-        const [keys] = await pool.query(
-            'SELECT key_code, used FROM registration_keys ORDER BY created_at DESC'
-        );
-        
-        // Don't expose full keys to clients - just return count and masked keys
-        const activeKeys = keys.filter(k => !k.used);
-        const totalKeys = keys.length;
-        
-        res.json({
-            total: totalKeys,
-            active: activeKeys.length,
-            // Return first active key (masked for security)
-            activeKey: activeKeys.length > 0 ? maskKey(activeKeys[0].key_code) : null,
-            hasKeys: totalKeys > 0,
-            hasActiveKeys: activeKeys.length > 0
-        });
-        
-    } catch (error) {
-        console.error('❌ Error fetching public keys:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Helper function to mask key
-function maskKey(key) {
-    if (!key || key.length < 4) return '****';
-    return key.substring(0, 3) + '•••' + key.substring(key.length - 2);
-}
-
-// POST - Generate new registration key (with custom or auto-generated key)
-app.post('/api/admin/registration-keys', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
-        
-        // Use provided key_code or generate one
-        const keyCode = req.body.key_code || generateKeyCode();
-        
-        // Check if key_code already exists
-        const [existing] = await pool.query(
-            'SELECT id FROM registration_keys WHERE key_code = ?',
-            [keyCode]
-        );
-        
-        if (existing.length > 0) {
-            return res.status(400).json({ error: 'Key code already exists' });
-        }
-        
-        console.log('🔑 Creating new key:', keyCode);
-        
-        const [result] = await pool.query(
-            'INSERT INTO registration_keys (key_code) VALUES (?)',
-            [keyCode]
-        );
-        
-        console.log('✅ Key created with ID:', result.insertId);
-        
-        res.json({
-            success: true,
-            id: result.insertId,
-            key_code: keyCode,
-            message: 'Registration key created successfully'
-        });
-        
-    } catch (error) {
-        console.error('❌ Error creating key:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Helper function to generate random key code
-function generateKeyCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    for (let i = 0; i < 10; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-// PUT - Update registration key code
-app.put('/api/admin/registration-keys/:id', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
-        
-        const keyId = req.params.id;
-        const { key_code } = req.body;
-        
-        console.log('✏️ Updating key ID:', keyId, 'New code:', key_code);
-        
-        if (key_code) {
-            const [existing] = await pool.query(
-                'SELECT id FROM registration_keys WHERE key_code = ? AND id != ?',
-                [key_code, keyId]
-            );
-            
-            if (existing.length > 0) {
-                return res.status(400).json({ error: 'Key code already exists' });
-            }
-            
-            // Only update key_code
-            const [result] = await pool.query(
-                'UPDATE registration_keys SET key_code = ? WHERE id = ?',
-                [key_code, keyId]
-            );
-            
-            if (result.affectedRows > 0) {
-                console.log('✅ Key updated');
-                res.json({ success: true, message: 'Key updated successfully' });
-            } else {
-                res.status(404).json({ error: 'Key not found' });
-            }
-        } else {
-            res.status(400).json({ error: 'Key code is required' });
-        }
-        
-    } catch (error) {
-        console.error('❌ Error updating key:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// DELETE - stays the same
-app.delete('/api/admin/registration-keys/:id', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        if (decoded.role !== 'admin') {
-            return res.status(403).json({ error: 'Access denied. Admin only.' });
-        }
-        
-        const keyId = req.params.id;
-        console.log('🗑️ Deleting key ID:', keyId);
-        
-        const [result] = await pool.query(
-            'DELETE FROM registration_keys WHERE id = ?',
-            [keyId]
-        );
-        
-        if (result.affectedRows > 0) {
-            console.log('✅ Key deleted');
-            res.json({ success: true, message: 'Key deleted successfully' });
-        } else {
-            res.status(404).json({ error: 'Key not found' });
-        }
-        
-    } catch (error) {
-        console.error('❌ Error deleting key:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
 app.put('/api/profile/:table/:id', async (req, res) => {
     try {
         const { table, id } = req.params;
@@ -6031,7 +5810,10 @@ app.get('/api/admin/settings', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager',];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const [rows] = await pool.query('SELECT settings_key, settings_value FROM system_settings');
         
@@ -6063,7 +5845,10 @@ app.post('/api/admin/settings', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         const settings = req.body;
         const userId = decoded.id;
@@ -6108,7 +5893,10 @@ app.post('/api/admin/upload-logo', uploadLogo.single('logo'), async (req, res) =
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
@@ -6144,7 +5932,10 @@ app.delete('/api/admin/remove-logo', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        if (decoded.role !== 'admin') return res.status(403).json({ error: 'Access denied' });
+         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager',];
+if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+    return res.status(403).json({ error: 'Access denied.' });
+}
         
         // Get current logo path from database
         const [rows] = await pool.query(
@@ -6213,7 +6004,7 @@ app.get('/api/admin/branches', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
 }
@@ -6235,7 +6026,7 @@ app.get('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'Technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
 }
@@ -6262,7 +6053,7 @@ app.post('/api/admin/branches', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+       const allowedRoles = ['admin', 'head/manager', 'head manager',  'branch manager', ];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
 }
@@ -6307,7 +6098,7 @@ app.put('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
 }
@@ -6364,7 +6155,7 @@ app.delete('/api/admin/branches/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+       const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
 }
@@ -8435,7 +8226,6 @@ app.get('/api/stats', async (req, res) => {
 // ============================================
 // DATABASE EXPORT API
 // ============================================
-
 // GET - Export entire database
 app.get('/api/admin/database/export', async (req, res) => {
     try {
@@ -8446,13 +8236,16 @@ app.get('/api/admin/database/export', async (req, res) => {
         
         console.log('💾 Starting database export...');
         
-        // Get all tables
+        // Get all tables ONLY (skip views)
         const [tables] = await pool.query(
             `SELECT TABLE_NAME 
              FROM information_schema.TABLES 
-             WHERE TABLE_SCHEMA = 'edptech_helpdesk'
+             WHERE TABLE_SCHEMA = 'edptech_helpdesk' 
+             AND TABLE_TYPE = 'BASE TABLE'
              ORDER BY TABLE_NAME`
         );
+        
+        console.log(`   Found ${tables.length} tables (views excluded)`);
         
         let sql = '-- ============================================\n';
         sql += '-- EDPTech Helpdesk Database Export\n';
@@ -8464,76 +8257,101 @@ app.get('/api/admin/database/export', async (req, res) => {
         sql += 'SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";\n';
         sql += 'START TRANSACTION;\n\n';
         
+        let totalRows = 0;
+        let successTables = 0;
+        let skippedTables = 0;
+        
         for (const tableObj of tables) {
             const tableName = tableObj.TABLE_NAME;
-            console.log(`  📋 Exporting table: ${tableName}`);
             
-            // Get CREATE TABLE statement
-            const [createResult] = await pool.query(`SHOW CREATE TABLE \`${tableName}\``);
-            const createStatement = createResult[0]['Create Table'];
-            
-            sql += `-- --------------------------------------------------------\n`;
-            sql += `-- Table: \`${tableName}\`\n`;
-            sql += `-- --------------------------------------------------------\n\n`;
-            sql += `DROP TABLE IF EXISTS \`${tableName}\`;\n`;
-            sql += `${createStatement};\n\n`;
-            
-            // Get table data
-            const [rows] = await pool.query(`SELECT * FROM \`${tableName}\``);
-            
-            if (rows.length > 0) {
-                sql += `-- Data for table \`${tableName}\` (${rows.length} rows)\n`;
+            try {
+                console.log(`  📋 Exporting table: ${tableName}`);
                 
-                // Get column names
-                const columns = Object.keys(rows[0]);
-                const columnList = columns.map(col => `\`${col}\``).join(', ');
+                // Get CREATE TABLE statement
+                const [createResult] = await pool.query(`SHOW CREATE TABLE \`${tableName}\``);
+                const createStatement = createResult[0]['Create Table'];
                 
-                // Build INSERT statements in batches of 50 rows
-                const batchSize = 50;
-                for (let i = 0; i < rows.length; i += batchSize) {
-                    const batch = rows.slice(i, i + batchSize);
-                    const values = batch.map(row => {
-                        const rowValues = columns.map(col => {
-                            const value = row[col];
-                            if (value === null) return 'NULL';
-                            if (value instanceof Date) {
-                                return `'${value.toISOString().slice(0, 19).replace('T', ' ')}'`;
-                            }
-                            if (typeof value === 'number') return value;
-                            if (typeof value === 'boolean') return value ? 1 : 0;
-                            // String - escape single quotes
-                            return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-                        });
-                        return `(${rowValues.join(', ')})`;
-                    });
+                sql += `-- --------------------------------------------------------\n`;
+                sql += `-- Table: \`${tableName}\`\n`;
+                sql += `-- --------------------------------------------------------\n\n`;
+                sql += `DROP TABLE IF EXISTS \`${tableName}\`;\n`;
+                sql += `${createStatement};\n\n`;
+                
+                // Get table data
+                const [rows] = await pool.query(`SELECT * FROM \`${tableName}\``);
+                
+                if (rows.length > 0) {
+                    sql += `-- Data for table \`${tableName}\` (${rows.length} rows)\n`;
                     
-                    sql += `INSERT INTO \`${tableName}\` (${columnList}) VALUES\n${values.join(',\n')};\n\n`;
+                    // Get column names
+                    const columns = Object.keys(rows[0]);
+                    const columnList = columns.map(col => `\`${col}\``).join(', ');
+                    
+                    // Build INSERT statements in batches of 50 rows
+                    const batchSize = 50;
+                    for (let i = 0; i < rows.length; i += batchSize) {
+                        const batch = rows.slice(i, i + batchSize);
+                        const values = batch.map(row => {
+                            const rowValues = columns.map(col => {
+                                const value = row[col];
+                                if (value === null) return 'NULL';
+                                if (value instanceof Date) {
+                                    return `'${value.toISOString().slice(0, 19).replace('T', ' ')}'`;
+                                }
+                                if (typeof value === 'number') return value;
+                                if (typeof value === 'boolean') return value ? 1 : 0;
+                                // String or Buffer - escape special characters
+                                if (Buffer.isBuffer(value)) {
+                                    return `0x${value.toString('hex')}`;
+                                }
+                                return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r')}'`;
+                            });
+                            return `(${rowValues.join(', ')})`;
+                        });
+                        
+                        sql += `INSERT INTO \`${tableName}\` (${columnList}) VALUES\n${values.join(',\n')};\n\n`;
+                    }
+                    
+                    totalRows += rows.length;
+                } else {
+                    sql += `-- Table \`${tableName}\` is empty\n\n`;
                 }
-            } else {
-                sql += `-- Table \`${tableName}\` is empty\n\n`;
+                
+                successTables++;
+                
+            } catch (tableError) {
+                console.warn(`  ⚠️ Skipping table ${tableName}: ${tableError.message}`);
+                sql += `-- ⚠️ Table \`${tableName}\` skipped due to error: ${tableError.message}\n\n`;
+                skippedTables++;
             }
         }
         
         sql += 'SET FOREIGN_KEY_CHECKS = 1;\n';
         sql += 'COMMIT;\n';
         sql += '\n-- ============================================\n';
-        sql += '-- Export completed successfully\n';
-        sql += '-- ============================================\n';
+        sql += `-- Export completed: ${successTables} tables, ${totalRows} rows`;
+        if (skippedTables > 0) sql += `, ${skippedTables} skipped`;
+        sql += '\n-- ============================================\n';
         
         // Generate filename
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
         const filename = `edptech_helpdesk_backup_${timestamp}.sql`;
         
         console.log(`✅ Database export complete: ${filename}`);
-        console.log(`   Tables: ${tables.length}`);
+        console.log(`   Tables: ${successTables} (${skippedTables} skipped)`);
+        console.log(`   Total rows: ${totalRows}`);
         console.log(`   Size: ${(sql.length / 1024).toFixed(1)} KB`);
         
         // Log the export event
-        await logSystemEvent('info', 'database_export', decoded.id, decoded.username, 
-            decoded.userTable || 'users', 'Database exported', req.ip);
+        try {
+            await logSystemEvent('info', 'database_export', decoded.id, decoded.username, 
+                decoded.userTable || 'users', `Database exported: ${successTables} tables`, req.ip);
+        } catch (logError) {
+            console.warn('⚠️ Could not log export event:', logError.message);
+        }
         
         // Send as downloadable file
-        res.setHeader('Content-Type', 'application/sql');
+        res.setHeader('Content-Type', 'application/sql; charset=utf-8');
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
         res.setHeader('Content-Length', Buffer.byteLength(sql, 'utf8'));
         res.send(sql);
@@ -8546,7 +8364,6 @@ app.get('/api/admin/database/export', async (req, res) => {
         });
     }
 });
-
 // Optional: Export single table
 app.get('/api/admin/database/export/:table', async (req, res) => {
     try {
@@ -8602,7 +8419,70 @@ app.get('/api/admin/database/export/:table', async (req, res) => {
         res.status(500).json({ error: 'Failed to export table: ' + error.message });
     }
 });
-
+// POST - Import/restore database from SQL file
+app.post('/api/admin/database/import', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        // Only admin can restore
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+        }
+        
+        const { sql, filename } = req.body;
+        
+        if (!sql) {
+            return res.status(400).json({ error: 'No SQL content provided' });
+        }
+        
+        console.log(`🔄 Starting database restore from: ${filename || 'unknown file'}`);
+        console.log(`   SQL size: ${(sql.length / 1024).toFixed(1)} KB`);
+        
+        // Split SQL into individual statements
+        const statements = sql
+            .split(';')
+            .map(s => s.trim())
+            .filter(s => s.length > 0 && !s.startsWith('--') && !s.startsWith('SET '));
+        
+        let executed = 0;
+        let errors = 0;
+        
+        for (const statement of statements) {
+            try {
+                await pool.query(statement);
+                executed++;
+            } catch (stmtError) {
+                console.warn(`⚠️ Skipping statement: ${stmtError.message}`);
+                errors++;
+            }
+        }
+        
+        console.log(`✅ Database restore complete: ${executed} statements executed, ${errors} skipped`);
+        
+        // Log the restore event
+        await logSystemEvent('warning', 'database_restore', decoded.id, decoded.username, 
+            decoded.userTable || 'users', `Database restored from: ${filename || 'upload'}`, req.ip);
+        
+        res.json({ 
+            success: true, 
+            message: `Database restored successfully!`,
+            executed,
+            errors,
+            filename: filename || 'uploaded file'
+        });
+        
+    } catch (error) {
+        console.error('❌ Database import error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to restore database: ' + error.message 
+        });
+    }
+});
 // ============================================
 // FORGOT PASSWORD - Send Reset Code via Discord
 // ============================================

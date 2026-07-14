@@ -225,8 +225,7 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
     <span class="nav-icon">💻</span> Computer Monitoring
   </a>
 </ng-container>
-    
-    <!-- System Section (admin only) -->
+
    <!-- System Section (admin, head/manager, supervisor) -->
 <ng-container *ngIf="hasSystemAccess()">
   <div class="sidebar-divider"></div>
