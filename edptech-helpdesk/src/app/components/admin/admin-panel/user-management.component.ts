@@ -175,34 +175,34 @@ import { environment } from '../../../../environments/environment';
         <tr class="branch-group-header">
           <td [attr.colspan]="canManageUsers ? 11 : 10" style="background:#e8edf8; font-weight:bold; text-align:left; padding:8px;">
             🏢 {{ branchGroup.branchName }} 
-            <!-- ✅ Count total users in this branch across all departments -->
             <span style="color:#888; font-weight:normal;">
               ({{ getBranchUserCount(branchGroup) }} users)
             </span>
           </td>
         </tr>
-        <!-- Department sub-groups within branch -->
+        <!-- Department groups -->
         <ng-container *ngFor="let deptGroup of branchGroup.departments">
-          <!-- Only show dept header if there are multiple departments -->
+          <!-- Department Header -->
           <tr class="dept-group-header" *ngIf="branchGroup.departments.length > 1">
             <td [attr.colspan]="canManageUsers ? 11 : 10" style="background:#f0f4f8; font-weight:600; text-align:left; padding:6px 8px 6px 24px;">
               📂 {{ deptGroup.deptName }}
               <span style="color:#888; font-weight:normal;">({{ deptGroup.users.length }} users)</span>
             </td>
           </tr>
-          <!-- Users in this department -->
+          <!-- Users -->
           <tr *ngFor="let user of deptGroup.users">
             <td>{{ user.id }}</td>
-           <td>
-  <div class="user-avatar-sm" 
-       [style.background]="user.avatar_color || '#3b82f6'"
-       [class.clickable-avatar]="canViewProfile"
-       (click)="onAvatarClick(user, 'new_user')"
-       [title]="canViewProfile ? 'Click to view profile' : ''">
-    <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
-    <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
-  </div>
-</td>
+            <td>
+              <div class="user-avatar-sm" 
+                   [style.background]="user.avatar_color || '#3b82f6'"
+                   [class.clickable-avatar]="canViewProfile"
+                   (click)="canViewProfile && openProfileModal(user, 'new_user')"
+                   style="cursor:pointer;"
+                   [title]="canViewProfile ? 'Click to view profile' : ''">
+                <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" class="avatar-img">
+                <span *ngIf="!user.photo_url">{{ user.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
+              </div>
+            </td>
             <td>{{ user.username }}</td>
             <td>{{ user.fullname }}</td>
             <td>{{ user.role || '—' }}</td>
@@ -216,19 +216,20 @@ import { environment } from '../../../../environments/environment';
                 <span class="status-text" [class]="getClientStatusClass(user)">{{ getClientAvailabilityStatus(user) }}</span>
               </div>
             </td>
-           <td class="action-cell" *ngIf="canManageUsers">
-  <ng-container *ngIf="canEditUsers">
-    <button class="action-btn" (click)="editUser(user, 'new_user')" title="Edit">✏️</button>
-    <button class="action-btn" (click)="resetPassword(user, 'new_user')" title="Reset Password">🔑</button>
-  </ng-container>
-  <button class="action-btn lock-btn" *ngIf="canLockUsers" (click)="toggleLockUser(user, 'new_user')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
-    {{ user.locked_until ? '🗝️' : '🔒' }}
-  </button>
-  <button class="action-btn delete-btn" *ngIf="canDeleteUsers" (click)="deleteUser(user, 'new_user')" title="Delete">🗑️</button>
-</td>
+            <td class="action-cell" *ngIf="canManageUsers">
+              <ng-container *ngIf="canEditUsers">
+                <button class="action-btn" (click)="editUser(user, 'new_user')" title="Edit">✏️</button>
+                <button class="action-btn" (click)="resetPassword(user, 'new_user')" title="Reset Password">🔑</button>
+              </ng-container>
+              <button class="action-btn lock-btn" *ngIf="canLockUsers" (click)="toggleLockUser(user, 'new_user')" [title]="user.locked_until ? 'Unlock' : 'Lock'">
+                {{ user.locked_until ? '🗝️' : '🔒' }}
+              </button>
+              <button class="action-btn delete-btn" *ngIf="canDeleteUsers" (click)="deleteUser(user, 'new_user')" title="Delete">🗑️</button>
+            </td>
           </tr>
         </ng-container>
       </ng-container>
+      <!-- Empty State -->
       <tr *ngIf="filteredClientUsers.length === 0">
         <td [attr.colspan]="canManageUsers ? 11 : 10" class="empty-row">No users found</td>
       </tr>
@@ -674,6 +675,24 @@ import { environment } from '../../../../environments/environment';
 .modal-titlebar:active {
   cursor: grabbing;
 }
+  .profile-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.profile-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  background: #e8eeff;
+  color: #0a3a8c;
+}
+.text-success { color: #008800 !important; }
+.text-danger { color: #cc0000 !important; }
       /* Clickable Avatar */
 .clickable-avatar {
   cursor: pointer;
@@ -686,10 +705,11 @@ import { environment } from '../../../../environments/environment';
 
 /* Profile Modal */
 .profile-modal {
-  max-width: 550px;
+  max-width: 700px;
+  min-width: 500px;
 }
 .profile-body {
-  max-height: 65vh;
+  max-height: 75vh;
   overflow-y: auto;
 }
 
@@ -736,8 +756,9 @@ import { environment } from '../../../../environments/environment';
 }
 
 .profile-details-grid {
-  display: grid; grid-template-columns: 1fr 1fr;
-  gap: 8px 16px;
+  display: grid; 
+  grid-template-columns: 1fr 1fr 1fr;  /* was 1fr 1fr */
+  gap: 10px 20px;
 }
 .profile-field {
   display: flex; flex-direction: column; gap: 2px;
@@ -963,11 +984,22 @@ canViewProfile = false;
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
     this.loadBranchesAndDepartments();
     this.loadAllUsers();
-    
+    document.addEventListener('keydown', this.onEscKey.bind(this));
     setInterval(() => {
       this.applyFilters();
     }, 60000);
   }
+  // ✅ ESC key handler
+onEscKey(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    if (this.showProfileModal) this.closeProfileModal();
+    if (this.showEditModal) this.closeEditModal();
+    if (this.showPasswordModal) this.closePasswordModal();
+    if (this.showLockModal) this.closeLockModal();
+    if (this.showDeleteUserModal) this.closeDeleteUserModal();
+    if (this.showNotificationModal) this.closeNotificationModal();
+  }
+}
 checkPermissions() {
     const role = (this.currentUser?.role || '').toLowerCase().trim();
     this.userRole = role;
@@ -1032,58 +1064,8 @@ checkPermissions() {
       canViewProfile: this.canViewProfile
     });
 }
-// ✅ Group client users by branch and department
-get groupedClientUsers(): any[] {
-  const groups: any[] = [];
-  const branchMap = new Map<number, any>();
-  
-  // Sort users by branch then department
-  const sortedUsers = [...this.filteredClientUsers].sort((a: any, b: any) => {
-    const branchA = this.getBranchName(a.branch_id) || '';
-    const branchB = this.getBranchName(b.branch_id) || '';
-    if (branchA !== branchB) return branchA.localeCompare(branchB);
-    const deptA = a.department || '';
-    const deptB = b.department || '';
-    return deptA.localeCompare(deptB);
-  });
-  
-  // Group by branch
-  sortedUsers.forEach((user: any) => {
-    const branchId = user.branch_id || 0;
-    const branchName = this.getBranchName(user.branch_id) || 'Unassigned';
-    
-    if (!branchMap.has(branchId)) {
-      branchMap.set(branchId, {
-        branchId,
-        branchName,
-        departments: new Map<string, any[]>()
-      });
-    }
-    
-    const branchGroup = branchMap.get(branchId)!;
-    const deptName = user.department || 'Unassigned';
-    
-    if (!branchGroup.departments.has(deptName)) {
-      branchGroup.departments.set(deptName, []);
-    }
-    branchGroup.departments.get(deptName)!.push(user);
-  });
-  
-  // Convert maps to arrays with proper type annotations
-  branchMap.forEach((branchGroup: any) => {
-    const departments: any[] = [];
-    branchGroup.departments.forEach((users: any[], deptName: string) => {
-      departments.push({ deptName, users });
-    });
-    groups.push({
-      branchId: branchGroup.branchId,
-      branchName: branchGroup.branchName,
-      departments
-    });
-  });
-  
-  return groups;
-}
+groupedClientUsers: any[] = [];
+
 // ✅ Helper to count total users in a branch group
 getBranchUserCount(branchGroup: any): number {
   let count = 0;
@@ -1220,7 +1202,7 @@ onAvatarClick(user: any, table: string) {
   applyFilters() {
     const term = this.searchTerm.toLowerCase();
     
-    // Filter team users (no branch/department filter for team)
+    // Filter team users
     this.filteredTeamUsers = this.teamUsers.filter(u => {
       const matchesSearch = !term || 
         u.username?.toLowerCase().includes(term) || 
@@ -1229,7 +1211,7 @@ onAvatarClick(user: any, table: string) {
       return matchesSearch;
     });
     
-    // Filter client users (with branch and department)
+    // Filter client users
     this.filteredClientUsers = this.clientUsers.filter(u => {
       const matchesSearch = !term || 
         u.username?.toLowerCase().includes(term) || 
@@ -1240,12 +1222,65 @@ onAvatarClick(user: any, table: string) {
       return matchesSearch && matchesBranch && matchesDept;
     });
     
+    // ✅ COMPUTE GROUPED USERS ONCE HERE
+    this.computeGroupedClientUsers();
+    
     this.teamTotalPages = Math.ceil(this.filteredTeamUsers.length / this.pageSize);
     this.clientTotalPages = Math.ceil(this.filteredClientUsers.length / this.pageSize);
     this.teamPage = 1;
     this.clientPage = 1;
     this.updatePaginatedLists();
-  }
+}
+
+// ✅ New method to compute grouped users
+computeGroupedClientUsers() {
+  const groups: any[] = [];
+  const branchMap = new Map<number, any>();
+  
+  const sortedUsers = [...this.filteredClientUsers].sort((a: any, b: any) => {
+    const branchA = this.getBranchName(a.branch_id) || '';
+    const branchB = this.getBranchName(b.branch_id) || '';
+    if (branchA !== branchB) return branchA.localeCompare(branchB);
+    const deptA = a.department || '';
+    const deptB = b.department || '';
+    return deptA.localeCompare(deptB);
+  });
+  
+  sortedUsers.forEach((user: any) => {
+    const branchId = user.branch_id || 0;
+    const branchName = this.getBranchName(user.branch_id) || 'Unassigned';
+    
+    if (!branchMap.has(branchId)) {
+      branchMap.set(branchId, {
+        branchId,
+        branchName,
+        departments: new Map<string, any[]>()
+      });
+    }
+    
+    const branchGroup = branchMap.get(branchId)!;
+    const deptName = user.department || 'Unassigned';
+    
+    if (!branchGroup.departments.has(deptName)) {
+      branchGroup.departments.set(deptName, []);
+    }
+    branchGroup.departments.get(deptName)!.push(user);
+  });
+  
+  branchMap.forEach((branchGroup: any) => {
+    const departments: any[] = [];
+    branchGroup.departments.forEach((users: any[], deptName: string) => {
+      departments.push({ deptName, users });
+    });
+    groups.push({
+      branchId: branchGroup.branchId,
+      branchName: branchGroup.branchName,
+      departments
+    });
+  });
+  
+  this.groupedClientUsers = groups;
+}
 
   parseTime(timeStr: string): number {
     if (!timeStr) return 0;
@@ -1388,14 +1423,14 @@ loadAllUsers() {
       }
     });
 
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/new-users`, { headers }).subscribe({
-      next: (users) => {
-        console.log('✅ Client users loaded:', users.length);
-        this.clientUsers = users;
-        this.applyFilters();
-      },
-      error: (err: HttpErrorResponse) => console.error('❌ Error loading client users:', err.status, err.error)
-    });
+   this.http.get<any[]>(`${environment.apiUrl}/api/admin/new-users`, { headers }).subscribe({
+  next: (users) => {
+    console.log('✅ Client users loaded:', users.length);
+    this.clientUsers = users;
+    this.applyFilters(); // This now calls computeGroupedClientUsers
+  },
+  error: (err: HttpErrorResponse) => console.error('❌ Error loading client users:', err.status, err.error)
+});
 }
   
    setActiveTab(tab: 'team' | 'users') {
