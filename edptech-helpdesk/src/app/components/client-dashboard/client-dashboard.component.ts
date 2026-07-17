@@ -188,7 +188,10 @@ interface ClientTicket {
   {{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}
   <span class="tbadge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
 </button>
-
+<button class="toolbar-btn" [class.active-btn]="isChatRoute" (click)="goToChat()" *ngIf="isEDPUser()">
+    <span class="tbtn-icon">💬</span> Chat
+    <span class="tbadge" *ngIf="chatUnreadCount > 0">{{ chatUnreadCount > 99 ? '99+' : chatUnreadCount }}</span>
+</button>
   <div class="toolbar-separator"></div>
 
   <app-client-notification-bell (viewAll)="openNotificationsModal()"></app-client-notification-bell>
@@ -1544,6 +1547,8 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isAuthenticated = false;
   isTokenValid = false;
   isRefreshing = false;
+  chatUnreadCount = 0;
+private chatCountInterval: any;
   // ✅ New properties for notifications
   ourOrdersUnreadCount: number = 0;
   incomingOrdersUnreadCount: number = 0;
@@ -1594,7 +1599,8 @@ private dragTargetCalendar: HTMLElement | null = null;
 ngOnInit() {
   // First, verify authentication before loading anything
   this.verifyAuthentication();
-  
+  this.loadChatUnreadCount();
+this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
   // ✅ Load notification data
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
@@ -1606,6 +1612,21 @@ ngOnInit() {
   });
 }
 // ─── CALENDAR DRAGGING METHODS ───
+loadChatUnreadCount() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const username = currentUser.username;
+  if (!username) return;
+  
+  const headers = { 'Authorization': `Bearer ${token}` };
+  this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${username}`, { headers }).subscribe({
+    next: (unread) => {
+      this.chatUnreadCount = (unread || []).reduce((total: number, item: any) => total + (item.count || 0), 0);
+    },
+    error: () => { this.chatUnreadCount = 0; }
+  });
+}
 
 onCalendarHeaderMouseDown(event: MouseEvent) {
   const target = event.currentTarget as HTMLElement;
@@ -2619,6 +2640,7 @@ markAllTicketsRead(): void {
     if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
     if (this.sessionCheckInterval) clearInterval(this.sessionCheckInterval);
     if (this.tokenCheckInterval) clearInterval(this.tokenCheckInterval);
+    if (this.chatCountInterval) clearInterval(this.chatCountInterval);
     this.destroy$.next();
     this.clearLogoutTimers();
     this.destroy$.complete();
@@ -2628,10 +2650,12 @@ markAllTicketsRead(): void {
 
   get isDashboardRoute(): boolean { return this.router.url === '/client/dashboard' || this.router.url === '/client'; }
   goToProfile() { this.router.navigate(['/client/profile']); }
-
+ goToChat() { this.router.navigate(['/client/chat']); }
   startInactivityTimer() { this.resetInactivityTimer(); }
 
-
+get isChatRoute(): boolean { 
+  return this.router.url === '/client/chat'; 
+}
   autoLogout() {
     this.showLogoutWarning = true;
     this.logoutCountdown = 60;

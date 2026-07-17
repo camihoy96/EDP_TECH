@@ -1018,7 +1018,7 @@ checkPermissions() {
         this.canManageUsers = true;
         this.canEditUsers = true;
         this.canDeleteUsers = true;
-        this.canLockUsers = false;
+        this.canLockUsers = true;
         this.canViewProfile = true;  // ✅ Head/Manager can view profile
         break;
       
@@ -1473,32 +1473,31 @@ loadAllUsers() {
     const user = this.lockUserData;
     
     if (user.locked_until) {
-     this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/lock`, {}, { headers: this.getHeaders() }).subscribe({
+      // ✅ User IS locked → UNLOCK them
+      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/unlock`, {}, { headers: this.getHeaders() }).subscribe({
         next: () => {
-          user.locked_until = null;
-          user.failed_attempts = 0;
           this.closeLockModal();
-          this.applySearch();
+          this.loadAllUsers();  // ✅ Reload from server to get fresh data
         },
         error: (err) => {
           this.closeLockModal();
-          alert('Error: ' + (err.error?.message || err.message));
+          this.showNotification('error', 'Error', err.error?.message || 'Failed to unlock user');
         }
       });
     } else {
-      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/unlock`, {}, { headers: this.getHeaders() }).subscribe({
+      // ✅ User is NOT locked → LOCK them
+      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/lock`, {}, { headers: this.getHeaders() }).subscribe({
         next: () => {
-          user.locked_until = new Date(Date.now() + 24 * 60 * 60 * 1000);
           this.closeLockModal();
-          this.applySearch();
+          this.loadAllUsers();  // ✅ Reload from server to get fresh data
         },
         error: (err) => {
           this.closeLockModal();
-          alert('Error: ' + (err.error?.message || err.message));
+          this.showNotification('error', 'Error', err.error?.message || 'Failed to lock user');
         }
       });
     }
-  }
+}
 
   closeLockModal() {
     this.showLockModal = false;

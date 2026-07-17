@@ -232,6 +232,11 @@ export const routes: Routes = [
   path: 'reports',
   loadComponent: () => import('./components/client-reports/client-reports-modal.component')
     .then(m => m.ClientReportsModalComponent)
+}, 
+{
+  path: 'chat',
+  loadComponent: () => import('./components/client-dashboard/client-chat.component')
+    .then(m => m.ClientChatComponent)
 }
     ]
   },

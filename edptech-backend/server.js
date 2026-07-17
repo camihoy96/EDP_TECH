@@ -5675,7 +5675,7 @@ app.post('/api/admin/restart', async (req, res) => {
         console.error('Error restarting services:', error);
         res.status(500).json({ error: error.message });
     }
-});
+}); 
 
 // Helper function to log system events (if not already defined)
 async function logSystemEvent(level, type, action, userId, username, ip) {
