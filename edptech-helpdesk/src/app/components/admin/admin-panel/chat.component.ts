@@ -55,7 +55,7 @@ interface ChatMessage {
 
       <div class="tabs-bar">
   <button class="tab-btn" [class.active]="activeTab === 'staff'" (click)="setActiveTab('staff')">
-    👨‍💼 Staff ({{ staffUsers.length }})
+    👨‍💼 Team ({{ staffUsers.length }})
     <span class="tab-badge" *ngIf="staffUnreadCount > 0">{{ staffUnreadCount > 99 ? '99+' : staffUnreadCount }}</span>
   </button>
   <button class="tab-btn" [class.active]="activeTab === 'clients'" (click)="setActiveTab('clients')">
