@@ -72,13 +72,30 @@ interface ChatMessage {
           </div>
           
           <div class="users-list">
-            <div class="user-item" *ngFor="let user of filteredUsers" [class.active]="selectedUser?.username === user.username" (click)="selectUser(user)">
-  <div class="user-avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'"
-     [attr.data-tooltip]="getUserHoverInfo(user)">
-    <img *ngIf="user.photo_url" [src]="this.apiUrl + user.photo_url" [alt]="user.fullname">
-    <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
-    <span class="status-dot" [class.online]="isUserOnline(user)"></span>
+          <div class="user-item" *ngFor="let user of filteredUsers" 
+     [class.active]="selectedUser?.username === user.username" 
+     (click)="selectUser(user)">
+  
+  <div class="user-avatar-wrapper" 
+       (mouseenter)="showUserInfo = user; tooltipX = $event.clientX; tooltipY = $event.clientY" 
+       (mouseleave)="showUserInfo = null">
+    <div class="user-avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
+      <img *ngIf="user.photo_url" [src]="this.apiUrl + user.photo_url" [alt]="user.fullname">
+      <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
+      <span class="status-dot" [class.online]="isUserOnline(user)"></span>
+    </div>
+    
+    <!-- ✅ Popup info card that appears on hover -->
+    <div class="user-info-popup" *ngIf="showUserInfo === user">
+      <div class="popup-name">{{ user.fullname }}</div>
+      <div class="popup-row" *ngIf="user.role"><span>🔖</span> {{ user.role }}</div>
+      <div class="popup-row" *ngIf="user.department"><span>📁</span> {{ user.department }}</div>
+      <div class="popup-row" *ngIf="user.branch"><span>🏢</span> {{ user.branch }}</div>
+      <div class="popup-row" *ngIf="user.company"><span>🏭</span> {{ user.company }}</div>
+      <div class="popup-row" *ngIf="user.email"><span>📧</span> {{ user.email }}</div>
+    </div>
   </div>
+  
   <div class="user-info">
     <div class="user-name">
       {{ user.fullname }}
@@ -310,37 +327,14 @@ interface ChatMessage {
     }
     .user-item:hover { background: #f8f9fa; }
     .user-item.active { background: #e8f0ff; }
-    .user-avatar {
-      width: 48px; height: 48px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      color: white; font-weight: bold; font-size: 18px;
-      margin-right: 12px;
-      position: relative; flex-shrink: 0;
-      overflow: hidden;
-    }
-   .user-avatar::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 110%;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.85);
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-size: 10px;
-  white-space: pre-line;  /* ✅ Changed from nowrap to pre-line for line breaks */
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 100;
-  line-height: 1.4;
-  text-align: left;  /* ✅ Changed to left for better readability */
-  min-width: 120px;  /* ✅ Add min-width */
-}
-.user-avatar:hover::after {
-  opacity: 1;
+   .user-avatar {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: bold; font-size: 18px;
+  margin-right: 12px;
+  position: relative; flex-shrink: 0;
+  overflow: visible !important; /* ✅ Important */
 }
     .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .status-dot {
@@ -522,7 +516,91 @@ interface ChatMessage {
   color: #888;
   margin-left: 2px;
 }
+/* User Avatar Wrapper */
+.user-avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  margin-right: 12px;
+}
 
+/* User Avatar */
+.user-avatar {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: bold; font-size: 18px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.status-dot {
+  position: absolute; bottom: 2px; right: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%; background: #888;
+  border: 2px solid white;
+}
+.status-dot.online { background: #008800; }
+
+/* ✅ User Info Popup - appears on hover */
+.user-info-popup {
+  position: fixed;
+  background: #1a1a2e;
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 11px;
+  z-index: 99999;
+  line-height: 1.6;
+  min-width: 180px;
+  max-width: 240px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 1px solid rgba(255,255,255,0.15);
+  pointer-events: none;
+  animation: popupFadeIn 0.15s ease;
+  transform: translate(60px, -20px);
+}
+
+.popup-name {
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+}
+
+.popup-row {
+  padding: 2px 0;
+  font-size: 11px;
+  color: #ccc;
+}
+
+.popup-row span {
+  margin-right: 4px;
+}
+
+@keyframes popupFadeIn {
+  from { opacity: 0; transform: translate(60px, -16px); }
+  to { opacity: 1; transform: translate(60px, -20px); }
+}
+
+.user-department {
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
+  margin-left: 2px;
+}
+.user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.status-dot {
+  position: absolute; bottom: 2px; right: 2px;
+  width: 12px; height: 12px;
+  border-radius: 50%; background: #888;
+  border: 2px solid white;
+}
+.status-dot.online { background: #008800; }
 .user-avatar {
   cursor: pointer;
 }
@@ -573,7 +651,9 @@ apiUrl = environment.apiUrl;
   // File upload
   selectedFile: File | null = null;
   isDragging = false;
-
+  showUserInfo: ChatUser | null = null;
+  tooltipX = 0;
+  tooltipY = 0;
   // Image preview
   showImagePreview = false;
   previewImageUrl = '';
@@ -785,15 +865,8 @@ get clientUnreadCount(): number {
     });
   }
  getUserHoverInfo(user: ChatUser): string {
-  const parts: string[] = [];
-  if (user.department) parts.push(`📁 Department: ${user.department}`);
-  if (user.branch) parts.push(`🏢 Branch: ${user.branch}`);
-  if (user.company) parts.push(`🏭 Company: ${user.company}`);
-  
-  // If no info, don't show tooltip
-  if (parts.length === 0) return '';
-  
-  return parts.join(' \n ');  // Add space before newline for better rendering
+  // ✅ Always show user info for testing
+  return `👤 ${user.fullname}\n📁 ${user.department || 'No Department'}\n🏢 ${user.branch || 'No Branch'}\n🏭 ${user.company || 'No Company'}`;
 }
   // --- Reply Functions ---
   replyToMessage(message: ChatMessage) {
