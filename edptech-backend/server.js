@@ -5759,31 +5759,23 @@ app.get('/api/computers', async (req, res) => {
         }
         
         // ✅ Direct from MySQL (fast - no timeout delay)
-        const [computers] = await pool.query(
-            `SELECT 
-                id, 
-                computer_name, 
-                user_name, 
-                location,
-                department, 
-                ip_address, 
-                mac_address, 
-                os, 
-                bit, 
-                ram, 
-                storage, 
-                processor, 
-                antivirus, 
-                ms_license_type, 
-                DATE_FORMAT(license_activation, '%Y-%m-%d') as license_activation,
-                license_duration,
-                DATE_FORMAT(license_expiry, '%Y-%m-%d') as license_expiry,
-                status, 
-                DATE_FORMAT(last_checked, '%Y-%m-%d %H:%i:%s') as last_checked,
-                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') as created_at
-            FROM computer_monitoring 
-            ORDER BY INET_ATON(SUBSTRING_INDEX(ip_address, '/', 1))`
-        );
+       const [computers] = await pool.query(
+    `SELECT 
+        id, computer_name, user_name, location, department, ip_address, mac_address,
+        os, bit, ram, storage, processor, antivirus, ms_license_type,
+        DATE_FORMAT(license_activation, '%Y-%m-%d') as license_activation,
+        license_duration,
+        DATE_FORMAT(license_expiry, '%Y-%m-%d') as license_expiry,
+        office_activation,  -- ✅ NEW
+        DATE_FORMAT(office_activation_date, '%Y-%m-%d') as office_activation_date,  -- ✅ NEW
+        office_duration,  -- ✅ NEW
+        DATE_FORMAT(office_expiry, '%Y-%m-%d') as office_expiry,  -- ✅ NEW
+        DATE_FORMAT(av_last_update, '%Y-%m-%d') as av_last_update,  -- ✅ NEW
+        DATE_FORMAT(av_next_update, '%Y-%m-%d') as av_next_update,  -- ✅ NEW
+        status, last_checked, created_at
+    FROM computer_monitoring 
+    ORDER BY INET_ATON(SUBSTRING_INDEX(ip_address, '/', 1))`
+);
         
         // Return in the format Angular expects
         res.json({
@@ -5797,7 +5789,24 @@ app.get('/api/computers', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
-
+// GET - Get all computer IDs that have cleaning records
+app.get('/api/computers/cleaning/all-ids', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const [rows] = await pool.query(
+            'SELECT DISTINCT computer_id FROM computer_cleaning_records WHERE computer_id IS NOT NULL'
+        );
+        
+        res.json(rows);
+    } catch (error) {
+        console.error('Error fetching cleaned PC IDs:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // GET - Single Computer - OPTIMIZED
 app.get('/api/computers/:id', async (req, res) => {
     try {
@@ -5841,6 +5850,12 @@ app.get('/api/computers/:id', async (req, res) => {
                 DATE_FORMAT(license_activation, '%Y-%m-%d') as license_activation,
                 license_duration,
                 DATE_FORMAT(license_expiry, '%Y-%m-%d') as license_expiry,
+                office_activation,  -- ✅ ADD
+                DATE_FORMAT(office_activation_date, '%Y-%m-%d') as office_activation_date,  -- ✅ ADD
+                office_duration,  -- ✅ ADD
+                DATE_FORMAT(office_expiry, '%Y-%m-%d') as office_expiry,  -- ✅ ADD
+                DATE_FORMAT(av_last_update, '%Y-%m-%d') as av_last_update,  -- ✅ ADD
+                DATE_FORMAT(av_next_update, '%Y-%m-%d') as av_next_update,  -- ✅ ADD
                 status, last_checked, created_at
             FROM computer_monitoring WHERE id = ?`,
             [req.params.id]
@@ -5946,19 +5961,37 @@ app.post('/api/computers', async (req, res) => {
         const token = authHeader.split(' ')[1];
         jwt.verify(token, 'secret_key');
         
-        const { computer_name, user_name, location, department, ip_address, mac_address,
-                os, bit, ram, storage, processor, antivirus,
-                ms_license_type, license_activation, license_duration, license_expiry } = req.body;
+        const { 
+            computer_name, user_name, location, department, ip_address, mac_address,
+            os, bit, ram, storage, processor, antivirus,
+            ms_license_type, license_activation, license_duration, license_expiry,
+            office_activation, office_activation_date, office_duration, office_expiry,  // ✅ NEW
+            av_last_update, av_next_update  // ✅ NEW
+        } = req.body;
         
         const [result] = await pool.query(
             `INSERT INTO computer_monitoring 
             (computer_name, user_name, location, department, ip_address, mac_address,
              os, bit, ram, storage, processor, antivirus,
-             ms_license_type, license_activation, license_duration, license_expiry, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')`,
-            [computer_name, user_name, location, department, ip_address, mac_address,
-             os, bit, ram, storage, processor, antivirus,
-             ms_license_type, license_activation, license_duration, license_expiry]
+             ms_license_type, license_activation, license_duration, license_expiry,
+             office_activation, office_activation_date, office_duration, office_expiry,  -- ✅ NEW
+             av_last_update, av_next_update,  -- ✅ NEW
+             status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')`,
+            [
+                computer_name, user_name, location, department, ip_address, mac_address,
+                os, bit, ram, storage, processor, antivirus,
+                ms_license_type, 
+                license_activation || null, 
+                license_duration || null, 
+                license_expiry || null,
+                office_activation || null,  // ✅ NEW
+                office_activation_date || null,  // ✅ NEW
+                office_duration || null,  // ✅ NEW
+                office_expiry || null,  // ✅ NEW
+                av_last_update || null,  // ✅ NEW
+                av_next_update || null  // ✅ NEW
+            ]
         );
         
         res.json({ success: true, message: 'Computer added', id: result.insertId });
@@ -5976,22 +6009,30 @@ app.put('/api/computers/:id', async (req, res) => {
         const token = authHeader.split(' ')[1];
         jwt.verify(token, 'secret_key');
         
-        const { computer_name, user_name, location, department, ip_address, mac_address,
-                os, bit, ram, storage, processor, antivirus,
-                ms_license_type, license_activation, license_duration, license_expiry } = req.body;
-        
-        await pool.query(`UPDATE computer_monitoring SET
-            computer_name=?, user_name=?, location=?, department=?, ip_address=?,
-            mac_address=?, os=?, bit=?, ram=?, storage=?,
-            processor=?, antivirus=?, ms_license_type=?,
-            license_activation=?, license_duration=?, license_expiry=?
-            WHERE id=?`,
-            [computer_name, user_name, location, department, ip_address, mac_address,
-             os, bit, ram, storage, processor, antivirus,
-             ms_license_type, license_activation, license_duration, license_expiry, req.params.id]
-        );
-        
-        res.json({ success: true, message: 'Computer updated' });
+         const { 
+        computer_name, user_name, location, department, ip_address, mac_address,
+        os, bit, ram, storage, processor, antivirus,
+        ms_license_type, license_activation, license_duration, license_expiry,
+        office_activation, office_activation_date, office_duration, office_expiry,
+        av_last_update, av_next_update 
+    } = req.body; // ✅ NEW
+    
+     await pool.query(`UPDATE computer_monitoring SET
+        computer_name=?, user_name=?, location=?, department=?, ip_address=?,
+        mac_address=?, os=?, bit=?, ram=?, storage=?,
+        processor=?, antivirus=?, ms_license_type=?,
+        license_activation=?, license_duration=?, license_expiry=?,
+        office_activation=?, office_activation_date=?, office_duration=?, office_expiry=?,
+        av_last_update=?, av_next_update=?
+        WHERE id=?`,
+        [computer_name, user_name, location, department, ip_address, mac_address,
+         os, bit, ram, storage, processor, antivirus,
+         ms_license_type, license_activation, license_duration, license_expiry,
+         office_activation, office_activation_date, office_duration, office_expiry,  // ✅ NEW
+         av_last_update, av_next_update, req.params.id]  // ✅ NEW
+    );
+    
+    res.json({ success: true, message: 'Computer updated' });
     } catch (error) { 
         res.status(500).json({ error: error.message }); 
     }
@@ -6037,6 +6078,130 @@ app.get('/api/computers/dashboard/stats', async (req, res) => {
         res.json({ success: true, stats: stats[0] });
     } catch (error) { 
         res.status(500).json({ error: error.message }); 
+    }
+});
+
+// ============================================
+// COMPUTER CLEANING RECORDS
+// ============================================
+
+// POST - Save Cleaning Record
+app.post('/api/computers/cleaning', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+         const { computer_id, computer_name, location, ip_address, os, bit,
+                ram, storage, antivirus, av_last_update,
+                office_activation, office_activation_date, office_duration, office_expiry,
+                notes, cleaning_date } = req.body;
+        
+        if (!computer_name || !cleaning_date) {
+            return res.status(400).json({ error: 'Computer name and cleaning date are required' });
+        }
+        
+        // Insert cleaning record
+        const [result] = await pool.query(
+            `INSERT INTO computer_cleaning_records 
+             (computer_id, computer_name, location, ip_address, os, bit, ram, storage, 
+              antivirus, av_last_update, office_activation, office_activation_date, 
+              office_duration, office_expiry, notes, cleaning_date)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [computer_id || null, computer_name, location || null, ip_address || null, 
+             os || null, bit || '64', ram || null, storage || null,
+             antivirus || null, av_last_update || null, office_activation || null, 
+             office_activation_date || null, office_duration || null, office_expiry || null, 
+             notes || null, cleaning_date]
+        );
+        
+        // Also update the main computer_monitoring table with latest cleaning data
+        if (computer_id) {
+            await pool.query(
+                `UPDATE computer_monitoring SET 
+                 location = COALESCE(NULLIF(?, ''), location),
+                 os = COALESCE(NULLIF(?, ''), os),
+                 bit = COALESCE(NULLIF(?, ''), bit),
+                 ram = COALESCE(NULLIF(?, ''), ram),
+                 storage = COALESCE(NULLIF(?, ''), storage),
+                 antivirus = COALESCE(NULLIF(?, ''), antivirus),
+                 av_last_update = COALESCE(?, av_last_update),
+                 office_activation = COALESCE(NULLIF(?, ''), office_activation),
+                 office_activation_date = COALESCE(?, office_activation_date),
+                 office_duration = COALESCE(NULLIF(?, ''), office_duration),
+                 office_expiry = COALESCE(?, office_expiry)
+                 WHERE id = ?`,
+                [location, os, bit, ram, storage, antivirus, 
+                 av_last_update || null, office_activation, 
+                 office_activation_date || null, office_duration, 
+                 office_expiry || null, computer_id]
+            );
+        }
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'Cleaning record saved successfully',
+            id: result.insertId 
+        });
+    } catch (error) {
+        console.error('Error saving cleaning record:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - Get Cleaning Records for a Specific Computer
+app.get('/api/computers/cleaning/:computerId', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { computerId } = req.params;
+        const { month, year } = req.query;
+        
+        let query = 'SELECT * FROM computer_cleaning_records WHERE computer_id = ?';
+        const params = [computerId];
+        
+        if (month) {
+            query += ' AND MONTH(cleaning_date) = ?';
+            params.push(month);
+        }
+        if (year) {
+            query += ' AND YEAR(cleaning_date) = ?';
+            params.push(year);
+        }
+        
+        query += ' ORDER BY cleaning_date DESC';
+        
+        const [records] = await pool.query(query, params);
+        res.json(records);
+    } catch (error) {
+        console.error('Error fetching cleaning records:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE - Delete a Cleaning Record
+app.delete('/api/computers/cleaning/:recordId', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { recordId } = req.params;
+        const [result] = await pool.query('DELETE FROM computer_cleaning_records WHERE id = ?', [recordId]);
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Record not found' });
+        }
+        
+        res.json({ success: true, message: 'Cleaning record deleted' });
+    } catch (error) {
+        console.error('Error deleting cleaning record:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 // ============================================

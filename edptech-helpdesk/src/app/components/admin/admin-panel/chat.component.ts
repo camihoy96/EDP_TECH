@@ -12,6 +12,8 @@ interface ChatUser {
   email: string;
   role: string;
   department: string;
+  branch?: string;     
+  company?: string;  
   avatar_color: string;
   photo_url: string | null;
   status: string;
@@ -71,35 +73,43 @@ interface ChatMessage {
           
           <div class="users-list">
             <div class="user-item" *ngFor="let user of filteredUsers" [class.active]="selectedUser?.username === user.username" (click)="selectUser(user)">
-              <div class="user-avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
-                <img *ngIf="user.photo_url" [src]="this.apiUrl + user.photo_url" [alt]="user.fullname">
-                <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
-                <span class="status-dot" [class.online]="isUserOnline(user)"></span>
-              </div>
-              <div class="user-info">
-                <div class="user-name">{{ user.fullname }}<span class="user-role">{{ getUserRoleIcon(user.role) }}</span></div>
-                <div class="user-last-message">{{ user.lastMessage || 'No messages' }}</div>
-              </div>
-              <div class="user-badge" *ngIf="user.unreadCount > 0">{{ user.unreadCount }}</div>
-            </div>
+  <div class="user-avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'"
+     [attr.data-tooltip]="getUserHoverInfo(user)">
+    <img *ngIf="user.photo_url" [src]="this.apiUrl + user.photo_url" [alt]="user.fullname">
+    <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
+    <span class="status-dot" [class.online]="isUserOnline(user)"></span>
+  </div>
+  <div class="user-info">
+    <div class="user-name">
+      {{ user.fullname }}
+      <span class="user-department" *ngIf="user.department">({{ user.department }})</span>
+    </div>
+    <div class="user-last-message">{{ user.lastMessage || 'No messages' }}</div>
+  </div>
+  <div class="user-badge" *ngIf="user.unreadCount > 0">{{ user.unreadCount }}</div>
+</div>
             <div class="no-users" *ngIf="filteredUsers.length === 0 && users.length > 0">No users found</div>
           </div>
         </div>
 
         <div class="chat-messages-panel" *ngIf="selectedUser">
-          <div class="chat-user-info">
-            <div class="chat-user-avatar" [style.backgroundColor]="selectedUser.avatar_color || '#0a3a8c'">
-              <img *ngIf="selectedUser.photo_url" [src]="this.apiUrl + selectedUser.photo_url" [alt]="selectedUser.fullname">
-              <span *ngIf="!selectedUser.photo_url">{{ getInitials(selectedUser.fullname) }}</span>
-            </div>
-            <div class="chat-user-details">
-              <div class="chat-user-name">{{ selectedUser.fullname }}</div>
-              <div class="chat-user-status">{{ getUserStatusText(selectedUser) }}</div>
-            </div>
-            <div class="chat-header-actions">
-              <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
-            </div>
-          </div>
+          <div class="chat-user-info" *ngIf="selectedUser">
+  <div class="chat-user-avatar" [style.backgroundColor]="selectedUser.avatar_color || '#0a3a8c'"
+       [title]="getUserHoverInfo(selectedUser)">
+    <img *ngIf="selectedUser.photo_url" [src]="this.apiUrl + selectedUser.photo_url" [alt]="selectedUser.fullname">
+    <span *ngIf="!selectedUser.photo_url">{{ getInitials(selectedUser.fullname) }}</span>
+  </div>
+  <div class="chat-user-details">
+    <div class="chat-user-name">
+      {{ selectedUser.fullname }}
+      <span class="user-department" *ngIf="selectedUser.department">({{ selectedUser.department }})</span>
+    </div>
+    <div class="chat-user-status">{{ getUserStatusText(selectedUser) }}</div>
+  </div>
+  <div class="chat-header-actions">
+    <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
+  </div>
+</div>
 
           <!-- Reply Preview -->
           <div class="reply-preview" *ngIf="replyingTo">
@@ -309,6 +319,29 @@ interface ChatMessage {
       position: relative; flex-shrink: 0;
       overflow: hidden;
     }
+   .user-avatar::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.85);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 10px;
+  white-space: pre-line;  /* ✅ Changed from nowrap to pre-line for line breaks */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 100;
+  line-height: 1.4;
+  text-align: left;  /* ✅ Changed to left for better readability */
+  min-width: 120px;  /* ✅ Add min-width */
+}
+.user-avatar:hover::after {
+  opacity: 1;
+}
     .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .status-dot {
       position: absolute; bottom: 2px; right: 2px;
@@ -483,7 +516,22 @@ interface ChatMessage {
   display: inline-block;
   animation: pulse 1.5s ease-in-out infinite;
 }
+.user-department {
+  font-size: 10px;
+  font-weight: 400;
+  color: #888;
+  margin-left: 2px;
+}
 
+.user-avatar {
+  cursor: pointer;
+}
+
+/* Tooltip styles - shown on hover via title attribute */
+.user-avatar[title]:hover::after {
+  /* Note: title attribute provides native browser tooltip */
+  /* For custom tooltip, see alternative below */
+}
 @keyframes pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.15); }
@@ -604,59 +652,64 @@ get staffUnreadCount(): number {
 get clientUnreadCount(): number {
   return this.clientUsers.reduce((total, user) => total + (user.unreadCount || 0), 0);
 }
-  loadAllUsers() {
-    this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers: this.getHeaders() }).subscribe({
-      next: (staffData) => {
-        this.staffUsers = staffData
-          .filter(user => user.username !== this.currentUsername)
-          .map(user => ({
-            userId: user.id,  
+ loadAllUsers() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers: this.getHeaders() }).subscribe({
+    next: (staffData) => {
+      console.log('Staff data sample:', staffData[0]); 
+      this.staffUsers = staffData
+        .filter(user => user.username !== this.currentUsername)
+        .map(user => ({
+          userId: user.id,  
+          username: user.username,
+          fullname: user.fullname,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          branch: user.branch || user.branch_name || user.branchName || '',
+          company: user.company || user.company_name || user.companyName || '',
+          avatar_color: user.avatar_color,
+          photo_url: user.photo_url,
+          status: 'online',
+          unreadCount: 0,
+          lastMessage: '',
+          lastMessageTime: undefined,
+          userType: 'staff' as const
+        }));
+      
+      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers: this.getHeaders() }).subscribe({
+        next: (clientData) => {
+          this.clientUsers = (clientData || []).map(user => ({
             username: user.username,
             fullname: user.fullname,
             email: user.email,
-            role: user.role,
+            role: user.role || 'user',
             department: user.department,
-            avatar_color: user.avatar_color,
+            branch: user.branch || user.branch_name || user.branchName || '',
+            company: user.company || user.company_name || user.companyName || '',
+            avatar_color: user.avatar_color || '#3b82f6',
             photo_url: user.photo_url,
             status: 'online',
             unreadCount: 0,
             lastMessage: '',
             lastMessageTime: undefined,
-            userType: 'staff' as const
+            userType: 'client' as const
           }));
-        
-        this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers: this.getHeaders() }).subscribe({
-          next: (clientData) => {
-            this.clientUsers = (clientData || []).map(user => ({
-              username: user.username,
-              fullname: user.fullname,
-              email: user.email,
-              role: user.role || 'user',
-              department: user.department,
-              avatar_color: user.avatar_color || '#3b82f6',
-              photo_url: user.photo_url,
-              status: 'online',
-              unreadCount: 0,
-              lastMessage: '',
-              lastMessageTime: undefined,
-              userType: 'client' as const
-            }));
-            
-            this.users = this.activeTab === 'staff' ? [...this.staffUsers] : [...this.clientUsers];
-            this.filterUsers();
-            this.loadUnreadCounts();
-            this.loadLastMessages();
-          },
-          error: () => {
-            this.clientUsers = [];
-            this.users = this.activeTab === 'staff' ? [...this.staffUsers] : [...this.clientUsers];
-            this.filterUsers();
-          }
-        });
-      },
-      error: (err) => console.error('Error loading staff users:', err)
-    });
-  }
+          
+          this.users = this.activeTab === 'staff' ? [...this.staffUsers] : [...this.clientUsers];
+          this.filterUsers();
+          this.loadUnreadCounts();
+          this.loadLastMessages();
+        },
+        error: () => {
+          this.clientUsers = [];
+          this.users = this.activeTab === 'staff' ? [...this.staffUsers] : [...this.clientUsers];
+          this.filterUsers();
+        }
+      });
+    },
+    error: (err) => console.error('Error loading staff users:', err)
+  });
+}
 
   loadUnreadCounts() {
     this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${this.currentUsername}`, { headers: this.getHeaders() }).subscribe({
@@ -731,7 +784,17 @@ get clientUnreadCount(): number {
       error: () => { this.messages = []; }
     });
   }
-
+ getUserHoverInfo(user: ChatUser): string {
+  const parts: string[] = [];
+  if (user.department) parts.push(`📁 Department: ${user.department}`);
+  if (user.branch) parts.push(`🏢 Branch: ${user.branch}`);
+  if (user.company) parts.push(`🏭 Company: ${user.company}`);
+  
+  // If no info, don't show tooltip
+  if (parts.length === 0) return '';
+  
+  return parts.join(' \n ');  // Add space before newline for better rendering
+}
   // --- Reply Functions ---
   replyToMessage(message: ChatMessage) {
     this.replyingTo = message;
