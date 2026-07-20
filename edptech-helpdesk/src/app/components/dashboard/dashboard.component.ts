@@ -12,11 +12,11 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
-
+import { ReportModalComponent } from './report-modal.component';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
- imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, NotificationBellComponent, AiAssistantComponent],
+ imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, NotificationBellComponent, AiAssistantComponent, ReportModalComponent ],
   template: `
     <div class="app-container" (click)="closeAllMenus()">
 
@@ -461,119 +461,17 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
     <span>{{ currentTime }}</span>
   </div>
 </div>
-  <!-- Report Modal -->
-<div class="modal-overlay" *ngIf="showReportModal" (click)="closeReportModal()">
-  <div class="report-modal-content" id="reportModal" (click)="$event.stopPropagation()">
-    <div class="report-modal-header modal-header-handle" (mousedown)="startDrag($event, 'reportModal')">
-      <h3>{{ reportModalTitle }}</h3>
-      <div class="modal-actions">
-        <button class="btn btn-sm" (click)="printReportModal()">🖨️ Print</button>
-        <button class="modal-close-btn" (click)="closeReportModal()">✕</button>
-      </div>
-    </div>
-    
-    <div class="report-modal-body">
-      <!-- Loading -->
-      <div class="loading-state" *ngIf="reportLoading">
-        <div class="spinner"></div>
-        <p>Loading report data...</p>
-      </div>
-
-      <!-- Report Data -->
-      <div class="print-area" *ngIf="!reportLoading && reportModalData">
-        <!-- Summary -->
-        <div class="report-summary">
-          <div class="report-stat">
-            <div class="stat-value">{{ reportModalData.totalTickets }}</div>
-            <div class="stat-label">Total</div>
-          </div>
-          <div class="report-stat open">
-            <div class="stat-value">{{ reportModalData.openTickets }}</div>
-            <div class="stat-label">Open</div>
-          </div>
-          <div class="report-stat resolved">
-            <div class="stat-value">{{ reportModalData.resolvedTickets }}</div>
-            <div class="stat-label">Resolved</div>
-          </div>
-          <div class="report-stat critical">
-            <div class="stat-value">{{ reportModalData.criticalTickets }}</div>
-            <div class="stat-label">Critical</div>
-          </div>
-          <div class="report-stat">
-            <div class="stat-value">{{ reportModalData.avgResolutionTime }}</div>
-            <div class="stat-label">Avg Resolution</div>
-          </div>
-          <div class="report-stat">
-            <div class="stat-value">{{ reportModalData.slaCompliance }}%</div>
-            <div class="stat-label">SLA</div>
-          </div>
-        </div>
-
-        <!-- Priority Distribution -->
-        <div class="report-section">
-          <h4>📊 Priority Distribution</h4>
-          <div class="priority-bars">
-            <div class="p-bar" *ngFor="let p of reportModalData.priorityData">
-              <span class="p-label">{{ p.label }}</span>
-              <div class="p-track">
-                <div class="p-fill" [style.width.%]="p.percentage" [style.background]="p.color"></div>
-              </div>
-              <span class="p-count">{{ p.count }} ({{ p.percentage }}%)</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Department Performance -->
-        <div class="report-section">
-          <h4>🏢 Department Performance</h4>
-          <table class="mini-table" *ngIf="reportModalData.departmentData?.length > 0">
-            <thead>
-              <tr>
-                <th>Department</th>
-                <th>Total</th>
-                <th>Open</th>
-                <th>Resolved</th>
-                <th>SLA</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let d of reportModalData.departmentData">
-                <td>{{ d.name }}</td>
-                <td>{{ d.total }}</td>
-                <td><span style="color:#0066cc">{{ d.open }}</span></td>
-                <td><span style="color:#008800">{{ d.resolved }}</span></td>
-                <td>{{ d.sla }}%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Recent Tickets -->
-        <div class="report-section">
-          <h4>🕐 Recent Tickets</h4>
-          <table class="mini-table" *ngIf="reportModalData.recentTickets?.length > 0">
-            <thead>
-              <tr>
-                <th>Ticket Code</th>
-                <th>Title</th>
-                <th>Priority</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let t of reportModalData.recentTickets.slice(0, 10)">
-                <td><code>{{ t.ticket_number }}</code></td>
-                <td>{{ t.title }}</td>
-                <td>{{ t.priority }}</td>
-                <td>{{ t.status }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
+ <!-- Report Modal -->
+<app-report-modal
+  [title]="reportModalTitle"
+  [reportData]="reportModalData"
+  [loading]="reportLoading"
+  [error]="reportError"
+  (closed)="closeReportModal()"
+  (printed)="onReportPrinted()"
+  (retryRequest)="retryLastReport()"
+  *ngIf="showReportModal">
+</app-report-modal>
 <!-- Search Modal -->
 <div class="modal-overlay" *ngIf="showSearchModal" (click)="closeSearchModal()">
   <div class="search-modal-content" id="searchModal" (click)="$event.stopPropagation()">
@@ -1140,12 +1038,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   showAIAssistant = false;
   showLogoutWarning = false;
   logoutCountdown = 60;
+  private departmentMap: Map<number, string> = new Map()
   private logoutWarningTimer: any;
   private logoutCountdownInterval: any;
   private _requisitionsNotificationCount: number = 0;
   aiQuery = '';
   aiResponse = '';
   aiLoading = false;
+  reportError: string | null = null;
+  private lastReportType: string = '';
   aiHistory: { role: string; content: string }[] = [];
   rejectedRequisitionsCount = 0;
   allReqsTotal = 0;
@@ -1555,7 +1456,7 @@ get requisitionsNotificationCount(): number {
     // Start message count polling
     this.loadUnreadMessagesCount();
     setInterval(() => this.loadUnreadMessagesCount(), 10000);
-    
+    this.loadDepartmentNames();
     this.startNewTicketPopup();
     this.loadJobOrdersCount();
     this.loadRequisitionsCount();
@@ -2493,7 +2394,22 @@ printReport() {
   printWindow.document.write(printContent);
   printWindow.document.close();
 }
- generateReport(type: string) {
+
+retryLastReport(): void {
+  if (this.lastReportType) {
+    this.generateReport(this.lastReportType);
+  }
+}
+
+onReportPrinted(): void {
+  console.log('Report printed');
+}
+
+// Update generateReport to store the type and handle errors
+generateReport(type: string): void {
+  this.lastReportType = type;
+  this.reportError = null;
+  
   const titles: Record<string, string> = {
     'daily': '📅 Daily Report',
     'weekly': '📆 Weekly Report', 
@@ -2502,37 +2418,234 @@ printReport() {
     'agent': '👥 Agent Performance'
   };
 
-  const periods: Record<string, string> = {
-    'daily': 'today',
-    'weekly': 'last7days',
-    'monthly': 'last30days',
-    'sla': 'last30days',
-    'agent': 'last30days'
-  };
-
   this.reportModalTitle = titles[type] || 'Report';
   this.reportLoading = true;
   this.showReportModal = true;
   this.activeMenu = null;
 
-  const period = periods[type] || 'last7days';
   const headers = this.getAuthHeaders();
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  const branchId = currentUser?.branch_id || 1;
+  const departmentId = currentUser?.department_id || 1;
+  
+  let url = `${environment.apiUrl}/api/reports`;
 
-  this.http.get<any>(`${environment.apiUrl}/api/reports?period=${period}`, { headers }).subscribe({
-    next: (data) => {
-      this.reportModalData = data;
-      this.reportLoading = false;
-    },
-    error: (err) => {
-      console.error('Failed to load report:', err);
-      this.reportLoading = false;
-    }
+  switch(type) {
+    case 'daily': url += '?period=today'; break;
+    case 'weekly': url += '?period=last7days'; break;
+    case 'monthly': url += '?period=last30days'; break;
+    case 'sla': url += '?period=last30days&type=sla'; break;
+    case 'agent': url += '?period=last30days&type=agent'; break;
+    default: url += '?period=last7days';
+  }
+  
+  url += `&branch_id=${branchId}&department_id=${departmentId}`;
+
+  // ✅ Load all data in parallel
+  Promise.all([
+    this.http.get<any>(url, { headers }).toPromise(),
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { headers }).toPromise(),
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/job-orders`, { headers }).toPromise()
+  ]).then(([reportData, requisitions, jobOrders]) => {
+    this.reportModalData = {
+      ...reportData,
+      // ✅ Add requisitions data filtered by branch/department
+      requisitionsData: this.processRequisitionsForReport(
+        (Array.isArray(requisitions) ? requisitions : []).filter(r => 
+          Number(r.branch_id) === branchId && Number(r.department_id) === departmentId
+        )
+      ),
+      // ✅ Add job orders data filtered by branch/department
+      jobOrdersData: this.processJobOrdersForReport(
+        (Array.isArray(jobOrders) ? jobOrders : []).filter(jo => 
+          Number(jo.branch_id) === branchId && Number(jo.department_id) === departmentId
+        )
+      )
+    };
+    this.reportLoading = false;
+    this.reportError = null;
+  }).catch((err) => {
+    console.error('Failed to load report:', err);
+    this.reportError = 'Failed to load report. Please check your connection and try again.';
+    this.reportLoading = false;
   });
 }
 
-closeReportModal() {
+// ✅ Process requisitions for report display
+private processRequisitionsForReport(requisitions: any[]): any {
+  const now = new Date();
+  const filterDate = this.getFilterDate(this.lastReportType);
+  
+  const filtered = filterDate ? requisitions.filter(r => new Date(r.created_at) >= filterDate) : requisitions;
+  
+  return {
+    total: filtered.length,
+    pending: filtered.filter(r => r.status === 'pending').length,
+    approved: filtered.filter(r => r.status === 'approved').length,
+    released: filtered.filter(r => r.status === 'released').length,
+    rejected: filtered.filter(r => r.status === 'rejected').length,
+    forwarded: filtered.filter(r => r.is_forwarded).length,
+    recent: filtered.slice(0, 10).map(r => ({
+      number: r.requisition_number,
+      requestFrom: r.request_from,
+      status: r.status,
+      date: r.date,
+      forwardedStatus: r.forwarded_status
+    }))
+  };
+}
+
+// ✅ Process job orders for report display
+private processJobOrdersForReport(jobOrders: any[]): any {
+  const now = new Date();
+  const filterDate = this.getFilterDate(this.lastReportType);
+  
+  const filtered = filterDate ? jobOrders.filter(jo => new Date(jo.created_at) >= filterDate) : jobOrders;
+  
+  return {
+    total: filtered.length,
+    pending: filtered.filter(jo => jo.status === 'pending').length,
+    approved: filtered.filter(jo => jo.status === 'approved').length,
+    done: filtered.filter(jo => jo.status === 'done').length,
+    assigned: filtered.filter(jo => jo.status === 'assigned').length,
+    forwarded: filtered.filter(jo => jo.is_forwarded).length,
+    recent: filtered.slice(0, 10).map(jo => ({
+      number: jo.job_order_number,
+      department: jo.department,
+      status: jo.status,
+      date: jo.date,
+      requestedDept: jo.request_dept,
+      assignedNames: jo.assigned_names
+    }))
+  };
+}
+
+// ✅ Helper to get filter date based on report type
+private getFilterDate(type: string): Date | null {
+  const now = new Date();
+  switch(type) {
+    case 'daily': return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    case 'weekly': return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    case 'monthly': return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    default: return null; // No date filter for SLA/Agent reports
+  }
+}
+
+// ✅ Add fallback method for local report generation
+private generateLocalReport(type: string, branchId: number, departmentId: number): void {
+  let tickets: Ticket[] = [];
+  
+  this.ticketService.tickets$.pipe(takeUntil(this.destroy$)).subscribe(t => {
+    tickets = t;
+  }).unsubscribe();
+
+  // ✅ Filter by branch and department
+  tickets = tickets.filter(t => 
+    Number(t.branch_id) === branchId && 
+    Number(t.department_id) === departmentId
+  );
+
+  const now = new Date();
+  let filteredTickets = tickets;
+  let periodLabel = '';
+
+  if (type === 'daily') {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    filteredTickets = tickets.filter(t => new Date(t.created_at) >= today);
+    periodLabel = 'Today';
+  } else if (type === 'weekly') {
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    filteredTickets = tickets.filter(t => new Date(t.created_at) >= weekAgo);
+    periodLabel = 'Last 7 Days';
+  } else if (type === 'monthly') {
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    filteredTickets = tickets.filter(t => new Date(t.created_at) >= monthAgo);
+    periodLabel = 'Last 30 Days';
+  } else {
+    periodLabel = type === 'sla' ? 'SLA Performance' : 'Agent Performance';
+  }
+
+  this.reportModalData = {
+    totalTickets: filteredTickets.length,
+    openTickets: filteredTickets.filter(t => !['resolved', 'closed'].includes(t.status)).length,
+    resolvedTickets: filteredTickets.filter(t => t.status === 'resolved').length,
+    criticalTickets: filteredTickets.filter(t => t.priority === 'critical').length,
+    avgResolutionTime: 'N/A',
+    slaCompliance: this.slaCompliance,
+    periodLabel: `${periodLabel} (EDP/IT - Main Branch)`,
+    
+    priorityData: [
+      { label: 'Critical', count: filteredTickets.filter(t => t.priority === 'critical').length, percentage: 0, color: '#cc0000' },
+      { label: 'High', count: filteredTickets.filter(t => t.priority === 'high').length, percentage: 0, color: '#ff6600' },
+      { label: 'Medium', count: filteredTickets.filter(t => t.priority === 'medium').length, percentage: 0, color: '#ffaa00' },
+      { label: 'Low', count: filteredTickets.filter(t => t.priority === 'low').length, percentage: 0, color: '#008800' }
+    ],
+    
+    departmentData: this.getLocalDepartmentData(filteredTickets),
+    
+    recentTickets: filteredTickets.slice(0, 10).map(t => ({
+      ticket_number: t.ticket_number,
+      title: t.title,
+      priority: t.priority,
+      status: t.status
+    }))
+  };
+
+  const total = filteredTickets.length || 1;
+  this.reportModalData.priorityData.forEach((p: any) => {
+    p.percentage = Math.round((p.count / total) * 100);
+  });
+  
+  this.reportLoading = false;
+  this.reportError = null;
+}
+
+private getLocalDepartmentData(tickets: Ticket[]): any[] {
+  const deptMap = new Map<string, { total: number; open: number; resolved: number }>();
+  
+  tickets.forEach(t => {
+    const deptId = t.department_id || 0;
+    // ✅ Use the loaded department names from API
+    const dept = this.departmentMap.get(Number(deptId)) || t.location || `Dept #${deptId}`;
+    
+    if (!deptMap.has(dept)) {
+      deptMap.set(dept, { total: 0, open: 0, resolved: 0 });
+    }
+    const d = deptMap.get(dept)!;
+    d.total++;
+    if (t.status === 'resolved') d.resolved++;
+    else if (!['resolved', 'closed'].includes(t.status)) d.open++;
+  });
+  
+  return Array.from(deptMap.entries()).map(([name, data]) => ({
+    name,
+    total: data.total,
+    open: data.open,
+    resolved: data.resolved,
+    sla: Math.round((data.resolved / (data.total || 1)) * 100)
+  }));
+}
+private loadDepartmentNames(): void {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/departments`, { headers }).subscribe({
+    next: (departments) => {
+      if (Array.isArray(departments)) {
+        departments.forEach((dept: any) => {
+          this.departmentMap.set(Number(dept.id), dept.name || 'Unknown');
+        });
+      }
+    },
+    error: () => {
+      console.warn('Could not load departments for report');
+    }
+  });
+}
+closeReportModal(): void {
   this.showReportModal = false;
   this.reportModalData = null;
+  this.reportError = null;
 }
 
 printReportModal() {
