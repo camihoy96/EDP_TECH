@@ -53,9 +53,11 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-     <!-- Filter Bar -->
+    <!-- Filter Bar -->
 <div class="filter-bar">
+  <!-- Search and basic filters - ALWAYS visible -->
   <input type="text" [(ngModel)]="searchTerm" (input)="applyFilters()" class="filter-input" placeholder="Computer name, user, IP, location...">
+  
   <select [(ngModel)]="filterExpiry" (change)="applyFilters()" class="filter-select">
     <option value="all">All Computers</option>
     <option value="expiring">Expiring Soon</option>
@@ -64,110 +66,148 @@ import { environment } from '../../../../environments/environment';
     <option value="office">Office Expiring</option>
     <option value="av">AV Update Needed</option>
   </select>
+  
   <select [(ngModel)]="filterLocation" (change)="applyFilters()" class="filter-select">
     <option value="all">All Locations</option>
     <option *ngFor="let loc of uniqueLocations" [value]="loc">{{ loc }}</option>
   </select>
+  
+  <!-- Cache badge - always visible -->
   <span class="cache-badge" [class.from-cache]="isFromCache" [class.from-server]="!isFromCache && pcs.length > 0" title="Data source indicator">
     {{ isFromCache ? '💾 Cached' : pcs.length > 0 ? '🌐 Live' : '' }}
   </span>
-  <button class="btn btn-primary" (click)="triggerScan()">🔄 Scan Network</button>
+
+  <!-- Scan Network - only in normal mode -->
+  <button class="btn btn-primary" *ngIf="!showCleanedOnly" (click)="triggerScan()">🔄 Scan Network</button>
   
-  <!-- ✅ Cleaning Records toggle button -->
+  <!-- ✅ Cleaning Records toggle button - always visible -->
   <button class="btn btn-cleaning" (click)="filterCleanedPCs()" [class.active-filter]="showCleanedOnly" title="Show computers with cleaning records">
     🧹 Cleaning Records
     <span class="badge-count" *ngIf="cleanedPCsCount > 0">{{ cleanedPCsCount }}</span>
   </button>
 
-  <!-- ✅ NEW: Back to All button - only shows when filter is active -->
-  <button class="btn btn-back-all" *ngIf="showCleanedOnly" (click)="filterCleanedPCs()" title="Show all computers">
-    📋 Show All Computers
-  </button>
+  <!-- ✅ Show these when in cleaning-only mode -->
+  <ng-container *ngIf="showCleanedOnly">
+    <button class="btn btn-back-all" (click)="filterCleanedPCs()" title="Show all computers">
+      📋 Show All Computers
+    </button>
+    
+    <!-- ✅ Month filter -->
+    <select [(ngModel)]="cleaningListFilterMonth" (change)="applyCleaningListFilters()" class="filter-select">
+      <option value="">All Months</option>
+      <option *ngFor="let m of monthOptions" [value]="m.value">{{ m.label }}</option>
+    </select>
+    
+    <!-- ✅ Year filter -->
+    <select [(ngModel)]="cleaningListFilterYear" (change)="applyCleaningListFilters()" class="filter-select">
+      <option value="">All Years</option>
+      <option *ngFor="let y of yearOptions" [value]="y">{{ y }}</option>
+    </select>
+    
+    <button class="btn" (click)="clearCleaningListFilters()" *ngIf="cleaningListFilterMonth || cleaningListFilterYear">✕ Clear</button>
+  </ng-container>
+
+  <!-- Refresh and Add PC - only in normal mode -->
+  <button class="btn" *ngIf="!showCleanedOnly" (click)="forceRefresh()" title="Force refresh from server">🔄 Refresh</button>
+  <button class="btn" *ngIf="!showCleanedOnly" (click)="addPC()">➕ Add PC</button>
   
-  <button class="btn" (click)="forceRefresh()" title="Force refresh from server">🔄 Refresh</button>
-  <button class="btn" (click)="addPC()">➕ Add PC</button>
+  <!-- New Cleaning - always visible -->
   <button class="btn" (click)="openCleaningModal()" title="Cleaning & Maintenance Records">🧹 New Cleaning</button>
+  
   <span class="count-badge">{{ filteredPCs.length }} computer(s)</span>
 </div>
-      <!-- Table -->
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Computer Name</th>
-              <th>User</th>
-              <th>Location</th>
-              <th>IP Address</th>
-              <th>OS</th>
-              <th>MS License</th>
-              <th>License Expiry</th>
-              <th>Office Activation</th>
-              <th>Office Expiry</th>
-              <th>AV Status</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let pc of filteredPCs" [class.expiring-row]="isExpiring(pc) || isOfficeExpiring(pc)" [class.expired-row]="isExpired(pc) || isOfficeExpired(pc)">
-              <td><strong>{{ pc.computer_name }}</strong></td>
-              <td>{{ pc.user_name || '—' }}</td>
-              <td><span class="location-badge" *ngIf="pc.location">📍 {{ pc.location }}</span><span *ngIf="!pc.location">—</span></td>
-              <td><code>{{ pc.ip_address }}</code></td>
-              <td>
-              <strong>{{ pc.os || '—' }}</strong>
-              <div><small>{{ pc.bit || '64' }}bit</small></div>
-            </td>
-              <td><span class="license-badge" [class]="getLicenseClass(pc)">{{ pc.ms_license_type || '—' }}</span></td>
-              <td>
-                <div class="expiry-cell" [class.expiring]="isExpiring(pc)" [class.expired]="isExpired(pc)">
-                  <strong>{{ pc.license_expiry ? (pc.license_expiry | date:'MMM d, yyyy') : '—' }}</strong>
-                  <div class="countdown" *ngIf="getDaysRemaining(pc) <= 30 && getDaysRemaining(pc) > 0">🔴 {{ getDaysRemaining(pc) }} days left</div>
-                  <div class="countdown expired-text" *ngIf="getDaysRemaining(pc) <= 0 && pc.license_expiry">❌ EXPIRED</div>
-                </div>
-              </td>
-          <!-- Office Activation column -->
-<td>
-  <span class="license-badge" 
-    [class.active]="!isOfficeExpired(pc) && isValidOfficeDate(pc)" 
-    [class.expiring]="isOfficeExpiring(pc)" 
-    [class.expired]="isOfficeExpired(pc)">
-    {{ isValidOfficeDate(pc) ? 'Activated' : (pc.office_activation === 'Expired' ? 'Expired' : 'N/A') }}
-  </span>
-  <div class="countdown" *ngIf="isValidDate(pc.office_activation_date)">
-    <small>Since: {{ pc.office_activation_date | date:'MMM yyyy' }}</small>
-  </div>
-</td><!-- Office Expiry column -->
-<td>
-  <div class="expiry-cell" [class.expiring]="isOfficeExpiring(pc)" [class.expired]="isOfficeExpired(pc)">
-    <strong>{{ isValidDate(pc.office_expiry) ? (pc.office_expiry | date:'MMM d, yyyy') : '—' }}</strong>
-    <div class="countdown" *ngIf="getOfficeDaysRemaining(pc) <= 30 && getOfficeDaysRemaining(pc) > 0 && isValidDate(pc.office_expiry)">🔴 {{ getOfficeDaysRemaining(pc) }} days left</div>
-    <div class="countdown expired-text" *ngIf="getOfficeDaysRemaining(pc) <= 0 && isValidDate(pc.office_expiry)">❌ EXPIRED</div>
-  </div>
+     <!-- Table -->
+<div class="table-container">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Computer Name</th>
+        <th>User</th>
+        <th>Location</th>
+        <th>IP Address</th>
+        <th>OS</th>
+        <th>MS License</th>
+        <th>License Expiry</th>
+        <th>Office Activation</th>
+        <th>Office Expiry</th>
+        <th>AV Status</th>
+        <!-- ✅ Show Cleaning Date column when in cleaning mode -->
+        <th *ngIf="showCleanedOnly">Cleaning Date</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let pc of filteredPCs" 
+    [class.expiring-row]="isExpiring(pc) || isOfficeExpiring(pc)" 
+    [class.expired-row]="isExpired(pc) || isOfficeExpired(pc)"
+    [class.has-notification-row]="pc.hasWarning">
+  
+  <td>
+    <strong>{{ pc.computer_name }}</strong>
+    <!-- ✅ Show notification badge if this PC has active notifications -->
+    <span *ngIf="pc.hasWarning" class="row-notif-badge" [title]="pc.activeNotifications[0]?.message">
+      {{ pc.notificationCount > 1 ? '🔔×' + pc.notificationCount : '🔔' }}
+    </span>
+  </td>
+        <td>{{ pc.user_name || '—' }}</td>
+        <td><span class="location-badge" *ngIf="pc.location">📍 {{ pc.location }}</span><span *ngIf="!pc.location">—</span></td>
+        <td><code>{{ pc.ip_address }}</code></td>
+        <td>
+          <strong>{{ pc.os || '—' }}</strong>
+          <div><small>{{ pc.bit || '64' }}bit</small></div>
+        </td>
+        <td><span class="license-badge" [class]="getLicenseClass(pc)">{{ pc.ms_license_type || '—' }}</span></td>
+        <td>
+          <div class="expiry-cell" [class.expiring]="isExpiring(pc)" [class.expired]="isExpired(pc)">
+            <strong>{{ pc.license_expiry ? (pc.license_expiry | date:'MMM d, yyyy') : '—' }}</strong>
+            <div class="countdown" *ngIf="getDaysRemaining(pc) <= 30 && getDaysRemaining(pc) > 0">🔴 {{ getDaysRemaining(pc) }} days left</div>
+            <div class="countdown expired-text" *ngIf="getDaysRemaining(pc) <= 0 && pc.license_expiry">❌ EXPIRED</div>
+          </div>
+        </td>
+        <td>
+          <span class="license-badge" [class.active]="!isOfficeExpired(pc) && isValidOfficeDate(pc)" [class.expiring]="isOfficeExpiring(pc)" [class.expired]="isOfficeExpired(pc)">
+            {{ isValidOfficeDate(pc) ? 'Activated' : (pc.office_activation === 'Expired' ? 'Expired' : 'N/A') }}
+          </span>
+          <div class="countdown" *ngIf="isValidDate(pc.office_activation_date)">
+            <small>Since: {{ pc.office_activation_date | date:'MMM yyyy' }}</small>
+          </div>
+        </td>
+        <td>
+          <div class="expiry-cell" [class.expiring]="isOfficeExpiring(pc)" [class.expired]="isOfficeExpired(pc)">
+            <strong>{{ isValidDate(pc.office_expiry) ? (pc.office_expiry | date:'MMM d, yyyy') : '—' }}</strong>
+            <div class="countdown" *ngIf="getOfficeDaysRemaining(pc) <= 30 && getOfficeDaysRemaining(pc) > 0 && isValidDate(pc.office_expiry)">🔴 {{ getOfficeDaysRemaining(pc) }} days left</div>
+            <div class="countdown expired-text" *ngIf="getOfficeDaysRemaining(pc) <= 0 && isValidDate(pc.office_expiry)">❌ EXPIRED</div>
+          </div>
+        </td>
+        <td>
+          <span class="status-badge" [class]="'status-' + getAVStatus(pc)">{{ pc.antivirus || 'N/A' }}</span>
+          <div class="countdown" *ngIf="isValidDate(pc.av_last_update)">
+            <small>Updated: {{ pc.av_last_update | date:'MMM yyyy' }}</small>
+          </div>
+        </td>
+        <!-- ✅ Show last cleaning date for this PC -->
+         <td *ngIf="showCleanedOnly">
+  <span class="cleaning-date-badge">{{ getLastCleaningDate(pc.id) | date:'MMM d, yyyy' }}</span>
 </td>
-             <!-- AV Status column -->
-<td>
-  <span class="status-badge" [class]="'status-' + getAVStatus(pc)">{{ pc.antivirus || 'N/A' }}</span>
-  <div class="countdown" *ngIf="isValidDate(pc.av_last_update)">
-    <small>Updated: {{ pc.av_last_update | date:'MMM yyyy' }}</small>
-  </div>
-</td>
-              <td><span class="status-badge" [class]="'status-' + (pc.status || 'unknown')">{{ pc.status || 'unknown' }}</span></td>
-              <td class="actions-cell">
-  <button class="action-btn" (click)="viewDetail(pc)" title="View Details">👁️</button>
-  <button class="action-btn" (click)="editPC(pc)" title="Edit">✏️</button>
-  <button class="action-btn check" (click)="checkLicenseStatus(pc)" title="Check License">🔍</button>
-  <button class="action-btn clean" (click)="openCleaningModal(pc)" title="Cleaning Record">🧹</button>
-  <button class="action-btn history" (click)="viewCleaningHistory(pc)" title="Cleaning History">📋</button>
-  <button class="action-btn" (click)="deletePC(pc)" title="Delete">🗑️</button>
-</td>
-            </tr>
-            <tr *ngIf="filteredPCs.length === 0">
-              <td colspan="12" class="empty-row">{{ pcs.length === 0 ? 'Loading computers...' : 'No computers found' }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <td><span class="status-badge" [class]="'staatus-' + (pc.status || 'unknown')">{{ pc.status || 'unknown' }}</span></td>
+        <td class="actions-cell">
+          <button class="action-btn" (click)="viewDetail(pc)" title="View Details">👁️</button>
+          <button class="action-btn" (click)="editPC(pc)" title="Edit">✏️</button>
+          <button class="action-btn check" (click)="checkLicenseStatus(pc)" title="Check License">🔍</button>
+          <button class="action-btn clean" (click)="openCleaningModal(pc)" title="Cleaning Record">🧹</button>
+          <button class="action-btn history" (click)="viewCleaningHistory(pc)" title="Cleaning History">📋</button>
+          <button class="action-btn" (click)="deletePC(pc)" title="Delete">🗑️</button>
+        </td>
+      </tr>
+      <tr *ngIf="filteredPCs.length === 0">
+        <td [attr.colspan]="showCleanedOnly ? 14 : 12" class="empty-row">
+          {{ pcs.length === 0 ? 'Loading computers...' : 'No computers found' }}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
     </div>
 
     <!-- Add/Edit Modal - Original format restored -->
@@ -404,18 +444,6 @@ import { environment } from '../../../../environments/environment';
     <input type="text" [value]="formData.office_expiry ? (isOfficeExpiredForm() ? 'Expired' : 'Activated') : '—'" class="form-input" readonly style="background-color: #f5f5f5;">
   </div>
 </div>
-
-<!-- ✅ ADD AV FIELDS -->
-<div class="form-row">
-  <div class="form-group half">
-    <label>AV Last Update:</label>
-    <input type="date" [(ngModel)]="formData.av_last_update" class="form-input">
-  </div>
-  <div class="form-group half">
-    <label>AV Next Update:</label>
-    <input type="date" [(ngModel)]="formData.av_next_update" class="form-input">
-  </div>
-</div>
         </div>
         <div class="modal-footer">
           <button class="btn" (click)="closeModal()">Cancel</button>
@@ -424,33 +452,125 @@ import { environment } from '../../../../environments/environment';
       </div>
     </div>
 
-    <!-- Detail Modal -->
-    <div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetailModal()">
-      <div class="modal-content detail-modal" id="detailModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['detailModal'].x" [style.top.px]="modalPositions['detailModal'].y">
-        <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'detailModal')">
-          <h3>💻 {{ selectedPC?.computer_name }} Details</h3>
-          <button class="modal-close" (click)="closeDetailModal()">✕</button>
-        </div>
-        <div class="modal-body" *ngIf="selectedPC">
-          <div class="detail-grid">
-            <div class="detail-item"><label>Computer Name:</label><span>{{ selectedPC.computer_name }}</span></div>
-            <div class="detail-item"><label>User:</label><span>{{ selectedPC.user_name || '—' }}</span></div>
-            <div class="detail-item"><label>Location:</label><span>{{ selectedPC.location || '—' }}</span></div>
-            <div class="detail-item"><label>Department:</label><span>{{ selectedPC.department || '—' }}</span></div>
-            <div class="detail-item"><label>IP Address:</label><code>{{ selectedPC.ip_address }}</code></div>
-            <div class="detail-item"><label>MAC Address:</label><code>{{ selectedPC.mac_address || '—' }}</code></div>
-            <div class="detail-item"><label>OS:</label><span>{{ selectedPC.os || '—' }} ({{ selectedPC.bit || '64' }}bit)</span></div>
-            <div class="detail-item"><label>RAM:</label><span>{{ selectedPC.ram || '—' }}</span></div>
-            <div class="detail-item"><label>Storage:</label><span>{{ selectedPC.storage || '—' }}</span></div>
-            <div class="detail-item"><label>Processor:</label><span>{{ selectedPC.processor || '—' }}</span></div>
-            <div class="detail-item"><label>Anti Virus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
-            <div class="detail-item"><label>MS License:</label><span>{{ selectedPC.ms_license_type || '—' }}</span></div>
-            <div class="detail-item"><label>License Expiry:</label><span [class.expiring]="isExpiring(selectedPC)" [class.expired]="isExpired(selectedPC)">{{ selectedPC.license_expiry ? (selectedPC.license_expiry | date:'MMM d, yyyy') : '—' }}</span></div>
-            <div class="detail-item"><label>Status:</label><span class="status-badge" [class]="'status-' + (selectedPC.status || 'unknown')">{{ selectedPC.status || 'unknown' }}</span></div>
-          </div>
-        </div>
-      </div>
+   <!-- Detail Modal -->
+<div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetailModal()">
+  <div class="modal-content detail-modal" id="detailModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['detailModal'].x" [style.top.px]="modalPositions['detailModal'].y">
+    <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'detailModal')">
+      <h3>💻 {{ selectedPC?.computer_name }} Details</h3>
+      <button class="modal-close" (click)="closeDetailModal()">✕</button>
     </div>
+    <div class="modal-body" *ngIf="selectedPC">
+      <!-- Tab Navigation -->
+      <div class="detail-tabs">
+        <button class="tab-btn" [class.active]="detailTab === 'general'" (click)="detailTab = 'general'">📋 General</button>
+        <button class="tab-btn" [class.active]="detailTab === 'license'" (click)="detailTab = 'license'">🔑 Licenses</button>
+        <button class="tab-btn" [class.active]="detailTab === 'cleaning'" (click)="detailTab = 'cleaning'">🧹 Cleaning</button>
+      </div>
+      
+      <!-- General Tab -->
+      <div class="detail-grid" *ngIf="detailTab === 'general'">
+        <div class="detail-item"><label>Computer Name:</label><span>{{ selectedPC.computer_name }}</span></div>
+        <div class="detail-item"><label>User:</label><span>{{ selectedPC.user_name || '—' }}</span></div>
+        <div class="detail-item"><label>Location:</label><span>{{ selectedPC.location || '—' }}</span></div>
+        <div class="detail-item"><label>Department:</label><span>{{ selectedPC.department || '—' }}</span></div>
+        <div class="detail-item"><label>IP Address:</label><code>{{ selectedPC.ip_address }}</code></div>
+        <div class="detail-item"><label>MAC Address:</label><code>{{ selectedPC.mac_address || '—' }}</code></div>
+        <div class="detail-item"><label>OS:</label><span>{{ selectedPC.os || '—' }} ({{ selectedPC.bit || '64' }}bit)</span></div>
+        <div class="detail-item"><label>RAM:</label><span>{{ selectedPC.ram || '—' }}</span></div>
+        <div class="detail-item"><label>Storage:</label><span>{{ selectedPC.storage || '—' }}</span></div>
+        <div class="detail-item"><label>Processor:</label><span>{{ selectedPC.processor || '—' }}</span></div>
+        <div class="detail-item"><label>Anti Virus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
+        <div class="detail-item"><label>Status:</label><span class="status-badge" [class]="'status-' + (selectedPC.status || 'unknown')">{{ selectedPC.status || 'unknown' }}</span></div>
+      </div>
+      
+      <!-- License Tab -->
+<div class="detail-grid" *ngIf="detailTab === 'license'">
+  <div class="detail-item full-width"><label>MS License Type:</label><span class="license-badge" [class]="getLicenseClass(selectedPC)">{{ selectedPC.ms_license_type || '—' }}</span></div>
+  <div class="detail-item"><label>License Activation:</label><span>{{ isValidDate(selectedPC.license_activation) ? (selectedPC.license_activation | date:'MMM d, yyyy') : '—' }}</span></div>
+  <div class="detail-item"><label>License Duration:</label><span>{{ selectedPC.license_duration ? selectedPC.license_duration + ' months' : '—' }}</span></div>
+  <div class="detail-item full-width">
+    <label>License Expiry:</label>
+    <span [class.expiring]="isExpiring(selectedPC)" [class.expired]="isExpired(selectedPC)">
+      {{ isValidDate(selectedPC.license_expiry) ? (selectedPC.license_expiry | date:'MMM d, yyyy') : '—' }}
+      <span *ngIf="isExpiring(selectedPC)" class="countdown">🔴 {{ getDaysRemaining(selectedPC) }} days left</span>
+      <span *ngIf="isExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
+    </span>
+  </div>
+  
+  <div class="detail-divider">📦 Microsoft Office</div>
+  
+  <div class="detail-item"><label>Office Status:</label>
+    <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC) && isValidDate(selectedPC.office_activation_date)" 
+          [class.status-offline]="isOfficeExpired(selectedPC)">
+      {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
+    </span>
+  </div>
+  <div class="detail-item"><label>Office Activation Date:</label><span>{{ isValidDate(selectedPC.office_activation_date) ? (selectedPC.office_activation_date | date:'MMM d, yyyy') : '—' }}</span></div>
+  <div class="detail-item"><label>Office Duration:</label><span>{{ selectedPC.office_duration ? selectedPC.office_duration + ' months' : '—' }}</span></div>
+  <div class="detail-item full-width">
+    <label>Office Expiry:</label>
+    <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
+      {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
+      <span *ngIf="isOfficeExpiring(selectedPC)" class="countdown">🔴 {{ getOfficeDaysRemaining(selectedPC) }} days left</span>
+      <span *ngIf="isOfficeExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
+    </span>
+  </div>
+  
+  <div class="detail-divider">🛡️ Antivirus</div>
+  
+  <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
+  <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
+  <div class="detail-item"><label>AV Next Update:</label>
+    <span [class.expiring]="isAVExpiring(selectedPC)" [class.expired]="isAVExpired(selectedPC)">
+      {{ isValidDate(selectedPC.av_next_update) ? (selectedPC.av_next_update | date:'MMM d, yyyy') : '—' }}
+      <span *ngIf="isAVExpiring(selectedPC)" class="countdown">🔴 Due soon</span>
+      <span *ngIf="isAVExpired(selectedPC)" class="countdown expired-text">❌ OVERDUE</span>
+    </span>
+  </div>
+</div>
+      
+     <!-- Cleaning Tab -->
+<div *ngIf="detailTab === 'cleaning'">
+  <div class="cleaning-summary" *ngIf="selectedPC">
+    <div class="cleaning-stat">
+      <span class="cleaning-stat-label">Last Cleaning:</span>
+      <span class="cleaning-stat-value">{{ getLastCleaningDate(selectedPC.id) ? (getLastCleaningDate(selectedPC.id) | date:'MMM d, yyyy') : 'No records' }}</span>
+    </div>
+    <!-- ✅ FIX: Save reference before closing detail modal -->
+    <button class="btn btn-primary" (click)="openHistoryFromDetail(selectedPC)" style="margin-top: 8px;">
+      📋 View Full History
+    </button>
+  </div>
+  
+  <!-- Quick view of last cleaning record details -->
+  <div class="detail-grid" *ngIf="selectedPC">
+    <div class="detail-item"><label>OS:</label><span>{{ selectedPC.os || '—' }} ({{ selectedPC.bit || '64' }}bit)</span></div>
+    <div class="detail-item"><label>RAM:</label><span>{{ selectedPC.ram || '—' }}</span></div>
+    <div class="detail-item"><label>Storage:</label><span>{{ selectedPC.storage || '—' }}</span></div>
+    <div class="detail-item"><label>Processor:</label><span>{{ selectedPC.processor || '—' }}</span></div>
+    <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
+    <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
+    <div class="detail-item"><label>Office Status:</label>
+      <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC)" [class.status-offline]="isOfficeExpired(selectedPC)">
+        {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
+      </span>
+    </div>
+    <div class="detail-item"><label>Office Expiry:</label>
+      <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
+        {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
+      </span>
+    </div>
+  </div>
+</div>
+    </div>
+   <div class="modal-footer">
+  <button class="btn" (click)="closeDetailModal()">Close</button>
+  <button class="btn btn-av" (click)="updateAntivirus(selectedPC); closeDetailModal()">🛡️ Update AV</button>
+  <button class="btn btn-primary" (click)="closeDetailModal(); editPC(selectedPC)">✏️ Edit</button>
+  <button class="btn" (click)="closeDetailModal(); openCleaningModal(selectedPC)">🧹 New Cleaning</button>
+</div>
+  </div>
+</div>
 
     <!-- Cleaning Record Modal -->
     <div class="modal-overlay" *ngIf="showCleaningModal" (click)="closeCleaningModal()">
@@ -476,9 +596,12 @@ import { environment } from '../../../../environments/environment';
           </div>
           <div class="form-row">
             <div class="form-group half">
-              <label>OS:</label>
-              <input type="text" [(ngModel)]="cleaningForm.os" class="form-input" placeholder="OS">
-            </div>
+  <label>Operating System:</label>
+  <select [(ngModel)]="cleaningForm.os" class="form-input">
+    <option value="">— Select OS —</option>
+    <option *ngFor="let os of osList" [value]="os">{{ os }}</option>
+  </select>
+</div>
             <div class="form-group half">
               <label>Architecture:</label>
               <select [(ngModel)]="cleaningForm.bit" class="form-input">
@@ -518,6 +641,11 @@ import { environment } from '../../../../environments/environment';
                 <option value="512 GB SSD + 1 TB HDD">512 GB SSD + 1 TB HDD</option>
               </select>
             </div>
+            <!-- ✅ ADD PROCESSOR FIELD -->
+<div class="form-group">
+  <label>Processor:</label>
+  <input type="text" [(ngModel)]="cleaningForm.processor" class="form-input" placeholder="e.g., Intel Core i5-12400, AMD Ryzen 5">
+</div>
           </div>
           <div class="form-row">
             <div class="form-group half">
@@ -646,7 +774,7 @@ import { environment } from '../../../../environments/environment';
                 <td>{{ record.ram || '—' }}</td>
                 <td>{{ record.storage || '—' }}</td>
                 <td>{{ record.notes || '—' }}</td>
-                <td><button class="action-btn" (click)="deleteCleaningRecord(record)" title="Delete">🗑️</button></td>
+                <td><button class="action-btn" (click)="openDeleteCleaningModal(record)" title="Delete">🗑️</button></td>
               </tr>
             </tbody>
           </table>
@@ -706,7 +834,30 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
     </div>
-
+     <!-- Delete Cleaning Record Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showDeleteCleaningModal" (click)="cancelDeleteCleaning()">
+  <div class="modal-content confirm-modal" id="deleteCleaningModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['deleteCleaningModal'].x" [style.top.px]="modalPositions['deleteCleaningModal'].y">
+    <div class="modal-header modal-drag-handle" style="background: #cc0000;" (mousedown)="startDrag($event, 'deleteCleaningModal')">
+      <h3>🗑️ Delete Cleaning Record</h3>
+      <button class="modal-close" (click)="cancelDeleteCleaning()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="confirm-content">
+        <span class="confirm-icon">⚠️</span>
+        <p>Are you sure you want to delete this cleaning record?</p>
+        <p *ngIf="deleteCleaningTarget" class="confirm-detail">
+          <strong>{{ deleteCleaningTarget.computer_name }}</strong><br>
+          <small>Date: {{ deleteCleaningTarget.cleaning_date | date:'MMM d, yyyy' }}</small>
+        </p>
+        <p class="confirm-warning">This action cannot be undone.</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" (click)="cancelDeleteCleaning()">Cancel</button>
+      <button class="btn btn-delete" (click)="confirmDeleteCleaning()">🗑️ Delete</button>
+    </div>
+  </div>
+</div> 
     <!-- Toast -->
     <div class="toast-notification" [class.show]="showToast" [class.success]="toastType==='success'" [class.error]="toastType==='error'">
       <span>{{ toastMessage }}</span>
@@ -730,7 +881,7 @@ import { environment } from '../../../../environments/environment';
     .alert-icon{font-size:16px;flex-shrink:0;margin-top:2px}
     .alert-messages{display:flex;flex-direction:column;gap:2px}
     .notification-bar{background:#f8f9fa;border:1px solid #d0d0d0;margin-bottom:10px;max-height:150px;overflow-y:auto}
-    .notification-item{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #eee;font-size:10px}
+    .notification-item{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #eee;font-size:10px; color: rgb(36, 31, 13);}
     .notification-item.critical{background:#fff5f5}
     .notification-item.warning{background:#fffdf0}
     .notif-icon{flex-shrink:0}
@@ -775,13 +926,10 @@ import { environment } from '../../../../environments/environment';
     .action-btn.clean:hover{background:#e8ffe8;border-color:#008800}
     .empty-row{text-align:center;padding:24px;color:#888}
     .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000}
-    
     /* ✅ SINGLE modal-content rule with centering */
     .modal-content{background:#fff;width:90%;max-width:650px;max-height:85vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)}
-    
     /* ✅ When dragged (has inline left style), remove the transform centering */
     .modal-content[style*="left:"]{transform:none}
-    
     .detail-modal{max-width:700px}
     .confirm-modal{max-width:380px}
     .modal-drag-handle{cursor:grab;user-select:none}
@@ -884,6 +1032,147 @@ import { environment } from '../../../../environments/environment';
   50% { transform: scale(1.05); }
   100% { transform: scale(1); }
 }
+  .cleaning-date-badge {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+  /* Detail Modal Tabs */
+.detail-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 11px;
+  color: #888;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: #0a246a;
+  background: #f0f4f8;
+}
+
+.tab-btn.active {
+  color: #0a246a;
+  border-bottom-color: #0a246a;
+  font-weight: 600;
+}
+
+/* Full width detail item */
+.detail-item.full-width {
+  grid-column: 1 / -1;
+}
+
+/* Detail divider */
+.detail-divider {
+  grid-column: 1 / -1;
+  padding: 8px 0;
+  margin: 4px 0;
+  font-weight: 700;
+  font-size: 11px;
+  color: #0a246a;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+/* Cleaning Summary in Detail Modal */
+.cleaning-summary {
+  background: #f0f8f0;
+  border: 1px solid #c8e6c9;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.cleaning-stat {
+  margin-bottom: 4px;
+}
+
+.cleaning-stat-label {
+  font-size: 10px;
+  color: #666;
+  display: block;
+}
+
+.cleaning-stat-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2e7d32;
+}
+  .btn-av {
+  background: #0066cc;
+  color: #fff;
+  border-color: #0055aa;
+}
+.btn-av:hover {
+  background: #0055aa;
+}
+  /* Row with active notification */
+.has-notification-row {
+  border-left: 3px solid #ff9800 !important;
+  background: #fff8e1 !important;
+}
+
+.has-notification-row.expiring-row {
+  border-left: 3px solid #cc6600 !important;
+  background: #fff3e0 !important;
+}
+
+.has-notification-row.expired-row {
+  border-left: 3px solid #cc0000 !important;
+  background: #ffebee !important;
+}
+
+/* Notification badge in the computer name cell */
+.row-notif-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  cursor: help;
+  animation: pulse-badge 2s infinite;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* Tooltip-style hover effect */
+.row-notif-badge:hover {
+  transform: scale(1.3);
+}
+  .confirm-detail {
+  background: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: #333;
+  text-align: center;
+}
+.confirm-detail strong {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.confirm-detail small {
+  color: #888;
+}
   `]
 })
 export class ComputerMonitoringComponent implements OnInit, OnDestroy {
@@ -907,6 +1196,10 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   departments: any[] = [];
   showToast = false;
   toastMessage = '';
+  cleaningListFilterMonth = '';
+  cleaningListFilterYear = '';
+  allCleaningRecordsForFilter: any[] = []; 
+  detailTab: string = 'general';
   toastType: 'success' | 'error' = 'success';
   private toastTimer: any;
   showAllNotifications = false;
@@ -916,9 +1209,9 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   cleanedPCsCount = 0;      // ✅ NEW
   private allCleanedPCIds: Set<number> = new Set();  // ✅ NEW
   private apiUrl = environment.apiUrl;
-  private cacheKey = 'computer_monitoring_cache_v2';
-  private cacheExpiryKey = 'computer_monitoring_cache_expiry_v2';
-  private CACHE_DURATION = 30 * 60 * 1000;
+  private cacheKey = 'computer_monitoring_cache_v3';
+  private cacheExpiryKey = 'computer_monitoring_cache_expiry_v3';
+  private CACHE_DURATION = 5 * 60 * 1000;
   isFromCache = false;
   originalIpAddress: string = '';
   ipDuplicateError: string = '';
@@ -926,7 +1219,8 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   cleaningFilterMonth = '';
   cleaningFilterYear = '';
   filteredCleaningRecords: any[] = [];
-
+  showDeleteCleaningModal = false;
+  deleteCleaningTarget: any = null;
   modalPositions: { [key: string]: { x: number; y: number } } = {};
   private isDragging = false;
   private dragTarget: string | null = null;
@@ -936,7 +1230,7 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   formData: any = this.getEmptyFormData();
   cleaningForm: any = this.getEmptyCleaningForm();
   
-  osList = ['Windows 7','Windows 7 Pro','Windows 8','Windows 8.1','Windows 10 Home','Windows 10 Pro','Windows 10 Enterprise','Windows 11 Home','Windows 11 Pro','Windows 11 Enterprise','Windows Server 2016','Windows Server 2019','Windows Server 2022','Linux - Ubuntu','Linux - CentOS','macOS'];
+  osList = ['Windows 7','Windows 7 Pro','Windows 8','Windows 8.1','Windows 10 Home','Windows 10 Pro','Windows 10 Enterprise','Windows 11 Home','Windows 11 Pro','Windows 11 Enterprise', 'Windows Server 2012','Windows Server 2016','Windows Server 2019','Windows Server 2022','Linux - Ubuntu','Linux - CentOS','macOS'];
   
   licenseGroups = [
     {label:'Windows 10',options:['Windows 10 Home','Windows 10 Pro','Windows 10 Enterprise']},
@@ -1095,17 +1389,18 @@ loadCleanedPCIds() {
       if (Array.isArray(data)) {
         this.allCleanedPCIds = new Set(data.map((item: any) => Number(item.computer_id)));
       }
-      // ✅ Also merge with localStorage data
       this.mergeLocalCleaningIds();
       this.cleanedPCsCount = this.allCleanedPCIds.size;
-      if (this.showCleanedOnly) {
+      
+      // ✅ Only apply filters if NOT in cleaning mode
+      // (cleaning mode has its own data loading)
+      if (!this.showCleanedOnly) {
         this.applyFilters();
       }
     },
     error: () => {
-      // ✅ Load from localStorage on API error
       this.loadFromLocalStorage();
-      if (this.showCleanedOnly) {
+      if (!this.showCleanedOnly) {
         this.applyFilters();
       }
     }
@@ -1130,23 +1425,74 @@ private mergeLocalCleaningIds() {
   });
   this.cleanedPCsCount = this.allCleanedPCIds.size;
 }
- openCleaningModal(pc?: any) {
+openCleaningModal(pc?: any) {
   this.cleaningTarget = pc || null;
   this.cleaningForm = this.getEmptyCleaningForm();
+  
   if (pc) {
+    const latestPC = this.pcs.find(p => p.id === pc.id) || pc;
+    
+    // ✅ Debug log
+    console.log('Opening cleaning modal, PC data:', {
+      name: latestPC.computer_name,
+      av_last_update: latestPC.av_last_update,
+      office_activation_date: latestPC.office_activation_date,
+      office_expiry: latestPC.office_expiry
+    });
+    
+    const osValue = latestPC.os || pc.os || '';
+    if (osValue && !this.osList.includes(osValue)) {
+      this.osList.push(osValue);
+    }
+    
     this.cleaningForm = {
-      computer_name: pc.computer_name || '', location: pc.location || '', ip_address: pc.ip_address || '',
-      os: pc.os || '', bit: pc.bit || '64', ram: pc.ram || '', storage: pc.storage || '',
-      antivirus: pc.antivirus || '', av_last_update: pc.av_last_update || '',
-      office_activation_date: pc.office_activation_date || '', office_duration: pc.office_duration || '',
-      office_expiry: pc.office_expiry || '', notes: '', cleaning_date: new Date().toISOString().split('T')[0]
+      computer_name: latestPC.computer_name || pc.computer_name || '',
+      location: latestPC.location || pc.location || '',
+      ip_address: latestPC.ip_address || pc.ip_address || '',
+      os: osValue,
+      bit: latestPC.bit || pc.bit || '64',
+      ram: latestPC.ram || pc.ram || '',
+      storage: latestPC.storage || pc.storage || '',
+      processor: latestPC.processor || pc.processor || '',
+      antivirus: latestPC.antivirus || pc.antivirus || '',
+      av_last_update: this.formatDate(latestPC.av_last_update || pc.av_last_update),
+      office_activation_date: this.formatDate(latestPC.office_activation_date || pc.office_activation_date),
+      office_duration: latestPC.office_duration || pc.office_duration || '',
+      office_expiry: this.formatDate(latestPC.office_expiry || pc.office_expiry),
+      notes: '',
+      cleaning_date: new Date().toISOString().split('T')[0]
     };
+    
+    // ✅ Debug log
+    console.log('Cleaning form data after loading:', {
+      av_last_update: this.cleaningForm.av_last_update,
+      office_activation_date: this.cleaningForm.office_activation_date,
+      office_expiry: this.cleaningForm.office_expiry
+    });
   }
-  this.centerModal('cleaningModal'); // ✅ Center the modal
+  
+  this.centerModal('cleaningModal');
   this.showCleaningModal = true;
   this.showCleaningHistory = false;
 }
-
+// ✅ Helper to format dates properly
+private formatDate(dateStr: any): string {
+  if (!dateStr || dateStr === '0000-00-00' || dateStr === '0000-00-00 00:00:00' || dateStr === 'null' || dateStr === 'undefined') return '';
+  // If it's a Date object, convert to string
+  if (dateStr instanceof Date && !isNaN(dateStr.getTime())) {
+    return dateStr.toISOString().split('T')[0];
+  }
+  // If it's already a valid date string, return it
+  if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}/)) {
+    return dateStr.split('T')[0];
+  }
+  // Try parsing it
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1900) {
+    return d.toISOString().split('T')[0];
+  }
+  return '';
+}
   calculateExpiry() {
     if (this.formData.license_activation && this.formData.license_duration) {
       const activationDate = new Date(this.formData.license_activation);
@@ -1198,12 +1544,12 @@ private mergeLocalCleaningIds() {
       if (this.cleaningTarget) {
         const idx = this.pcs.findIndex(p => p.id === this.cleaningTarget!.id);
         if (idx >= 0) {
-          // ✅ Update ALL fields including location and os
           this.pcs[idx].location = data.location || this.pcs[idx].location;
           this.pcs[idx].os = data.os || this.pcs[idx].os;
           this.pcs[idx].bit = data.bit || this.pcs[idx].bit;
           this.pcs[idx].ram = data.ram || this.pcs[idx].ram;
           this.pcs[idx].storage = data.storage || this.pcs[idx].storage;
+          this.pcs[idx].processor = data.processor || this.pcs[idx].processor;
           this.pcs[idx].antivirus = data.antivirus || this.pcs[idx].antivirus;
           this.pcs[idx].av_last_update = data.av_last_update || this.pcs[idx].av_last_update;
           this.pcs[idx].office_activation = data.office_activation;
@@ -1212,25 +1558,33 @@ private mergeLocalCleaningIds() {
           this.pcs[idx].office_expiry = data.office_expiry;
           
           this.saveToCache(this.pcs);
-          this.applyFilters();
           this.generateNotifications();
         }
       }
       
-      this.loadCleanedPCIds();
+      // ✅ Reload cleaning data to update counts and dates
+      if (this.showCleanedOnly) {
+        // If in cleaning mode, reload everything
+        this.loadAllCleaningData();
+      } else {
+        // Otherwise just update the badge count
+        this.loadCleanedPCIds();
+      }
+      
       this.showToastMsg('✅ Cleaning record saved!', 'success');
     },
     error: () => {
+      // Local fallback
       const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
       data.id = Date.now();
-      data.computer_id = this.cleaningTarget?.id || data.computer_id || null;
+      data.computer_id = this.cleaningTarget?.id || data.computer_id || 0;
+      data.cleaning_date = data.cleaning_date || new Date().toISOString().split('T')[0];
       records.push(data);
       localStorage.setItem('cleaning_records', JSON.stringify(records));
       
       if (this.cleaningTarget) {
         const idx = this.pcs.findIndex(p => p.id === this.cleaningTarget!.id);
         if (idx >= 0) {
-          // ✅ Update ALL fields locally too
           this.pcs[idx].location = data.location || this.pcs[idx].location;
           this.pcs[idx].os = data.os || this.pcs[idx].os;
           this.pcs[idx].bit = data.bit || this.pcs[idx].bit;
@@ -1244,13 +1598,18 @@ private mergeLocalCleaningIds() {
           this.pcs[idx].office_expiry = data.office_expiry || '';
           
           this.saveToCache(this.pcs);
-          this.applyFilters();
           this.generateNotifications();
         }
       }
       
       this.showCleaningModal = false;
-      this.loadCleanedPCIds();
+      
+      if (this.showCleanedOnly) {
+        this.loadAllCleaningData();
+      } else {
+        this.loadCleanedPCIds();
+      }
+      
       this.showToastMsg('✅ Record saved locally', 'success');
     }
   });
@@ -1305,7 +1664,79 @@ private mergeLocalCleaningIds() {
     }
   });
 }
+applyCleaningListFilters() {
+  if (!this.showCleanedOnly) return;
+  this.loadAllCleaningRecordsForFilter();
+}
 
+loadAllCleaningRecordsForFilter() {
+  const hasFilter = this.cleaningListFilterMonth || this.cleaningListFilterYear;
+  
+  if (!hasFilter) {
+    // ✅ No filters selected - show ALL cleaned PCs
+    this.loadCleanedPCIds();
+    return;
+  }
+  
+  // ✅ First try from localStorage (fast, always works)
+  const localRecords = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+  
+  let filteredIds: Set<number> = new Set();
+  
+  localRecords.forEach((r: any) => {
+    if (!r.cleaning_date || !r.computer_id) return;
+    const date = new Date(r.cleaning_date);
+    const month = (date.getMonth() + 1).toString();
+    const year = date.getFullYear().toString();
+    
+    let include = true;
+    if (this.cleaningListFilterMonth && month !== this.cleaningListFilterMonth) include = false;
+    if (this.cleaningListFilterYear && year !== this.cleaningListFilterYear) include = false;
+    
+    if (include) {
+      filteredIds.add(Number(r.computer_id));
+    }
+  });
+  
+  // ✅ Also try backend with month/year filter
+  const headers = this.getHeaders();
+  let url = `${this.apiUrl}/api/computers/cleaning/all-dates`;
+  const params: string[] = [];
+  if (this.cleaningListFilterMonth) params.push(`month=${this.cleaningListFilterMonth}`);
+  if (this.cleaningListFilterYear) params.push(`year=${this.cleaningListFilterYear}`);
+  if (params.length > 0) url += '?' + params.join('&');
+  
+  this.http.get<any[]>(url, { headers }).subscribe({
+    next: (data) => {
+      if (Array.isArray(data)) {
+        data.forEach((item: any) => {
+          const computerId = Number(item.computer_id);
+          if (computerId && !isNaN(computerId)) {
+            filteredIds.add(computerId);
+          }
+        });
+      }
+      
+      // Apply the filtered results
+      this.allCleanedPCIds = filteredIds;
+      this.cleanedPCsCount = filteredIds.size;
+      this.applyFilters();
+    },
+    error: () => {
+      // Backend failed, use localStorage results only
+      this.allCleanedPCIds = filteredIds;
+      this.cleanedPCsCount = filteredIds.size;
+      this.applyFilters();
+    }
+  });
+}
+
+clearCleaningListFilters() {
+  this.cleaningListFilterMonth = '';
+  this.cleaningListFilterYear = '';
+  // Reload all cleaned PC IDs
+  this.loadCleanedPCIds();
+}
 // ✅ New helper method
 private mergeLocalCleaningRecords(pc: any) {
   const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
@@ -1330,33 +1761,72 @@ private mergeLocalCleaningRecords(pc: any) {
   }
 
   clearCleaningFilters() {this.cleaningFilterMonth = ''; this.cleaningFilterYear = ''; this.applyCleaningFilters();}
+  // Open the delete confirmation modal
+openDeleteCleaningModal(record: any) {
+  this.deleteCleaningTarget = record;
+  this.centerModal('deleteCleaningModal');
+  this.showDeleteCleaningModal = true;
+}
 
-  deleteCleaningRecord(record: any) {
-    if (!confirm('Delete this cleaning record?')) return;
-    const headers = this.getHeaders();
-    this.http.delete(`${this.apiUrl}/api/computers/cleaning/${record.id}`, {headers}).subscribe({
-      next: () => {
-        this.cleaningRecords = this.cleaningRecords.filter(r => r.id !== record.id);
-        this.applyCleaningFilters();
-        this.showToastMsg('Record deleted', 'success');
-      },
-      error: () => {
-        const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
-        localStorage.setItem('cleaning_records', JSON.stringify(records.filter((r: any) => r.id !== record.id)));
-        this.cleaningRecords = this.cleaningRecords.filter(r => r.id !== record.id);
-        this.applyCleaningFilters();
+// Cancel deletion
+cancelDeleteCleaning() {
+  this.showDeleteCleaningModal = false;
+  this.deleteCleaningTarget = null;
+}
+
+// Confirm and execute deletion
+confirmDeleteCleaning() {
+  if (!this.deleteCleaningTarget) return;
+  
+  const record = this.deleteCleaningTarget;
+  const headers = this.getHeaders();
+  
+  this.http.delete(`${this.apiUrl}/api/computers/cleaning/${record.id}`, { headers }).subscribe({
+    next: () => {
+      this.cleaningRecords = this.cleaningRecords.filter(r => r.id !== record.id);
+      this.applyCleaningFilters();
+      
+      if (this.showCleanedOnly) {
+        this.loadAllCleaningData();
+      } else {
         this.loadCleanedPCIds();
-        this.showToastMsg('Record deleted', 'success');
       }
-    });
-  }
+      
+      this.showDeleteCleaningModal = false;
+      this.deleteCleaningTarget = null;
+      this.showToastMsg('✅ Record deleted', 'success');
+    },
+    error: () => {
+      const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+      localStorage.setItem('cleaning_records', JSON.stringify(records.filter((r: any) => r.id !== record.id)));
+      this.cleaningRecords = this.cleaningRecords.filter(r => r.id !== record.id);
+      this.applyCleaningFilters();
+      
+      if (this.showCleanedOnly) {
+        this.loadAllCleaningData();
+      } else {
+        this.loadCleanedPCIds();
+      }
+      
+      this.showDeleteCleaningModal = false;
+      this.deleteCleaningTarget = null;
+      this.showToastMsg('✅ Record deleted', 'success');
+    }
+  });
+}
 
-  private getEmptyCleaningForm() {
-    return {
-      computer_name:'',location:'',ip_address:'',os:'',bit:'64',ram:'',storage:'',antivirus:'',av_last_update:'',
-      office_activation_date:'',office_duration:'',office_expiry:'',notes:'',cleaning_date:new Date().toISOString().split('T')[0]
-    };
-  }
+// Keep this for backward compatibility or remove it
+deleteCleaningRecord(record: any) {
+  this.openDeleteCleaningModal(record);
+}
+private getEmptyCleaningForm() {
+  return {
+    computer_name:'',location:'',ip_address:'',os:'',bit:'64',ram:'',storage:'',processor:'',
+    antivirus:'',av_last_update:'',
+    office_activation_date:'',office_duration:'',office_expiry:'',notes:'',
+    cleaning_date:new Date().toISOString().split('T')[0]
+  };
+}
 
  private getEmptyFormData() {
   return {
@@ -1386,12 +1856,20 @@ private mergeLocalCleaningRecords(pc: any) {
   }
 
   private loadFromCacheOrServer() {
-    const cachedData = this.getFromCache();
-    if (cachedData && cachedData.length > 0) {
-      this.pcs = cachedData; this.applyFilters(); this.extractLocationsFromPCs(); this.generateNotifications(); this.isFromCache = true;
-    }
-    this.loadPCsFromServer(true);
+  // ✅ Load cache instantly first
+  const cachedData = this.getFromCache();
+  if (cachedData && cachedData.length > 0) {
+    this.pcs = cachedData;
+    this.applyFilters();
+    this.extractLocationsFromPCs();
+    this.generateNotifications();
+    this.isFromCache = true;
+    console.log('📦 Loaded from cache:', cachedData.length, 'computers');
   }
+  
+  // ✅ Then fetch fresh data from server (without clearing cache first)
+  this.loadPCsFromServer(true);
+}
 
   get uniqueLocations(): string[] {
     return [...new Set(this.pcs.map(pc => pc.location).filter((loc: string) => loc && loc.trim() !== ''))].sort();
@@ -1440,7 +1918,283 @@ private mergeLocalCleaningRecords(pc: any) {
   }
 filterCleanedPCs() {
   this.showCleanedOnly = !this.showCleanedOnly;
-  this.applyFilters();
+  if (this.showCleanedOnly) {
+    this.cleaningListFilterMonth = '';
+    this.cleaningListFilterYear = '';
+    // ✅ Load both IDs AND dates
+    this.loadAllCleaningData();
+  } else {
+    // ✅ When going back to all computers, don't reload - just apply filters
+    this.applyFilters();
+  }
+}
+loadAllCleaningData() {
+  const headers = this.getHeaders();
+  const url = `${this.apiUrl}/api/computers/cleaning/all-records`;
+  
+  console.log('🔍 Calling all-records API:', url);
+  console.log('🔍 Headers:', headers);
+  
+  this.http.get<any[]>(url, { headers }).subscribe({
+    next: (data) => {
+      console.log('✅ Raw API response:', data);
+      console.log('✅ Response type:', typeof data, 'Is array:', Array.isArray(data));
+      
+      if (Array.isArray(data) && data.length > 0) {
+        this.allCleaningRecordsForFilter = data;
+        
+        // Merge localStorage
+        const localRecords = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+        localRecords.forEach((lr: any) => {
+          const exists = this.allCleaningRecordsForFilter.some(
+            (existing: any) => Number(existing.id) === Number(lr.id)
+          );
+          if (!exists) {
+            this.allCleaningRecordsForFilter.push(lr);
+          }
+        });
+        
+        // Build sets
+        const cleanedIds = new Set<number>();
+        const cleanedNames = new Set<string>();
+        
+        this.allCleaningRecordsForFilter.forEach((r: any) => {
+          if (r.computer_id) cleanedIds.add(Number(r.computer_id));
+          if (r.computer_name) cleanedNames.add(r.computer_name.toLowerCase().trim());
+        });
+        
+        console.log('🔢 Cleaned IDs:', [...cleanedIds]);
+        console.log('📛 Cleaned Names:', [...cleanedNames]);
+        
+        // Match pcs
+        this.allCleanedPCIds = new Set<number>();
+        this.pcs.forEach(pc => {
+          const pcId = Number(pc.id);
+          const pcName = (pc.computer_name || '').toLowerCase().trim();
+          if (cleanedIds.has(pcId) || cleanedNames.has(pcName)) {
+            this.allCleanedPCIds.add(pcId);
+          }
+        });
+        
+        this.cleanedPCsCount = this.allCleanedPCIds.size;
+        console.log('✅ Final count:', this.cleanedPCsCount);
+      } else {
+        console.warn('⚠️ No data returned, falling back');
+        this.loadFromLocalStorage();
+      }
+      this.applyFilters();
+    },
+    error: (err) => {
+      console.error('❌ API Error:', err.status, err.statusText, err.message);
+      console.error('❌ Full error:', err);
+      // Fallback to localStorage
+      this.loadFromLocalStorage();
+      this.applyFilters();
+    }
+  });
+}
+// ✅ Add this helper method
+private mergeLocalCleaningRecordsForAll() {
+  // This is now handled inline in loadAllCleaningData
+}
+
+// ✅ New method: Load both PC IDs and dates, then apply filters
+loadCleanedPCIdsAndDates() {
+  const headers = this.getHeaders();
+  
+  // First load the PC IDs
+  this.http.get<any[]>(`${this.apiUrl}/api/computers/cleaning/all-ids`, { headers }).subscribe({
+    next: (data) => {
+      if (Array.isArray(data)) {
+        this.allCleanedPCIds = new Set(data.map((item: any) => Number(item.computer_id)));
+      }
+      this.mergeLocalCleaningIds();
+      this.cleanedPCsCount = this.allCleanedPCIds.size;
+      
+      // ✅ Now load the dates
+      this.loadAllCleaningRecordsForDates();
+    },
+    error: () => {
+      this.loadFromLocalStorage();
+      // ✅ Still load dates even if IDs fail
+      this.loadAllCleaningRecordsForDates();
+    }
+  });
+}
+getLastCleaningDate(computerId: number): string | null {
+  if (!computerId || isNaN(computerId)) {
+    return null;
+  }
+  
+  const numId = Number(computerId);
+  let latestDate: string | null = null;
+  let latestDateObj: Date | null = null;
+  
+  // Check all records from the API (these have id, computer_id, cleaning_date)
+  if (this.allCleaningRecordsForFilter && this.allCleaningRecordsForFilter.length > 0) {
+    for (const record of this.allCleaningRecordsForFilter) {
+      // ✅ Convert both to numbers for comparison
+      const recordCompId = Number(record.computer_id);
+      if (recordCompId === numId && record.cleaning_date) {
+        const dateObj = new Date(record.cleaning_date);
+        if (!isNaN(dateObj.getTime()) && (!latestDateObj || dateObj > latestDateObj)) {
+          latestDate = record.cleaning_date;
+          latestDateObj = dateObj;
+        }
+      }
+    }
+  }
+  
+  // If not found, check localStorage
+  if (!latestDate) {
+    const localRecords = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+    for (const record of localRecords) {
+      const recordCompId = Number(record.computer_id);
+      if (recordCompId === numId && record.cleaning_date) {
+        const dateObj = new Date(record.cleaning_date);
+        if (!isNaN(dateObj.getTime()) && (!latestDateObj || dateObj > latestDateObj)) {
+          latestDate = record.cleaning_date;
+          latestDateObj = dateObj;
+        }
+      }
+    }
+  }
+  
+  return latestDate;
+}
+// Load all cleaning records (for displaying dates in table)
+loadAllCleaningRecords() {
+  const headers = this.getHeaders();
+  this.http.get<any[]>(`${this.apiUrl}/api/computers/cleaning/all-records`, { headers }).subscribe({
+    next: (data) => {
+      if (Array.isArray(data)) {
+        this.allCleaningRecordsForFilter = data;
+      }
+      this.applyFilters();
+    },
+    error: () => {
+      // Fallback to localStorage
+      this.allCleaningRecordsForFilter = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+      this.applyFilters();
+    }
+  });
+}
+// ✅ New method specifically for loading dates when entering cleaning mode
+loadAllCleaningRecordsForDates() {
+  const headers = this.getHeaders();
+  const url = `${this.apiUrl}/api/computers/cleaning/all-records`;
+  console.log('🔍 Calling API:', url);
+  console.log('🔍 Headers:', headers);
+  
+  this.http.get<any[]>(url, { headers }).subscribe({
+    next: (data) => {
+      console.log('🔍 API SUCCESS - Raw data:', data);
+      console.log('🔍 Is array?', Array.isArray(data));
+      if (Array.isArray(data)) {
+        this.allCleaningRecordsForFilter = data;
+        console.log('🔍 Loaded records count:', data.length);
+        if (data.length > 0) {
+          console.log('🔍 First record:', data[0]);
+        }
+      }
+      this.applyFilters();
+    },
+    error: (err) => {
+      console.error('🔍 API ERROR:', err.status, err.statusText, err.message);
+      console.error('🔍 Full error:', err);
+      this.allCleaningRecordsForFilter = [];
+      this.applyFilters();
+    }
+  });
+}
+// ✅ Helper methods for AV status in detail modal
+isAVExpiring(pc: any): boolean {
+  if (!pc.av_next_update) return false;
+  const days = this.getDaysUntil(new Date(pc.av_next_update));
+  return days <= 14 && days > 0;
+}
+
+isAVExpired(pc: any): boolean {
+  if (!pc.av_next_update) return false;
+  const days = this.getDaysUntil(new Date(pc.av_next_update));
+  return days <= 0;
+}
+
+// Helper to get days until a date (reusable)
+getDaysUntilDate(dateStr: string): number {
+  if (!dateStr || dateStr === '0000-00-00') return Infinity;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return Infinity;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+// ✅ New method to handle opening history from detail modal
+openHistoryFromDetail(pc: any) {
+  // Save the PC reference first
+  const pcToView = pc;
+  // Close the detail modal
+  this.showDetailModal = false;
+  // Open history with the saved reference
+  this.viewCleaningHistory(pcToView);
+}
+// ✅ Simple one-click antivirus update
+updateAntivirus(pc: any) {
+  const today = new Date();
+  const nextUpdate = new Date();
+  nextUpdate.setDate(today.getDate() + 90); // ✅ Changed from 14 to 90 days
+  
+  const updateData = {
+    av_last_update: today.toISOString().split('T')[0],
+    av_next_update: nextUpdate.toISOString().split('T')[0]
+  };
+  
+  const headers = this.getHeaders();
+  
+  // Update in backend
+  this.http.put(`${this.apiUrl}/api/computers/${pc.id}`, { ...pc, ...updateData }, { headers }).subscribe({
+    next: () => {
+      // Update local data
+      const idx = this.pcs.findIndex(p => p.id === pc.id);
+      if (idx >= 0) {
+        this.pcs[idx].av_last_update = updateData.av_last_update;
+        this.pcs[idx].av_next_update = updateData.av_next_update;
+        this.saveToCache(this.pcs);
+        
+        // ✅ Dismiss any existing AV notifications for this PC
+        this.dismissAVNotifications(pc);
+        
+        this.applyFilters();
+        this.generateNotifications();
+      }
+      this.showToastMsg(`🛡️ Antivirus updated for ${pc.computer_name}`, 'success');
+    },
+    error: () => {
+      // Update locally even if backend fails
+      const idx = this.pcs.findIndex(p => p.id === pc.id);
+      if (idx >= 0) {
+        this.pcs[idx].av_last_update = updateData.av_last_update;
+        this.pcs[idx].av_next_update = updateData.av_next_update;
+        this.saveToCache(this.pcs);
+        
+        // ✅ Dismiss any existing AV notifications for this PC
+        this.dismissAVNotifications(pc);
+        
+        this.applyFilters();
+        this.generateNotifications();
+      }
+      this.showToastMsg(`🛡️ Updated locally for ${pc.computer_name}`, 'success');
+    }
+  });
+}
+
+// ✅ Add this helper method to dismiss AV notifications for a PC
+private dismissAVNotifications(pc: any) {
+  const notifKey = `pc_${pc.id}`;
+  this.dismissedNotifications.add(`${notifKey}_av_overdue`);
+  this.dismissedNotifications.add(`${notifKey}_av_due`);
+  this.saveDismissedNotifications();
+  this.notifications = this.notifications.filter(n => n.pc && Number(n.pc.id) !== Number(pc.id));
 }
 private loadPCsFromServer(silent: boolean = false) {
     const headers = this.getHeaders();
@@ -1452,20 +2206,22 @@ private loadPCsFromServer(silent: boolean = false) {
         else if (response?.data) rawData = response.data;
         
         if (rawData.length > 0) {
+          // ✅ Cache the raw data immediately
+          this.saveToCache(rawData);
+          
           const existingMap = new Map();
           
-          // ✅ Preserve existing local data first
+          // Preserve existing local data first
           this.pcs.forEach(pc => { 
             if (pc.id) existingMap.set(Number(pc.id), pc); 
           });
           
-          // ✅ Merge server data - but keep locally updated office fields if server has no value
+          // Merge server data
           rawData.forEach((serverPC: any) => {
             const id = Number(serverPC.id);
             if (id) {
               const existing = existingMap.get(id);
               if (existing) {
-                // ✅ Keep local office data if server doesn't have it
                 serverPC.office_activation = serverPC.office_activation || existing.office_activation;
                 serverPC.office_activation_date = serverPC.office_activation_date || existing.office_activation_date;
                 serverPC.office_duration = serverPC.office_duration || existing.office_duration;
@@ -1478,6 +2234,7 @@ private loadPCsFromServer(silent: boolean = false) {
           });
           
           this.pcs = Array.from(existingMap.values());
+          // ✅ Update cache with merged data
           this.saveToCache(this.pcs);
           this.extractLocationsFromPCs();
           this.generateNotifications();
@@ -1546,17 +2303,26 @@ isOfficeExpiredForm(): boolean {
     if (!this.isCacheValid()) return null;
     const cached = localStorage.getItem(this.cacheKey);
     if (!cached) return null;
-    try {this.isFromCache = true; return JSON.parse(cached);} catch {return null;}
+    try {
+      const data = JSON.parse(cached);
+      this.isFromCache = true;
+      return data;
+    } catch { return null; }
   }
 
   saveToCache(data: any[]) {
     if (!data || data.length === 0) return;
-    try {localStorage.setItem(this.cacheKey, JSON.stringify(data)); localStorage.setItem(this.cacheExpiryKey, (Date.now() + this.CACHE_DURATION).toString());} catch {}
+    try {
+      localStorage.setItem(this.cacheKey, JSON.stringify(data));
+      localStorage.setItem(this.cacheExpiryKey, (Date.now() + this.CACHE_DURATION).toString());
+    } catch (e) {
+      console.warn('Cache save failed:', e);
+    }
   }
 
   forceRefresh() {this.loadPCsFromServer(false); this.showToastMsg('🔄 Refreshing...', 'success');}
 
-  savePC() {
+ savePC() {
   if (!this.formData.computer_name || !this.formData.ip_address) {
     this.showToastMsg('Computer Name and IP Address are required!', 'error'); return;
   }
@@ -1579,11 +2345,35 @@ isOfficeExpiredForm(): boolean {
     : this.http.post(url, this.formData, {headers});
   
   request.subscribe({
-    next: () => {
+    next: (response: any) => {
       this.showModal = false;
-      this.loadPCsFromServer(true);
+      
+      // ✅ Update local pcs array immediately
+      if (this.editingPC) {
+        // Editing existing PC
+        const idx = this.pcs.findIndex(p => p.id === this.editingPC!.id);
+        if (idx >= 0) {
+          // Update the local PC data with form data
+          Object.assign(this.pcs[idx], this.formData);
+        }
+      } else {
+        // Adding new PC - add to local array
+        const newId = response?.id || Date.now();
+        this.pcs.push({ ...this.formData, id: newId, status: 'online' });
+      }
+      
+      // Save to cache and refresh display
+      this.saveToCache(this.pcs);
+      this.extractLocationsFromPCs();
+      this.applyFilters();
+      this.generateNotifications();
       this.originalIpAddress = '';
+      this.isFromCache = false;
+      
       this.showToastMsg(this.editingPC ? '✅ PC updated!' : '✅ PC added!', 'success');
+      
+      // ✅ Refresh from server in background (without clearing local data)
+      this.loadPCsFromServer(true);
     },
     error: (err) => {
       this.showToastMsg(err.error?.sqlMessage?.includes('Duplicate entry') 
@@ -1614,7 +2404,7 @@ isOfficeExpiredForm(): boolean {
   cancelDelete() {this.closeDeleteModal();}
   closeDeleteModal() {this.showDeleteModal = false; this.deleteTarget = null;}
 
-  applyFilters() {
+ applyFilters() {
   let filtered = [...this.pcs];
   
   // Search filter
@@ -1628,7 +2418,6 @@ isOfficeExpiredForm(): boolean {
     );
   }
   
-  // ✅ NEW: Show only cleaned PCs filter
   if (this.showCleanedOnly) {
     filtered = filtered.filter(pc => this.allCleanedPCIds.has(Number(pc.id)));
   }
@@ -1640,21 +2429,36 @@ isOfficeExpiredForm(): boolean {
   else if (this.filterExpiry === 'office') filtered = filtered.filter(pc => this.isOfficeExpiring(pc) || this.isOfficeExpired(pc));
   else if (this.filterExpiry === 'av') filtered = filtered.filter(pc => pc.av_next_update && this.getDaysUntil(new Date(pc.av_next_update)) <= 14);
   
-  // Location filter
   if (this.filterLocation !== 'all') filtered = filtered.filter(pc => pc.location === this.filterLocation);
   
-  // Sort by IP
+  // ✅ Mark PCs that have active notifications
+  filtered = filtered.map(pc => {
+    const pcNotifications = this.getPCNotifications(pc);
+    return {
+      ...pc,
+      hasWarning: pcNotifications.length > 0,
+      notificationCount: pcNotifications.length,
+      activeNotifications: pcNotifications
+    };
+  });
+  
   filtered.sort((a, b) => this.ipToNumber(a.ip_address) - this.ipToNumber(b.ip_address));
   this.filteredPCs = filtered;
+}
+
+// ✅ Add this method to get notifications for a specific PC
+getPCNotifications(pc: any): any[] {
+  return this.notifications.filter(n => n.pc && Number(n.pc.id) === Number(pc.id));
 }
   ipToNumber(ip: string): number {
     if (!ip) return 0;
     try {const p = ip.split('.'); if (p.length !== 4) return 0; return (+p[0]*16777216)+(+p[1]*65536)+(+p[2]*256)+(+p[3]);} catch {return 0;}
   }
 
- viewDetail(pc: any) {
+viewDetail(pc: any) {
   this.selectedPC = pc;
-  this.centerModal('detailModal'); // ✅ Center the modal
+  this.detailTab = 'general'; // ✅ Reset to general tab
+  this.centerModal('detailModal');
   this.showDetailModal = true;
 }
   closeDetailModal() {this.showDetailModal = false; this.selectedPC = null;}
@@ -1676,20 +2480,52 @@ private centerModal(modalId: string) {
 }
 
  editPC(pc: any) {
-  this.editingPC = pc; this.originalIpAddress = pc.ip_address; this.ipDuplicateError = '';
+  this.editingPC = pc; 
+  this.originalIpAddress = pc.ip_address; 
+  this.ipDuplicateError = '';
+  
+  // ✅ Get the LATEST version of this PC from the array
+  const latestPC = this.pcs.find(p => p.id === pc.id) || pc;
+  
+  // ✅ Ensure the current OS value exists in osList
+  if (latestPC.os && !this.osList.includes(latestPC.os)) {
+    this.osList.push(latestPC.os);
+  }
+  
+  // ✅ Use latestPC which has the most current data
   this.formData = {
-    computer_name:pc.computer_name||'', user_name:pc.user_name||'', location:pc.location||'',
-    ip_address:pc.ip_address||'', department:pc.department||'', os:pc.os||'', bit:pc.bit||'64',
-    ram:pc.ram||'', storage:pc.storage||'', processor:pc.processor||'',
-    antivirus:pc.antivirus||'', mac_address:pc.mac_address||'',
-    ms_license_type:pc.ms_license_type||'', license_activation:pc.license_activation||'',
-    license_duration:pc.license_duration||'', license_expiry:pc.license_expiry||'',
-    office_activation:pc.office_activation||'', 
-    office_activation_date:pc.office_activation_date||'',
-    office_duration:pc.office_duration||'',
-    office_expiry:pc.office_expiry||'',
-    av_last_update:pc.av_last_update||'', av_next_update:pc.av_next_update||''
+    computer_name: latestPC.computer_name || '',
+    user_name: latestPC.user_name || '',
+    location: latestPC.location || '',
+    ip_address: latestPC.ip_address || '',
+    department: latestPC.department || '',
+    os: latestPC.os || '',
+    bit: latestPC.bit || '64',
+    ram: latestPC.ram || '',
+    storage: latestPC.storage || '',
+    processor: latestPC.processor || '',
+    antivirus: latestPC.antivirus || '',
+    mac_address: latestPC.mac_address || '',
+    ms_license_type: latestPC.ms_license_type || '',
+    license_activation: latestPC.license_activation || '',
+    license_duration: latestPC.license_duration || '',
+    license_expiry: latestPC.license_expiry || '',
+    office_activation: latestPC.office_activation || '',
+    office_activation_date: latestPC.office_activation_date || '',
+    office_duration: latestPC.office_duration || '',
+    office_expiry: latestPC.office_expiry || '',
+    av_last_update: latestPC.av_last_update || '',
+    av_next_update: latestPC.av_next_update || ''
   };
+  
+  // ✅ Debug log
+  console.log('Edit PC data loaded:', {
+    name: this.formData.computer_name,
+    office_activation_date: this.formData.office_activation_date,
+    office_expiry: this.formData.office_expiry,
+    av_last_update: this.formData.av_last_update
+  });
+  
   this.centerModal('editModal');
   this.showModal = true;
 }

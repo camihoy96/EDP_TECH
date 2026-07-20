@@ -899,6 +899,11 @@ export class NotificationService {
     }
   }
 
+  // In your notification service
+getComputerMonitoringNotifications(): number {
+  const notifications = JSON.parse(localStorage.getItem('computer_notifications') || '[]');
+  return notifications.length;
+}
   // ── PUBLIC MUTATIONS ──
 
   markAsRead(id: string): void { 

@@ -185,10 +185,6 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
   <span class="nav-icon">📩</span>Manage Requisitions
   <span class="badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
 </a>
-<a routerLink="/admin/users-management" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">👥</span> User Management
-</a>
-    
     <!-- Knowledge Base Section -->
     <div class="sidebar-divider"></div>
     <a routerLink="/knowledge-base" routerLinkActive="active" class="sidebar-link">
@@ -221,9 +217,14 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
     <span class="nav-icon">🏢</span>Org Directory
   </a>
 
-  <a routerLink="/admin/computer-monitoring" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">💻</span> Computer Monitoring
-  </a>
+ <a routerLink="/admin/computer-monitoring" routerLinkActive="active" class="sidebar-link" style="position: relative;">
+  <span class="nav-icon">💻</span> Computer Monitoring
+  <span *ngIf="computerMonitoringNotifCount > 0" 
+        class="sidebar-notif-badge" 
+        [title]="computerMonitoringNotifCount + ' active alert(s)'">
+    {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
+  </span>
+</a>
 </ng-container>
 
    <!-- System Section (admin, head/manager, supervisor) -->
@@ -1069,6 +1070,37 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
     ::-webkit-scrollbar-track{background:#f0f0f0}
     ::-webkit-scrollbar-thumb{background:#c0c0c0;border:1px solid #a0a0a0}
     ::-webkit-scrollbar-thumb:hover{background:#a0a0a0}
+    .sidebar-link {
+  position: relative;
+}
+
+.sidebar-notif-badge {
+  position: absolute;
+  top: 2px;
+  right: 8px;
+  background: #cc0000;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  animation: pulse-badge 2s infinite;
+  z-index: 10;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.sidebar-link.active .sidebar-notif-badge {
+  background: #ffcc00;
+  color: #333;
+}
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {
@@ -1093,6 +1125,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   newTicketsCount = 0;
   apiUrl = environment.apiUrl;
   showReportModal = false;
+  computerMonitoringNotifCount = 0;
   reportModalTitle = '';
   reportModalData: any = null;
   reportLoading = false;
@@ -1186,6 +1219,7 @@ private get seenReqNotificationIds(): Set<number> {
   ngOnInit() {
    this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     this.setupSubscriptions();
+     this.loadNotificationCount();
     this.verifyAuthentication();
     this.loadReadOrdersFromStorage();
     this.loadNotificationMapFromStorage();
@@ -1198,6 +1232,7 @@ private get seenReqNotificationIds(): Set<number> {
   if (event.url.includes('/admin/requisitions')) {
     this.markRequisitionNotificationsAsRead();
   }
+  setInterval(() => this.loadNotificationCount(), 30000);
 });
   }
 checkSystemStatus() {
@@ -1260,7 +1295,71 @@ startDrag(event: MouseEvent, modalId: string) {
   
   event.preventDefault();
 }
-
+loadNotificationCount() {
+    // Get dismissed notifications with proper type casting
+    const stored = localStorage.getItem('dismissed_computer_notifications');
+    let dismissedSet: Set<string> = new Set<string>();
+    
+    if (stored) {
+      try {
+        const parsed: string[] = JSON.parse(stored);
+        dismissedSet = new Set<string>(parsed);
+      } catch (e) {
+        dismissedSet = new Set<string>();
+      }
+    }
+    
+    this.computerMonitoringNotifCount = this.getActiveNotificationCount(dismissedSet);
+}
+  getActiveNotificationCount(dismissedSet: Set<string>): number {
+    const stored = localStorage.getItem('computer_monitoring_cache_v3');
+    if (!stored) return 0;
+    
+    let pcs: any[] = [];
+    try {
+      pcs = JSON.parse(stored);
+      if (!Array.isArray(pcs)) return 0;
+    } catch (e) {
+      return 0;
+    }
+    
+    let count = 0;
+    
+    pcs.forEach((pc: any) => {
+      const notifKey = `pc_${pc.id}`;
+      
+      // Check license expiry
+      if (pc.license_expiry) {
+        const days = this.getDaysRemaining(pc.license_expiry);
+        if (days <= 0 && !dismissedSet.has(`${notifKey}_license_expired`)) count++;
+        else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_license_expiring`)) count++;
+      }
+      
+      // Check office expiry
+      if (pc.office_expiry) {
+        const days = this.getDaysRemaining(pc.office_expiry);
+        if (days <= 0 && !dismissedSet.has(`${notifKey}_office_expired`)) count++;
+        else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_office_expiring`)) count++;
+      }
+      
+      // Check AV updates
+      if (pc.av_next_update) {
+        const days = this.getDaysRemaining(pc.av_next_update);
+        if (days <= 0 && !dismissedSet.has(`${notifKey}_av_overdue`)) count++;
+        else if (days <= 14 && days > 0 && !dismissedSet.has(`${notifKey}_av_due`)) count++;
+      }
+    });
+    
+    return count;
+}
+   getDaysRemaining(dateStr: string): number {
+    if (!dateStr) return Infinity;
+    const expiry = new Date(dateStr);
+    if (isNaN(expiry.getTime())) return Infinity;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  }
 onDragMove(event: MouseEvent) {
   if (!this.isDragging || !this.currentDragModal) return;
   
