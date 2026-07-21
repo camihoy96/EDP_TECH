@@ -294,29 +294,31 @@ updateTicket(id: number, data: any): Observable<Ticket> {
       );
   }
   deleteTicket(id: number): Observable<any> {
-    return this.http.delete(`${this.apiUrl}/client/tickets/${id}`)
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}` };
+    
+    console.log('🗑️ Deleting ticket:', id, 'URL:', `${this.apiUrl}/client/tickets/${id}`);
+    
+    return this.http.delete(`${this.apiUrl}/client/tickets/${id}`, { headers })
       .pipe(
         tap(() => {
-          const current = this.ticketsSubject.value;
-          const deletedTicket = current.find(t => t.id === id);
-          this.ticketsSubject.next(current.filter(t => t.id !== id));
-          if (deletedTicket) {
-            this.ticketUpdateSubject.next({ ...deletedTicket, status: 'deleted' } as any);
-          }
-          
-          // ✅ Refresh the full list from backend
-          this.fetchTickets();
-          
-          this.cacheService.remove(`client_ticket_${id}`);
-          this.cacheService.remove('client_tickets');
-          this.calculateStats(current.filter(t => t.id !== id));
+            console.log('✅ Delete API call succeeded');
+            const current = this.ticketsSubject.value;
+            const deletedTicket = current.find(t => t.id === id);
+            this.ticketsSubject.next(current.filter(t => t.id !== id));
+            if (deletedTicket) {
+                this.ticketUpdateSubject.next({ ...deletedTicket, status: 'deleted' } as any);
+            }
+            this.cacheService.remove(`client_ticket_${id}`);
+            this.cacheService.remove('client_tickets');
+            this.calculateStats(current.filter(t => t.id !== id));
         }),
         catchError(error => {
-          console.error('❌ Client delete error:', error);
-          return this.handleError<any>(null)(error);
+            console.error('❌ Client delete error:', error);
+            return this.handleError<any>(null)(error);
         })
       );
-  }
+}
   addComment(ticketId: number, comment: string, isInternal: boolean, userId?: number, userTable?: string): Observable<any> {
     return this.http.post(`${this.apiUrl}/client/tickets/${ticketId}/comments`, {
       comment,

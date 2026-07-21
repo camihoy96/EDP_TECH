@@ -469,8 +469,13 @@ ngOnInit() {
                 return isAdmin;
             }
             
-            // ✅ String composite ID → exact match
+            // ✅ String composite ID → check for exclude_ prefix
             if (typeof n.targetUserId === 'string') {
+                // ✅ Exclude notifications meant for others
+                if (n.targetUserId.startsWith('exclude_')) {
+                    const excludeId = n.targetUserId.replace('exclude_', '');
+                    return excludeId !== String(userId);  // Show if NOT the excluded user
+                }
                 return n.targetUserId === compositeId;
             }
             
@@ -522,8 +527,13 @@ get filteredNotifications(): Notification[] {
         
         // ✅ String composite ID → exact match
         if (typeof n.targetUserId === 'string') {
-            return n.targetUserId === compositeId;
-        }
+    // ✅ Exclude notifications meant for others
+    if (n.targetUserId.startsWith('exclude_')) {
+        const excludeId = n.targetUserId.replace('exclude_', '');
+        return excludeId !== String(userId);  // Show if NOT the excluded user
+    }
+    return n.targetUserId === compositeId;
+}
         
         // ✅ Numeric ID → match with current user (only for admin table)
         if (typeof n.targetUserId === 'number') {

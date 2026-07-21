@@ -1041,24 +1041,45 @@ private fetchAgentName(userId: number) {
   deleteTicket(ticket: any) { this.ticketToDelete = ticket; this.showDeleteConfirm = true; }
 
 confirmDelete() {
-  if (this.ticketToDelete) {
-    this.ticketService.deleteTicket(this.ticketToDelete.id).subscribe({
-      next: () => {
-        this.tickets = this.tickets.filter(t => t.id !== this.ticketToDelete!.id);
-        this.myTickets = [...this.tickets];
+  if (!this.ticketToDelete) return;
+  
+  const ticketId = this.ticketToDelete.id;
+  console.log('🗑️ Attempting to delete ticket:', ticketId, this.ticketToDelete.ticket_number);
+  
+  // Remove from local arrays IMMEDIATELY (optimistic)
+  this.tickets = this.tickets.filter(t => t.id !== ticketId);
+  this.myTickets = this.myTickets.filter(t => t.id !== ticketId);
+  this.filteredTickets = this.filteredTickets.filter(t => t.id !== ticketId);
+  this.showDeleteConfirm = false;
+  const deletedTicket = this.ticketToDelete;
+  this.ticketToDelete = null;
+  
+  // ✅ Pause polling
+  this.ticketService.pausePolling();
+  
+  this.ticketService.deleteTicket(ticketId).subscribe({
+    next: (response) => {
+      console.log('✅ Delete successful:', response);
+      
+      // Resume polling after delete completes
+      setTimeout(() => {
+        this.ticketService.resumePolling();
+      }, 3000);
+    },
+    error: (err) => { 
+      console.error('❌ Delete failed:', err);
+      
+      // PUT THE TICKET BACK on error
+      if (deletedTicket) {
+        this.tickets.push(deletedTicket);
+        this.myTickets.push(deletedTicket);
         this.applyFilters();
-        this.showDeleteConfirm = false;
-        this.ticketToDelete = null;
-        this.ticketService.fetchTickets();
-      },
-      error: (error) => { 
-        console.error('Delete error:', error); 
-        this.showDeleteConfirm = false; 
-        alert('Error deleting ticket.');
       }
-    });
-  }
+      
+      this.ticketService.resumePolling();
+      alert('Error deleting ticket: ' + (err.error?.message || err.message));
+    }
+  });
 }
-
   cancelDelete() { this.showDeleteConfirm = false; this.ticketToDelete = null; }
 }

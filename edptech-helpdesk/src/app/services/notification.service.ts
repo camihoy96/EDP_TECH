@@ -24,7 +24,7 @@ export interface Notification {
 export class NotificationService {
   private notificationsSubject = new BehaviorSubject<Notification[]>([]);
   public notifications$ = this.notificationsSubject.asObservable();
-
+  private recentlyCreatedIds: Set<string> = new Set();
   private permissionGranted = false;
   private isBrowser: boolean;
   private toastContainer: HTMLElement | null = null;
@@ -34,7 +34,7 @@ export class NotificationService {
   private currentUserId: number | null = null;
   private currentUserName: string | null = null;
   private serverPolling: any;
-
+  private recentlyCreatedActions: Set<string> = new Set();
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.isBrowser = isPlatformBrowser(this.platformId);
     if (this.isBrowser) {
@@ -45,6 +45,7 @@ export class NotificationService {
       this.loadNotifications();
       this.loadNotificationsFromServer();
       this.serverPolling = setInterval(() => this.loadNotificationsFromServer(), 5000);
+      setInterval(() => this.loadTicketNotificationsFromServer(), 5000);
     }
   }
 
@@ -471,79 +472,110 @@ export class NotificationService {
     }
   }
 
-  handleTicketAssigned(ticket: Ticket, assignedByName: string, assignedToName: string, assignedToId?: number): void {
+handleTicketAssigned(ticket: Ticket, assignedByName: string, assignedToName: string, assignedToId?: number): void {
     const key = `assigned-${ticket.id}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     this.newTicketsForPopup = this.newTicketsForPopup.filter(t => t.id !== ticket.id);
     
-    if (assignedToId && assignedToId !== this.currentUserId) {
-      this.addBellNotification({
-        type: 'info', title: '📌 Ticket Assigned to You',
-        message: `Ticket #${ticket.ticket_number} was assigned to you by ${assignedByName}`,
-        ticketId: ticket.id, ticketNumber: ticket.ticket_number,
-        targetUserId: `users_${assignedToId}`, countInBadge: true,
-      });
+    // ✅ Notify EACH assigned user (the confirmAssign sends only the first ID, 
+    // but we should notify all users in assigned_users array)
+    const assignedUsers = (ticket as any).assigned_users;
+    if (assignedUsers && Array.isArray(assignedUsers)) {
+        assignedUsers.forEach((user: any) => {
+            const userId = typeof user === 'object' ? user.id : user;
+            if (userId && userId !== this.currentUserId) {
+                const userName = typeof user === 'object' ? user.fullname : `Agent #${userId}`;
+                this.addBellNotification({
+                    type: 'info', title: '📌 Ticket Assigned to You',
+                    message: `Ticket #${ticket.ticket_number}: "${ticket.title}" was assigned to you by ${assignedByName}`,
+                    ticketId: ticket.id, ticketNumber: ticket.ticket_number,
+                    targetUserId: `users_${userId}`, countInBadge: true,
+                });
+            }
+        });
+    } else if (assignedToId && assignedToId !== this.currentUserId) {
+        // Fallback to single assigned user
+        this.addBellNotification({
+            type: 'info', title: '📌 Ticket Assigned to You',
+            message: `Ticket #${ticket.ticket_number}: "${ticket.title}" was assigned to you by ${assignedByName}`,
+            ticketId: ticket.id, ticketNumber: ticket.ticket_number,
+            targetUserId: `users_${assignedToId}`, countInBadge: true,
+        });
     }
     
-    if (assignedToId === this.currentUserId) {
-      this.showToastPopup('📌 Ticket Assigned to You', `#${ticket.ticket_number}: "${ticket.title}" — assigned by ${assignedByName}`, ticket.id);
-    }
-    
-    if (!assignedToId || assignedToId !== this.currentUserId) {
-      this.addBellNotification({
+    // ✅ Broadcast to OTHER admins (exclude current user)
+    this.addBellNotification({
         type: 'info', title: '📌 Ticket Assigned',
         message: `${assignedByName} assigned ticket #${ticket.ticket_number} to ${assignedToName}`,
         ticketId: ticket.id, ticketNumber: ticket.ticket_number,
-        targetUserId: null, countInBadge: true,
-      });
-    }
+        targetUserId: `exclude_${this.currentUserId}`, countInBadge: true,
+    });
     
-    if (this.getCurrentUserTable() === 'users') {
-      this.showToastPopup('📌 Ticket Assigned', `${assignedByName} assigned #${ticket.ticket_number} to ${assignedToName}`, ticket.id);
+    // ✅ Only show toast if the assigned user IS the current user
+    if (assignedToId === this.currentUserId) {
+        this.showToastPopup('📌 Ticket Assigned to You', `#${ticket.ticket_number}: "${ticket.title}" — assigned by ${assignedByName}`, ticket.id);
     }
-  }
+}
 
-  handleStatusChange(ticket: Ticket, newStatus: string, changedByName: string): void {
+handleStatusChange(ticket: Ticket, newStatus: string, changedByName: string): void {
     const key = `${newStatus}-${ticket.id}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Track this action so polling doesn't bring it back
+    const actionKey = `status-${ticket.id}-${newStatus}`;
+    this.recentlyCreatedActions.add(actionKey);
+    setTimeout(() => this.recentlyCreatedActions.delete(actionKey), 15000);
     const statusConfig: Record<string, { emoji: string; verb: string }> = {
-      in_progress: { emoji: '⚙️', verb: 'started working on' },
-      pending: { emoji: '⏳', verb: 'set as pending' },
-      resolved: { emoji: '✅', verb: 'resolved' },
+        in_progress: { emoji: '⚙️', verb: 'started working on' },
+        pending: { emoji: '⏳', verb: 'set as pending' },
+        resolved: { emoji: '✅', verb: 'resolved' },
     };
     const config = statusConfig[newStatus] || { emoji: '📢', verb: 'updated' };
+    // ✅ Notify the ticket CREATOR (client) about status change
+    if (ticket.created_by) {
+        this.addBellNotification({
+            type: newStatus === 'resolved' ? 'success' : 'info',
+            title: `${config.emoji}Ticket ${newStatus.replace('_', ' ')}`,
+            message: `${changedByName} ${config.verb} your ticket #${ticket.ticket_number}: "${ticket.title}"`,
+            ticketId: ticket.id, ticketNumber: ticket.ticket_number,
+            targetUserId: `new_user_${ticket.created_by}`, countInBadge: true,
+        });
+    }
     
-    if (ticket.assigned_to !== this.currentUserId) {
-      this.addBellNotification({
+    // ✅ Notify OTHER assigned users (if ticket has multiple assigned users)
+    const assignedUsers = (ticket as any).assigned_users;
+    if (assignedUsers && Array.isArray(assignedUsers)) {
+        assignedUsers.forEach((user: any) => {
+            const userId = typeof user === 'object' ? user.id : user;
+            if (userId && userId !== this.currentUserId && userId !== ticket.created_by) {
+                this.addBellNotification({
+                    type: newStatus === 'resolved' ? 'success' : 'info',
+                    title: `${config.emoji} Ticket ${newStatus.replace('_', ' ')}`,
+                    message: `${changedByName} ${config.verb} ticket #${ticket.ticket_number}: "${ticket.title}"`,
+                    ticketId: ticket.id, ticketNumber: ticket.ticket_number,
+                    targetUserId: `users_${userId}`, countInBadge: true,
+                });
+            }
+        });
+    }
+    
+    // ✅ Broadcast to OTHER admins (exclude current user)
+    this.addBellNotification({
         type: newStatus === 'resolved' ? 'success' : 'info',
         title: `${config.emoji} Ticket ${newStatus.replace('_', ' ')}`,
         message: `${changedByName} ${config.verb} ticket #${ticket.ticket_number}: "${ticket.title}"`,
         ticketId: ticket.id, ticketNumber: ticket.ticket_number,
-        targetUserId: null, countInBadge: true,
-      });
-    }
+        targetUserId: `exclude_${this.currentUserId}`, countInBadge: true,
+    });
     
-    if (ticket.created_by) {
-      this.addBellNotification({
-        type: newStatus === 'resolved' ? 'success' : 'info',
-        title: `${config.emoji} Your Ticket ${newStatus.replace('_', ' ')}`,
-        message: `${changedByName} ${config.verb} your ticket #${ticket.ticket_number}`,
-        ticketId: ticket.id, ticketNumber: ticket.ticket_number,
-        targetUserId: `new_user_${ticket.created_by}`, countInBadge: true,
-      });
-    }
-    
-    if (this.getCurrentUserTable() === 'users') {
-      this.showToastPopup(`${config.emoji} Ticket ${newStatus.replace('_', ' ')}`, `${changedByName} ${config.verb} ticket #${ticket.ticket_number}`, ticket.id);
-    }
-    
+    // ✅ Show toast only if the current user is NOT the one making the change
+    // (The toast is for the person being notified, not the actor)
     if (newStatus === 'resolved') {
-      this.newTicketsForPopup = this.newTicketsForPopup.filter(t => t.id !== ticket.id);
+        this.newTicketsForPopup = this.newTicketsForPopup.filter(t => t.id !== ticket.id);
     }
-  }
+}
 
   // ── EXISTING REQUISITION METHODS ──
 
@@ -760,8 +792,7 @@ export class NotificationService {
   }
 
   // ── BELL NOTIFICATIONS ──
-
-  public addBellNotification(notif: Partial<Notification>): void {
+public addBellNotification(notif: Partial<Notification>): void {
     const newNotif: Notification = {
       id: notif.id || this.generateId(), type: notif.type || 'info',
       title: notif.title || '', message: notif.message || '',
@@ -773,6 +804,9 @@ export class NotificationService {
       timestamp: notif.timestamp || new Date(),
       read: notif.read !== undefined ? notif.read : false,
     };
+    this.recentlyCreatedIds.add(newNotif.id);
+    // Clean up after 10 seconds
+    setTimeout(() => this.recentlyCreatedIds.delete(newNotif.id), 10000);
     const current = this.notificationsSubject.value;
     const isDuplicate = current.find(n => n.id === newNotif.id || (n.title === newNotif.title && n.message === newNotif.message && n.ticketId === newNotif.ticketId));
     if (isDuplicate) { console.log('⚠️ Duplicate notification skipped:', newNotif.title); return; }
@@ -780,7 +814,14 @@ export class NotificationService {
     const updated = [newNotif, ...current].slice(0, 100);
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
-  }
+    
+    // ✅ Save to server for ALL notifications EXCEPT exclude_ ones
+    // null (broadcast), string (targeted), and number (targeted) should all be saved
+    const targetId = newNotif.targetUserId;
+    if (!targetId || !String(targetId).startsWith('exclude_')) {
+        this.saveNotificationToServer(newNotif);
+    }
+}
 
   dismissNotification(id: string): void {
     const updated = this.notificationsSubject.value.filter(n => n.id !== id);
@@ -796,15 +837,28 @@ export class NotificationService {
     const current = this.notificationsSubject.value;
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
-      current.forEach(n => {
-        if (n.id.startsWith('srv_')) {
-          fetch(`${environment.apiUrl}/api/notifications/${n.id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
-        }
-      });
+        // Delete server notifications (srv_)
+        current.forEach(n => {
+            if (n.id.startsWith('srv_')) {
+                fetch(`${environment.apiUrl}/api/notifications/${n.id}`, { 
+                    method: 'DELETE', 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                }).catch(() => {});
+            }
+        });
+        
+        // ✅ Mark all ticket notifications as cleared (doesn't delete them)
+        fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, { 
+            method: 'PUT', 
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        }).catch(() => {});
     }
     this.notificationsSubject.next([]);
     localStorage.removeItem(this.getStorageKey());
-  }
+}
 
   // ── TOAST POPUP ──
 
@@ -861,44 +915,104 @@ export class NotificationService {
       }
     } catch { localStorage.removeItem(this.getStorageKey()); }
   }
-
-  private saveNotifications(notifications: Notification[]): void {
+// ✅ KEEP THIS - saves to localStorage
+private saveNotifications(notifications: Notification[]): void {
     if (!this.isBrowser) return;
-    
-    const userId = this.currentUserId;
-    const userTable = this.getCurrentUserTable();
-    const compositeId = userId ? `${userTable}_${userId}` : null;
-    const isAdmin = userTable === 'users';
-    
-    const relevantNotifications = notifications.filter(n => {
-        if (n.countInBadge === false) return false;
-        
-        if (n.targetUserId == null) {
-            return isAdmin;
-        }
-        
-        if (typeof n.targetUserId === 'string') {
-            return n.targetUserId === compositeId;
-        }
-        
-        if (typeof n.targetUserId === 'number') {
-            return isAdmin && n.targetUserId === userId;
-        }
-        
-        return false;
-    });
     
     try { 
         const key = this.getStorageKey();
-        localStorage.setItem(key, JSON.stringify(relevantNotifications)); 
-        console.log('💾 Saved', relevantNotifications.length, 'relevant notifications (filtered from', notifications.length, ')');
+        localStorage.setItem(key, JSON.stringify(notifications)); 
+        console.log('💾 Saved', notifications.length, 'notifications to', key);
     }
-    catch { 
+    catch (e) { 
         const key = this.getStorageKey();
-        localStorage.setItem(key, JSON.stringify(relevantNotifications.slice(0, 50))); 
+        localStorage.setItem(key, JSON.stringify(notifications.slice(0, 50))); 
+        console.warn('⚠️ Storage full, saved only 50 notifications');
     }
-  }
-
+}
+  // In notification.service.ts, update the save method
+private saveNotificationToServer(notif: Notification): void {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+    
+    let userId: number | null = null;
+    let userTable: string | null = null;
+    
+    if (typeof notif.targetUserId === 'string' && notif.targetUserId.includes('_')) {
+        const parts = notif.targetUserId.split('_');
+        // ✅ Only save to server for 'new_user' (clients) and 'null' (broadcast)
+        // Skip 'users_*' and 'exclude_*' - these are handled locally
+        if (parts[0] === 'exclude') return;
+        if (parts[0] === 'users') return;  // ✅ Don't save admin-to-admin notifications
+        userTable = parts[0];
+        userId = parseInt(parts[1]) || null;
+    }
+    
+    fetch(`${environment.apiUrl}/api/ticket-notifications`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            ticket_id: notif.ticketId,
+            ticket_number: notif.ticketNumber,
+            user_id: userId,
+            user_table: userTable
+        })
+    }).catch(err => console.log('Failed to save ticket notification:', err));
+}
+// Add this polling alongside the existing one
+private loadTicketNotificationsFromServer(): void {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+    
+    fetch(`${environment.apiUrl}/api/ticket-notifications`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then((data: any[]) => {
+        if (!Array.isArray(data)) return;
+        
+        const current = this.notificationsSubject.value;
+        const newNotifications: Notification[] = [];
+        
+        data.forEach(n => {
+            const tId = 'ticket_' + n.id;
+            const actionKey = `status-${n.ticket_id}-${n.type || 'info'}`;
+        if (this.recentlyCreatedActions.has(actionKey)) {
+            console.log('⏭️ Skipping server notification (recent action):', n.title);
+            return;
+        }
+            if (this.recentlyCreatedIds.has(tId)) return;
+            const exists = current.find(existing => existing.id === tId);
+            if (!exists) {
+                newNotifications.push({
+                    id: tId,
+                    type: n.type || 'info',
+                    title: n.title,
+                    message: n.message,
+                    ticketId: n.ticket_id,
+                    ticketNumber: n.ticket_number,
+                    targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
+                    countInBadge: true,
+                    timestamp: new Date(n.created_at),
+                    read: n.is_read === 1,
+                });
+            }
+        });
+        
+        if (newNotifications.length > 0) {
+            const updated = [...newNotifications, ...current].slice(0, 100);
+            this.notificationsSubject.next(updated);
+            this.saveNotifications(updated);
+        }
+    })
+    .catch(err => console.log('Failed to load ticket notifications:', err));
+}
   // In your notification service
 getComputerMonitoringNotifications(): number {
   const notifications = JSON.parse(localStorage.getItem('computer_notifications') || '[]');

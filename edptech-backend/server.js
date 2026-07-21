@@ -1978,6 +1978,58 @@ app.delete('/api/client/tickets/comments/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// In your backend
+app.delete('/api/client/tickets/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        console.log('🔑 Decoded token:', decoded);
+        console.log('📋 Ticket ID to delete:', req.params.id);
+        
+        const { id } = req.params;
+        
+        const [ticket] = await pool.query('SELECT * FROM tickets WHERE id = ?', [id]);
+        
+        if (!ticket.length) {
+            console.log('❌ Ticket not found:', id);
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+        
+        console.log('📋 Ticket found:', ticket[0].ticket_number);
+        console.log('👤 Ticket created_by:', ticket[0].created_by);
+        console.log('👤 Decoded user id:', decoded.id);
+        console.log('👤 Decoded user_table:', decoded.user_table);
+        
+        // Allow delete if user is the creator OR is an admin (users table)
+        const isCreator = ticket[0].created_by === decoded.id;
+        const isAdmin = decoded.user_table === 'users';
+        
+        console.log('✅ Is creator?', isCreator);
+        console.log('✅ Is admin?', isAdmin);
+        
+        if (!isCreator && !isAdmin) {
+            console.log('❌ Not authorized');
+            return res.status(403).json({ error: 'Not authorized to delete this ticket' });
+        }
+        
+        // Delete related records first
+        await pool.query('DELETE FROM ticket_comments WHERE ticket_id = ?', [id]);
+        await pool.query('DELETE FROM ticket_attachments WHERE ticket_id = ?', [id]);
+        
+        // Delete the ticket
+        const [result] = await pool.query('DELETE FROM tickets WHERE id = ?', [id]);
+        
+        console.log('✅ Delete result:', result.affectedRows, 'rows affected');
+        
+        res.json({ success: true, message: 'Ticket deleted', deletedId: parseInt(id) });
+    } catch (error) {
+        console.error('❌ Error deleting ticket:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // ============ STATS ROUTES ============
 app.get('/api/stats', async (req, res) => {
     try {
@@ -9306,6 +9358,156 @@ app.post('/api/admin/database/import', async (req, res) => {
             success: false, 
             error: 'Failed to restore database: ' + error.message 
         });
+    }
+});
+// ============================================
+// ticket notifications
+// ============================================
+// POST - Save a ticket notification
+app.post('/api/ticket-notifications', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { type, title, message, ticket_id, ticket_number, user_id, user_table } = req.body;
+        
+        await pool.query(
+            `INSERT INTO ticket_notifications (type, title, message, ticket_id, ticket_number, user_id, user_table) 
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [type || 'info', title, message, ticket_id || null, ticket_number || null, user_id || null, user_table || null]
+        );
+        
+        res.status(201).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - Get ticket notifications for current user
+app.get('/api/ticket-notifications', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const [notifications] = await pool.query(
+            `SELECT * FROM ticket_notifications 
+             WHERE (user_id IS NULL OR (user_id = ? AND user_table = ?)) 
+             ORDER BY created_at DESC LIMIT 50`,
+            [decoded.id, decoded.user_table || 'users']
+        );
+        res.json(notifications);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE - Delete a ticket notification
+app.delete('/api/ticket-notifications/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        await pool.query('DELETE FROM ticket_notifications WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+// PUT - Mark notification as read
+app.put('/api/ticket-notifications/:id/read', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        await pool.query('UPDATE ticket_notifications SET is_read = 1 WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+// ============================================
+// track which users have read/cleared each notification
+// ============================================
+// PUT - Mark notification as read/cleared for current user
+app.put('/api/ticket-notifications/:id/read', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const { cleared } = req.body; // true if clearing all
+        
+        await pool.query(
+            `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at) 
+             VALUES (?, ?, ?, 1, ?) 
+             ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = ?`,
+            [id, decoded.id, decoded.user_table || 'users', cleared ? new Date() : null, cleared ? new Date() : null]
+        );
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT - Mark all notifications as cleared for current user
+app.put('/api/ticket-notifications/clear-all', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        // Mark all existing notifications as cleared for this user
+        await pool.query(
+            `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at)
+             SELECT id, ?, ?, 1, NOW() FROM ticket_notifications
+             ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = NOW()`,
+            [decoded.id, decoded.user_table || 'users']
+        );
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - Updated to exclude cleared notifications
+app.get('/api/ticket-notifications', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, 'secret_key');
+        
+        const [notifications] = await pool.query(
+            `SELECT tn.*, tnr.is_read as user_read, tnr.cleared_at
+             FROM ticket_notifications tn
+             LEFT JOIN ticket_notification_reads tnr 
+                ON tn.id = tnr.notification_id 
+                AND tnr.user_id = ? 
+                AND tnr.user_table = ?
+             WHERE (tn.user_id IS NULL AND ? = 'users') 
+                OR (tn.user_id = ? AND tn.user_table = ?)
+             ORDER BY tn.created_at DESC LIMIT 50`,
+            [decoded.id, decoded.user_table || 'users', decoded.user_table || 'users', decoded.id, decoded.user_table || 'users']
+        );
+        
+        // Filter out cleared notifications
+        const filtered = notifications.filter(n => !n.cleared_at);
+        res.json(filtered);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
 });
 // ============================================
