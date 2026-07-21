@@ -8,9 +8,9 @@ import { CommonModule } from '@angular/common';
   template: `
      <div class="modal-overlay" (click)="close()">
       <div class="report-modal-content" id="reportModal" (click)="$event.stopPropagation()" 
-           [class.is-dragging]="isDragging"
-           [style.left.px]="isDragging ? modalPosition.x : null"
-           [style.top.px]="isDragging ? modalPosition.y : null">
+     [class.is-dragging]="hasBeenDragged"
+     [style.left.px]="hasBeenDragged ? modalPosition.x : null"
+     [style.top.px]="hasBeenDragged ? modalPosition.y : null">
         <div class="report-modal-header modal-header-handle" (mousedown)="startDrag($event)">
           <h3>{{ title }}</h3>
           <div class="modal-actions">
@@ -263,22 +263,25 @@ import { CommonModule } from '@angular/common';
       animation: fadeIn 0.2s ease;
     }
     .report-modal-content {
-      background: #fff;
-      width: 95%;
-      max-width: 800px;
-      max-height: 85vh;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-      display: flex;
-      flex-direction: column;
-      border-radius: 0;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-    }
-    .report-modal-content[style*="left:"] {
-      transform: none;
-    }
+  background: #fff;
+  width: 95%;
+  max-width: 800px;
+  max-height: 85vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* ✅ When dragged, remove centering and use inline positions */
+.report-modal-content.is-dragging {
+  transform: none;
+  margin: 0;
+}
     .report-modal-header {
       display: flex;
       justify-content: space-between;
@@ -530,6 +533,7 @@ export class ReportModalComponent {
 
   modalPosition = { x: 0, y: 0 };
   isDragging = false;
+  hasBeenDragged = false; 
   private dragOffsetX = 0;
   private dragOffsetY = 0;
 
@@ -551,6 +555,7 @@ export class ReportModalComponent {
     if (!modal) return;
 
     this.isDragging = true;
+    this.hasBeenDragged = true;
     const rect = modal.getBoundingClientRect();
     this.dragOffsetX = event.clientX - rect.left;
     this.dragOffsetY = event.clientY - rect.top;
