@@ -225,6 +225,9 @@ import { ReportModalComponent } from './report-modal.component';
     {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
   </span>
 </a>
+  <a routerLink="/admin/announcements" routerLinkActive="active" class="sidebar-link">
+    <span class="nav-icon">📢</span>Manage Announcements
+  </a>
 </ng-container>
 
    <!-- System Section (admin, head/manager, supervisor) -->
@@ -1981,16 +1984,17 @@ loadStats() {
     this.totalTickets = tickets.length;
     this.openTickets = tickets.filter(t => !['resolved', 'closed'].includes(t.status)).length;
     
-    // Count new/unassigned tickets
-    const newTickets = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
+    // ✅ Only count NEW unassigned tickets for the badge
+    const newUnassigned = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
     
-    // Count tickets assigned to current user (not yet started)
+    // ✅ Separately count tickets assigned to current user
     const assignedToMe = tickets.filter(t => 
       t.assigned_to === this.currentUser?.id && 
-      t.status === 'assigned'
+      ['assigned', 'in_progress', 'pending'].includes(t.status)
     ).length;
     
-    this.newTicketsCount = newTickets + assignedToMe;
+    // Only show new unassigned count in badge
+    this.newTicketsCount = newUnassigned;
     
     this.criticalTickets = tickets.filter(t => t.priority === 'critical' && t.status !== 'resolved').length;
     this.resolvedToday = tickets.filter(t => {
@@ -2008,17 +2012,13 @@ loadStats() {
     this.totalTickets = tickets.length;
     this.openTickets = tickets.filter(t => !['resolved', 'closed'].includes(t.status)).length;
     
-    const newTickets = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
-    const assignedToMe = tickets.filter(t => 
-      t.assigned_to === this.currentUser?.id && 
-      t.status === 'assigned'
-    ).length;
+    // ✅ Only count NEW unassigned tickets for the badge
+    const newUnassigned = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
+    this.newTicketsCount = newUnassigned;
     
-    this.newTicketsCount = newTickets + assignedToMe;
     this.criticalTickets = tickets.filter(t => t.priority === 'critical' && t.status !== 'resolved').length;
     this.recentTickets = tickets.slice(0, 10);
 
-    // Use location instead of category
     const locationMap = new Map<string, number>();
     tickets.forEach(t => {
       const loc = t.location || 'General';
@@ -2055,41 +2055,47 @@ loadStats() {
     return icons[status] || '📋';
   }
 loadRegistrationKeys() {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  
-  if (!token) {
-    this.registrationKeys = 'N/A';
-    return;
-  }
-  
-  const headers = { 'Authorization': `Bearer ${token}` };
-  
-  this.http.get<any[]>(`${environment.apiUrl}/api/admin/registration-keys`, { headers }).subscribe({
-    next: (data: any[]) => {
-      const keys = Array.isArray(data) ? data : [];
-      this.registrationKeyCount = keys.length;
-      this.activeKeyCount = keys.filter((k: any) => !k.used).length;
-      
-      const activeKeys = keys.filter((k: any) => !k.used);
-      if (activeKeys.length > 0) {
-        this.registrationKeys = activeKeys[0].key_code;
-      } else if (keys.length > 0) {
-        this.registrationKeys = 'All used';
-      } else {
-        this.registrationKeys = 'None';
-      }
-    },
-    error: (err) => {
-      console.warn('Could not load registration keys:', err);
-      if (err.status === 401) {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
+    if (!token) {
         this.registrationKeys = 'N/A';
-      } else if (err.status === 403) {
-        this.registrationKeys = 'Restricted';
-      } else {
-        this.registrationKeys = 'Error';
-      }
+        return;
     }
-  });
+    
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const branchId = currentUser?.branch_id;
+    const headers = { 'Authorization': `Bearer ${token}` };
+    
+    this.http.get<any[]>(`${this.apiUrl}/api/public/branches`, { headers }).subscribe({
+        next: (branches) => {
+            const branchList = Array.isArray(branches) ? branches : [];
+            this.registrationKeyCount = branchList.length;
+            this.activeKeyCount = branchList.filter((b: any) => b.is_active).length;
+            
+            if (branchId) {
+                const userBranch = branchList.find((b: any) => b.id === branchId);
+                if (userBranch?.registration_key) {
+                    this.registrationKeys = userBranch.registration_key;
+                } else {
+                    this.registrationKeys = 'None';
+                }
+            } else if (branchList.length > 0) {
+                this.registrationKeys = branchList[0]?.registration_key || 'None';
+            } else {
+                this.registrationKeys = 'None';
+            }
+        },
+        error: (err) => {
+            console.warn('Could not load branches:', err);
+            if (err.status === 401) {
+                this.registrationKeys = 'N/A';
+            } else if (err.status === 403) {
+                this.registrationKeys = 'Restricted';
+            } else {
+                this.registrationKeys = 'Error';
+            }
+        }
+    });
 }
   // ── Navigation ────────────────────────────────
   newTicket()        { this.router.navigate(['/tickets/new']); }

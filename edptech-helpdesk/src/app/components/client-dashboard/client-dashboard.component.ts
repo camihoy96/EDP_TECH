@@ -361,23 +361,30 @@ interface ClientTicket {
                 </div>
               </div>
             </div>
-            <div class="widget">
-              <div class="widget-header">
-                <span class="widget-icon">📢</span>
-                <span class="widget-title">Announcements</span>
-              </div>
-              <div class="widget-content">
-                <div class="announce-list">
-                  <div class="announce-item" *ngFor="let a of announcements">
-                    <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
-                    <span class="announce-text">{{ a.text }}</span>
-                  </div>
-                  <div class="announce-viewall" (click)="goToAnnouncements()">
-                    View all announcements →
-                  </div>
-                </div>
-              </div>
-            </div>
+           <div class="widget">
+  <div class="widget-header">
+    <span class="widget-icon">📢</span>
+    <span class="widget-title">Announcements</span>
+    <span class="widget-badge" *ngIf="unreadAnnouncementsCount > 0">
+      {{ unreadAnnouncementsCount }} new
+    </span>
+  </div>
+  <div class="widget-content">
+    <div class="announce-list">
+      <div class="announce-item" *ngFor="let a of announcements">
+        <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
+        <span class="announce-text">{{ a.text }}</span>
+        <span class="new-dot" *ngIf="a.isNew">●</span>
+      </div>
+      <div class="announce-empty" *ngIf="announcements.length === 0">
+        <span>No active announcements</span>
+      </div>
+      <div class="announce-viewall" (click)="goToAnnouncements()">
+        View all announcements →
+      </div>
+    </div>
+  </div>
+</div>
           </div>
           <!-- Router outlet -->
           <div class="main-content">
@@ -1391,7 +1398,28 @@ interface ClientTicket {
     }
     .notif-modal-empty span { font-size: 36px; display: block; margin-bottom: 8px; }
     .notif-modal-empty p { font-size: 12px; }
+    .announce-empty {
+      text-align: center;
+      padding: 12px;
+      color: #888;
+      font-size: 11px;
+      font-style: italic;
+    }
+      .widget-badge {
+  background: #cc0000;
+  color: white;
+  font-size: 9px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: bold;
+  margin-left: auto;
+}
 
+.new-dot {
+  color: #0a246a;
+  font-size: 10px;
+  margin-left: 4px;
+}
     /* ═══════════════════════════════════════════════════
        CLEAR CONFIRM
     ═══════════════════════════════════════════════════ */
@@ -1578,13 +1606,7 @@ private dragTargetCalendar: HTMLElement | null = null;
   allOrders: any[] = [];
   clientNotifications: ClientNotification[] = [];
   private _requisitionsNotificationCount: number = 0;
-  readonly announcements = [
-    { type: 'new',   text: 'IT Support hours: Mon–Fri 8AM – 6PM' },
-    { type: 'info',  text: 'Password resets available via self-service portal' },
-    { type: 'maint', text: 'Scheduled maintenance: Saturday 2AM – 4AM' },
-    { type: 'info',  text: 'New Knowledge Base articles added this week' },
-  ];
-
+announcements: any[] = [];
   constructor(
     private authService: AuthService,
     private ticketService: TicketService,
@@ -1600,11 +1622,12 @@ ngOnInit() {
   // First, verify authentication before loading anything
   this.verifyAuthentication();
   this.loadChatUnreadCount();
+  this.loadAnnouncements();
 this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
   // ✅ Load notification data
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
-  
+  setInterval(() => this.loadAnnouncements(), 300000);
   this.router.events.subscribe((event: any) => {
     if (event.url && event.url.includes('/client/request')) {
       this.markRequisitionNotificationsAsRead();
@@ -2206,21 +2229,72 @@ private addSeenReqIds(ids: number[]): void {
 
   loadRegistrationKeys() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) { this.registrationKey = 'N/A'; return; }
+    if (!token) { 
+        this.registrationKey = 'N/A'; 
+        return; 
+    }
+    
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const branchId = currentUser?.branch_id;
+    
+    if (!branchId) {
+        // Try to get from public branches endpoint
+        const headers = { 'Authorization': `Bearer ${token}` };
+        this.http.get<any>(`${this.apiUrl}/api/public/branches`, { headers }).subscribe({
+            next: (data: any) => {
+                const branches = Array.isArray(data) ? data : [];
+                if (branches.length > 0 && branches[0].registration_key) {
+                    this.registrationKey = branches[0].registration_key;
+                    this.registrationKeyCount = branches.length;
+                } else {
+                    this.registrationKey = 'None';
+                    this.registrationKeyCount = 0;
+                }
+            },
+            error: () => {
+                this.registrationKey = 'Error';
+                this.registrationKeyCount = 0;
+            }
+        });
+        return;
+    }
+    
     const headers = { 'Authorization': `Bearer ${token}` };
-    this.http.get<any>(`${this.apiUrl}/api/registration-keys/public`, { headers }).subscribe({
-      next: (data: any) => {
-        this.registrationKeyCount = data.total || 0;
-        if (data.activeKey) { this.registrationKey = data.activeKey; }
-        else if (data.hasKeys && !data.hasActiveKeys) { this.registrationKey = 'All used'; }
-        else { this.registrationKey = 'None'; }
-      },
-      error: (err) => {
-        console.warn('Could not load registration keys:', err);
-        this.registrationKey = err.status === 401 ? 'N/A' : 'Error';
-      }
+    
+    // Get the branch's registration key
+    this.http.get<any>(`${this.apiUrl}/api/public/branches/${branchId}`, { headers }).subscribe({
+        next: (branch: any) => {
+            if (branch && branch.registration_key) {
+                this.registrationKey = branch.registration_key;
+                this.registrationKeyCount = 1;
+            } else {
+                this.registrationKey = 'None';
+                this.registrationKeyCount = 0;
+            }
+        },
+        error: (err) => {
+            console.warn('Could not load registration key:', err);
+            // Fallback: get all branches
+            this.http.get<any>(`${this.apiUrl}/api/public/branches`, { headers }).subscribe({
+                next: (data: any) => {
+                    const branches = Array.isArray(data) ? data : [];
+                    const userBranch = branches.find((b: any) => b.id === branchId);
+                    if (userBranch?.registration_key) {
+                        this.registrationKey = userBranch.registration_key;
+                        this.registrationKeyCount = 1;
+                    } else {
+                        this.registrationKey = 'None';
+                        this.registrationKeyCount = 0;
+                    }
+                },
+                error: () => {
+                    this.registrationKey = 'Error';
+                    this.registrationKeyCount = 0;
+                }
+            });
+        }
     });
-  }
+}
 // refresh all data
 refreshAll() {
   // Set loading state
@@ -2831,7 +2905,34 @@ private isCurrentUserAssigned(ticket: any): boolean {
 
   goToDashboard() { this.router.navigate(['/client/dashboard']); }
   goToAnnouncements() { this.router.navigate(['/client/announcements']); }
-
+loadAnnouncements() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) return;
+  
+  const headers = { 'Authorization': `Bearer ${token}` };
+  const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
+  
+  this.http.get<any[]>(`${environment.apiUrl}/api/announcements`, { headers }).subscribe({
+    next: (data) => {
+      const now = new Date();
+      this.announcements = (data || [])
+        .filter((a: any) => {
+          if (!a.expires_at) return true;
+          return new Date(a.expires_at) >= now;
+        })
+        .slice(0, 4)
+        .map((a: any) => ({
+          type: (a.priority || a.tag || 'info').toLowerCase(),
+          text: a.title,
+          isNew: !readIds.includes(a.id)  // ✅ Track unread
+        }));
+    },
+    error: (err) => console.error('Error loading announcements:', err)
+  });
+}
+get unreadAnnouncementsCount(): number {
+  return this.announcements.filter(a => a.isNew).length;
+}
   setView(view: string) {
     this.currentView = view;
     const qp = view !== 'all' ? { status: view } : {};

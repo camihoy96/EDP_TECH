@@ -9510,6 +9510,42 @@ app.get('/api/ticket-notifications', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+// GET - Get all announcements
+app.get('/api/announcements', async (req, res) => {
+    try {
+        const [announcements] = await pool.query(
+            'SELECT * FROM announcements ORDER BY created_at DESC'
+        );
+        res.json(announcements);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Create announcement
+app.post('/api/announcements', async (req, res) => {
+    try {
+        const { title, message, priority, expires_at, created_by, created_by_name } = req.body;
+        const [result] = await pool.query(
+            'INSERT INTO announcements (title, message, priority, expires_at, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?)',
+            [title, message, priority || 'normal', expires_at || null, created_by, created_by_name]
+        );
+        res.status(201).json({ id: result.insertId, success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE - Delete announcement
+app.delete('/api/announcements/:id', async (req, res) => {
+    try {
+        await pool.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // ============================================
 // FORGOT PASSWORD - Send Reset Code via Discord
 // ============================================

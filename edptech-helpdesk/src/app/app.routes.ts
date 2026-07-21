@@ -11,7 +11,6 @@ import { TicketFormComponent } from './components/tickets/ticket-form/ticket-for
 import { TicketDetailComponent } from './components/tickets/ticket-detail/ticket-detail.component';
 import { KnowledgeBaseComponent } from './components/knowledge-base/knowledge-base.component';
 import { KnowledgeBaseAdminComponent } from './components/knowledge-base/knowledge-base-admin.component';
-import { AnnouncementsComponent } from './components/announcements/announcements.component';
 import { AuthGuard } from './guards/auth.guard';
 import { RoleGuard } from './guards/role.guard';
 import { ProfileComponent } from './components/manage/profile.component';
@@ -30,6 +29,7 @@ import { AdminSupportComponent } from './components/admin/admin-panel/support.co
 import { AuthCallbackComponent } from './components/auth-callback/auth-callback.component';
 import { ClientFeaturesComponent } from './components/client/features/features.component';
 import { AdminRequisitionFormComponent } from './components/admin/admin-panel/requisition-form.component';
+import { AnnouncementsComponent } from './components/admin/admin-panel/announcements.component';
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
    { path: 'signup', component: SignupPageComponent },
@@ -62,6 +62,11 @@ export const routes: Routes = [
       { path: 'knowledge-base', component: KnowledgeBaseComponent },
       { path: 'knowledge-base/create', component: KnowledgeBaseAdminComponent },
       { path: 'knowledge-base/edit', component: KnowledgeBaseAdminComponent },
+       {
+    path: 'admin/announcements',
+    component: AnnouncementsComponent,
+    canActivate: [AuthGuard]
+  },
       { 
             path: 'job-orders/new', 
             loadComponent: () => import('./components/admin/admin-panel/job-order-form.component').then(m => m.AdminJobOrderFormComponent) 
