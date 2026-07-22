@@ -226,9 +226,18 @@ app.post('/api/auth/login', async (req, res) => {
         let user = null;
         let userTable = '';
         
-        // First check users table
+        // First check users table with JOIN to get branch and company names
         const [usersResult] = await pool.query(
-            'SELECT *, "users" as user_table FROM users WHERE username = ? OR email = ?', 
+            `SELECT 
+                u.*, 
+                "users" as user_table,
+                b.name AS branch_name,
+                b.company_name,
+                d.name AS department_name
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.username = ? OR u.email = ?`, 
             [username, username]
         );
         console.log('📊 Users table result:', usersResult.length > 0 ? 'Found' : 'Not found');
@@ -237,12 +246,19 @@ app.post('/api/auth/login', async (req, res) => {
             user = usersResult[0];
             userTable = 'users';
             console.log('✅ User found in users table:', user.username);
-            console.log('📝 Hash length:', user.password?.length);
-            console.log('📝 Hash preview:', user.password?.substring(0, 20) + '...');
         } else {
-            // Check new_user table
+            // Check new_user table with JOIN
             const [newUserResult] = await pool.query(
-                'SELECT *, "new_user" as user_table FROM new_user WHERE username = ? OR email = ?', 
+                `SELECT 
+                    nu.*, 
+                    "new_user" as user_table,
+                    b.name AS branch_name,
+                    b.company_name,
+                    d.name AS department_name
+                FROM new_user nu
+                LEFT JOIN branches b ON nu.branch_id = b.id
+                LEFT JOIN departments d ON nu.department_id = d.id
+                WHERE nu.username = ? OR nu.email = ?`, 
                 [username, username]
             );
             console.log('📊 new_user table result:', newUserResult.length > 0 ? 'Found' : 'Not found');
@@ -250,8 +266,6 @@ app.post('/api/auth/login', async (req, res) => {
                 user = newUserResult[0];
                 userTable = 'new_user';
                 console.log('✅ User found in new_user table:', user.username);
-                console.log('📝 Hash length:', user.password?.length);
-                console.log('📝 Hash preview:', user.password?.substring(0, 20) + '...');
             }
         }
         
@@ -320,7 +334,7 @@ app.post('/api/auth/login', async (req, res) => {
             { expiresIn: '7d' }
         );
         
-        // Build user response with all fields
+        // Build user response with all fields including branch_name and company_name
         const userResponse = {
             id: user.id,
             username: user.username,
@@ -328,6 +342,10 @@ app.post('/api/auth/login', async (req, res) => {
             email: user.email,
             role: user.role,
             department: user.department || '',
+            branch_name: user.branch_name || '',      // NOW INCLUDED
+            company_name: user.company_name || '',    // NOW INCLUDED
+            branch_id: user.branch_id || null,
+            department_id: user.department_id || null,
             avatar_color: user.avatar_color || '#00c878',
             photo_url: user.photo_url || '',
             birthdate: user.birthdate || '',
@@ -341,10 +359,6 @@ app.post('/api/auth/login', async (req, res) => {
             created_at: user.created_at,
             user_table: userTable
         };
-        
-        // Add branch_id and department_id for both tables
-        userResponse.branch_id = user.branch_id || null;
-        userResponse.department_id = user.department_id || null;
         
         res.json({ 
             success: true, 
@@ -650,6 +664,45 @@ app.post('/api/auth/validate-key', async (req, res) => {
 // ============================================
 // function for profile components
 // ============================================
+app.get('/api/profile/:table/:id', async (req, res) => {
+    try {
+        const { table, id } = req.params;
+        
+        // Validate table
+        if (table !== 'users' && table !== 'new_user') {
+            return res.status(400).json({ message: 'Invalid table' });
+        }
+        
+        // Join with branches table to get branch_name and company_name
+        const [users] = await pool.query(`
+            SELECT 
+                u.*,
+                b.name AS branch_name,
+                b.company_name,
+                d.name AS department_name
+            FROM ${table} u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.id = ?
+        `, [id]);
+        
+        if (users.length === 0) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        
+        const user = users[0];
+        
+        // Remove sensitive data
+        delete user.password;
+        
+        res.json(user);
+        
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({ message: error.message });
+    }
+});
+
 app.put('/api/profile/:table/:id', async (req, res) => {
     try {
         const { table, id } = req.params;
