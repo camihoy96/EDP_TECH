@@ -154,18 +154,22 @@ interface ClientTicket {
    <!-- ── Toolbar ─────────────────────────────────────────────────── -->
 <div class="toolbar">
   <button class="toolbar-btn icon-only" (click)="toggleSidebar()" title="Toggle Sidebar">
-    <!-- Hamburger menu (☰) when sidebar is HIDDEN (show this to open sidebar) -->
+    <!-- Hamburger menu (☰) when sidebar is HIDDEN -->
     <svg *ngIf="sidebarHidden" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
       <rect y="2" width="16" height="1.5" rx="0.75"/>
       <rect y="7.25" width="16" height="1.5" rx="0.75"/>
       <rect y="12.5" width="16" height="1.5" rx="0.75"/>
     </svg>
-    <!-- X icon (✕) when sidebar is VISIBLE (show this to close sidebar) -->
+    <!-- X icon (✕) when sidebar is VISIBLE -->
     <svg *ngIf="!sidebarHidden" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
       <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>
-  </button>
+    <!-- ✅ Combined notification badge -->
+    <span class="tbadge" *ngIf="(pendingJobOrdersCount + requisitionsNotificationCount) > 0" style="position: absolute; top: -4px; right: -4px;">
+        {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 ? '99+' : (pendingJobOrdersCount + requisitionsNotificationCount) }}
+    </span>
+</button>
   
   <div class="toolbar-separator"></div>
 

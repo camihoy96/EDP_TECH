@@ -107,9 +107,12 @@ import { ReportModalComponent } from './report-modal.component';
       </div>  
       <!-- Toolbar -->
       <div class="toolbar">
-        <button class="toolbar-btn" (click)="toggleSidebar()" title="Toggle Sidebar">
-          <span>{{ sidebarHidden ? '☰' : '❌' }}</span>
-        </button>
+       <button class="toolbar-btn" (click)="toggleSidebar()" title="Toggle Sidebar">
+    <span>{{ sidebarHidden ? '☰' : '❌' }}</span>
+    <span class="badge" *ngIf="(pendingJobOrdersCount + requisitionsNotificationCount) > 0">
+        {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 ? '99+' : (pendingJobOrdersCount + requisitionsNotificationCount) }}
+    </span>
+</button>
         <div class="toolbar-separator"></div>
         <div class="toolbar-separator"></div>
         <button class="toolbar-btn" (click)="goToDashboard()">
