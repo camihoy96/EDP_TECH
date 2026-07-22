@@ -823,41 +823,84 @@ public addBellNotification(notif: Partial<Notification>): void {
     }
 }
 
-  dismissNotification(id: string): void {
+ dismissNotification(id: string): void {
     const updated = this.notificationsSubject.value.filter(n => n.id !== id);
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token && id.startsWith('srv_')) {
-      fetch(`${environment.apiUrl}/api/notifications/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
+        // ✅ Only delete this specific notification
+        fetch(`${environment.apiUrl}/api/notifications/${id}`, { 
+            method: 'DELETE', 
+            headers: { 'Authorization': `Bearer ${token}` } 
+        }).catch(() => {});
     }
-  }
-
-  clearAll(): void {
-    const current = this.notificationsSubject.value;
+    
+    // ✅ Also handle ticket notifications (ticket_ prefix)
+    if (token && id.startsWith('ticket_')) {
+        const ticketNotifId = id.replace('ticket_', '');
+        // Mark as cleared for current user
+        fetch(`${environment.apiUrl}/api/ticket-notifications/${ticketNotifId}/read`, { 
+            method: 'PUT',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ cleared: true })
+        }).catch(() => {});
+    }
+}
+ clearAll(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    
     if (token) {
-        // Delete server notifications (srv_)
-        current.forEach(n => {
-            if (n.id.startsWith('srv_')) {
-                fetch(`${environment.apiUrl}/api/notifications/${n.id}`, { 
-                    method: 'DELETE', 
-                    headers: { 'Authorization': `Bearer ${token}` } 
-                }).catch(() => {});
-            }
-        });
-        
-        // ✅ Mark all ticket notifications as cleared (doesn't delete them)
+        // Mark all ticket notifications as cleared for THIS user
         fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, { 
             method: 'PUT', 
             headers: { 
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             }
-        }).catch(() => {});
+        }).then(() => {
+            console.log('✅ Clear-all request sent to server');
+        }).catch(err => {
+            console.error('❌ Clear-all failed:', err);
+        });
     }
-    this.notificationsSubject.next([]);
+    
+    // Clear localStorage for this user
     localStorage.removeItem(this.getStorageKey());
+    
+    // Clear the BehaviorSubject immediately
+    this.notificationsSubject.next([]);
+    
+    // Clear all tracked sets
+    this.notifiedEvents.clear();
+    this.recentlyCreatedActions.clear();
+    this.shownToastIds.clear();
+}
+
+// Helper method to check if a notification belongs to the current user
+private notificationBelongsToCurrentUser(n: Notification): boolean {
+    if (!n.targetUserId) {
+        // Broadcast notification - only for admin users
+        return this.getCurrentUserTable() === 'users';
+    }
+    
+    if (typeof n.targetUserId === 'string') {
+        if (n.targetUserId.startsWith('exclude_')) {
+            return false; // Don't delete exclude_ notifications
+        }
+        const parts = n.targetUserId.split('_');
+        return parseInt(parts[1]) === this.currentUserId && parts[0] === this.getCurrentUserTable();
+    }
+    
+    if (typeof n.targetUserId === 'number') {
+        return n.targetUserId === this.currentUserId;
+    }
+    
+    return false;
 }
 
   // ── TOAST POPUP ──
@@ -965,7 +1008,6 @@ private saveNotificationToServer(notif: Notification): void {
         })
     }).catch(err => console.log('Failed to save ticket notification:', err));
 }
-// Add this polling alongside the existing one
 private loadTicketNotificationsFromServer(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
@@ -977,39 +1019,48 @@ private loadTicketNotificationsFromServer(): void {
     .then((data: any[]) => {
         if (!Array.isArray(data)) return;
         
-        const current = this.notificationsSubject.value;
+        console.log('📥 Server ticket notifications received:', data.length);
+        
+        // The server now only returns non-cleared notifications
         const newNotifications: Notification[] = [];
         
         data.forEach(n => {
-            const tId = 'ticket_' + n.id;
-            const actionKey = `status-${n.ticket_id}-${n.type || 'info'}`;
-        if (this.recentlyCreatedActions.has(actionKey)) {
-            console.log('⏭️ Skipping server notification (recent action):', n.title);
-            return;
-        }
-            if (this.recentlyCreatedIds.has(tId)) return;
-            const exists = current.find(existing => existing.id === tId);
-            if (!exists) {
-                newNotifications.push({
-                    id: tId,
-                    type: n.type || 'info',
-                    title: n.title,
-                    message: n.message,
-                    ticketId: n.ticket_id,
-                    ticketNumber: n.ticket_number,
-                    targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
-                    countInBadge: true,
-                    timestamp: new Date(n.created_at),
-                    read: n.is_read === 1,
-                });
+            // Skip if cleared_at is set
+            if (n.cleared_at) {
+                console.log('⏭️ Skipping cleared notification:', n.id);
+                return;
             }
+            
+            const tId = 'ticket_' + n.id;
+            
+            if (this.recentlyCreatedActions.has(`status-${n.ticket_id}-${n.type || 'info'}`)) {
+                return;
+            }
+            if (this.recentlyCreatedIds.has(tId)) return;
+            
+            newNotifications.push({
+                id: tId,
+                type: n.type || 'info',
+                title: n.title,
+                message: n.message,
+                ticketId: n.ticket_id,
+                ticketNumber: n.ticket_number,
+                targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : (n.user_id === null && n.user_table === null ? null : undefined),
+                countInBadge: true,
+                timestamp: new Date(n.created_at),
+                read: n.is_read === 1,
+            });
         });
         
-        if (newNotifications.length > 0) {
-            const updated = [...newNotifications, ...current].slice(0, 100);
-            this.notificationsSubject.next(updated);
-            this.saveNotifications(updated);
-        }
+        // Replace server notifications, keep local ones
+        const current = this.notificationsSubject.value;
+        const localOnly = current.filter(n => 
+            !n.id.startsWith('ticket_') && !n.id.startsWith('srv_')
+        );
+        
+        const updated = [...newNotifications, ...localOnly].slice(0, 100);
+        this.notificationsSubject.next(updated);
+        this.saveNotifications(updated);
     })
     .catch(err => console.log('Failed to load ticket notifications:', err));
 }

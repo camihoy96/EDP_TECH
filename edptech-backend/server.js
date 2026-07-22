@@ -9416,6 +9416,7 @@ app.post('/api/admin/database/import', async (req, res) => {
 // ============================================
 // ticket notifications
 // ============================================
+
 // POST - Save a ticket notification
 app.post('/api/ticket-notifications', async (req, res) => {
     try {
@@ -9438,25 +9439,8 @@ app.post('/api/ticket-notifications', async (req, res) => {
     }
 });
 
-// GET - Get ticket notifications for current user
-app.get('/api/ticket-notifications', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
-        
-        const [notifications] = await pool.query(
-            `SELECT * FROM ticket_notifications 
-             WHERE (user_id IS NULL OR (user_id = ? AND user_table = ?)) 
-             ORDER BY created_at DESC LIMIT 50`,
-            [decoded.id, decoded.user_table || 'users']
-        );
-        res.json(notifications);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+// ❌ REMOVE THIS - It's a duplicate and doesn't filter cleared notifications
+// app.get('/api/ticket-notifications', async (req, res) => { ... });
 
 // DELETE - Delete a ticket notification
 app.delete('/api/ticket-notifications/:id', async (req, res) => {
@@ -9473,24 +9457,14 @@ app.delete('/api/ticket-notifications/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// PUT - Mark notification as read
-app.put('/api/ticket-notifications/:id/read', async (req, res) => {
-    try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
-        
-        const { id } = req.params;
-        await pool.query('UPDATE ticket_notifications SET is_read = 1 WHERE id = ?', [id]);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
+
+// ❌ REMOVE THIS - Duplicate route, same path as below
+// app.put('/api/ticket-notifications/:id/read', async (req, res) => { ... });
+
 // ============================================
 // track which users have read/cleared each notification
 // ============================================
+
 // PUT - Mark notification as read/cleared for current user
 app.put('/api/ticket-notifications/:id/read', async (req, res) => {
     try {
@@ -9500,13 +9474,13 @@ app.put('/api/ticket-notifications/:id/read', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const { id } = req.params;
-        const { cleared } = req.body; // true if clearing all
+        const { cleared } = req.body;
         
         await pool.query(
             `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at) 
              VALUES (?, ?, ?, 1, ?) 
              ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = ?`,
-            [id, decoded.id, decoded.user_table || 'users', cleared ? new Date() : null, cleared ? new Date() : null]
+            [id, decoded.id, decoded.userTable || 'users', cleared ? new Date() : null, cleared ? new Date() : null]
         );
         res.json({ success: true });
     } catch (error) {
@@ -9522,20 +9496,38 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // Mark all existing notifications as cleared for this user
+        const currentUserId = decoded.id;
+        const currentUserTable = decoded.userTable || 'users';
+        
+        console.log('🗑️ Clear all for user:', currentUserId, 'table:', currentUserTable);
+        
         await pool.query(
             `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at)
-             SELECT id, ?, ?, 1, NOW() FROM ticket_notifications
-             ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = NOW()`,
-            [decoded.id, decoded.user_table || 'users']
+             SELECT tn.id, ?, ?, 1, NOW() 
+             FROM ticket_notifications tn
+             LEFT JOIN ticket_notification_reads tnr 
+                ON tn.id = tnr.notification_id 
+                AND tnr.user_id = ? 
+                AND tnr.user_table = ?
+             WHERE tnr.id IS NULL
+               AND (
+                   (tn.user_id IS NULL AND tn.user_table IS NULL AND ? = 'users')
+                   OR 
+                   (tn.user_id = ? AND tn.user_table = ?)
+               )
+             ON DUPLICATE KEY UPDATE cleared_at = NOW()`,
+            [currentUserId, currentUserTable, currentUserId, currentUserTable, currentUserTable, currentUserId, currentUserTable]
         );
-        res.json({ success: true });
+        
+        console.log('✅ All notifications cleared for user:', currentUserId);
+        res.json({ success: true, message: 'All notifications cleared for user' });
     } catch (error) {
+        console.error('Clear all error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// GET - Updated to exclude cleared notifications
+// ✅ KEEP THIS ONE - The proper GET with cleared notification filtering
 app.get('/api/ticket-notifications', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -9543,27 +9535,32 @@ app.get('/api/ticket-notifications', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
+        const currentUserId = decoded.id;
+        const currentUserTable = decoded.userTable || 'users';
+        
         const [notifications] = await pool.query(
-            `SELECT tn.*, tnr.is_read as user_read, tnr.cleared_at
+            `SELECT tn.*, tnr.cleared_at
              FROM ticket_notifications tn
              LEFT JOIN ticket_notification_reads tnr 
                 ON tn.id = tnr.notification_id 
                 AND tnr.user_id = ? 
                 AND tnr.user_table = ?
-             WHERE (tn.user_id IS NULL AND ? = 'users') 
-                OR (tn.user_id = ? AND tn.user_table = ?)
+             WHERE tnr.cleared_at IS NULL
+               AND (
+                   (tn.user_id IS NULL AND tn.user_table IS NULL AND ? = 'users')
+                   OR 
+                   (tn.user_id = ? AND tn.user_table = ?)
+               )
              ORDER BY tn.created_at DESC LIMIT 50`,
-            [decoded.id, decoded.user_table || 'users', decoded.user_table || 'users', decoded.id, decoded.user_table || 'users']
+            [currentUserId, currentUserTable, currentUserTable, currentUserId, currentUserTable]
         );
         
-        // Filter out cleared notifications
-        const filtered = notifications.filter(n => !n.cleared_at);
-        res.json(filtered);
+        res.json(notifications);
     } catch (error) {
+        console.error('Get ticket notifications error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // GET - Get all announcements
 app.get('/api/announcements', async (req, res) => {
     try {
