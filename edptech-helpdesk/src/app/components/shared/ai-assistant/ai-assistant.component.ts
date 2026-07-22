@@ -1,4 +1,4 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -11,8 +11,13 @@ import { environment } from '../../../../environments/environment';
   template: `
    <!-- AI Assistant Modal -->
 <div class="ai-assistant-overlay" *ngIf="isOpen" (click)="close()">
-  <div class="ai-assistant-panel" (click)="$event.stopPropagation()">
-    <div class="ai-assistant-header">
+  <div class="ai-assistant-panel" 
+       (click)="$event.stopPropagation()"
+       [style.left.px]="panelPosition.x" 
+       [style.top.px]="panelPosition.y"
+       [style.bottom]="'auto'"
+       [style.right]="'auto'">
+    <div class="ai-assistant-header" (mousedown)="startDrag($event)">
       <div class="ai-assistant-title">
         <img src="assets/images/ai.png" alt="AI" class="ai-header-icon">
         <span>EDPTech AI Assistant</span>
@@ -28,17 +33,17 @@ import { environment } from '../../../../environments/environment';
            [class.user-message]="msg.role === 'user'" 
            [class.ai-message-style]="msg.role === 'assistant'">
         <div class="ai-message-avatar">
-  <!-- AI avatar -->
-  <img *ngIf="msg.role === 'assistant'" src="assets/images/ai.png" alt="AI" class="ai-avatar-img">
-  
-  <!-- User avatar - same style as toolbar -->
-  <ng-container *ngIf="msg.role === 'user'">
-    <img *ngIf="userPhotoUrl" [src]="userPhotoUrl" alt="User" class="ai-avatar-img">
-    <span *ngIf="!userPhotoUrl" class="ai-user-initial" [style.background]="userAvatarColor">
-      {{ userInitial }}
-    </span>
-  </ng-container>
-</div>
+          <!-- AI avatar -->
+          <img *ngIf="msg.role === 'assistant'" src="assets/images/ai.png" alt="AI" class="ai-avatar-img">
+          
+          <!-- User avatar - same style as toolbar -->
+          <ng-container *ngIf="msg.role === 'user'">
+            <img *ngIf="userPhotoUrl" [src]="userPhotoUrl" alt="User" class="ai-avatar-img">
+            <span *ngIf="!userPhotoUrl" class="ai-user-initial" [style.background]="userAvatarColor">
+              {{ userInitial }}
+            </span>
+          </ng-container>
+        </div>
         <div class="ai-message-content">{{ msg.content }}</div>
       </div>
       
@@ -62,10 +67,12 @@ import { environment } from '../../../../environments/environment';
   `,
   styles: [`
     .ai-assistant-overlay {
-      position: fixed; bottom: 80px; right: 20px; z-index: 3000;
-      animation: slideUp 0.3s ease;
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 3000;
+      background: transparent;
     }
     .ai-assistant-panel {
+      position: fixed;
       width: 400px; height: 510px; background: white; border-radius: 12px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.3); display: flex; flex-direction: column;
       overflow: hidden; border: 1px solid #d0d0d0;
@@ -73,20 +80,16 @@ import { environment } from '../../../../environments/environment';
     .ai-assistant-header {
       display: flex; justify-content: space-between; align-items: center;
       padding: 12px 16px; background: linear-gradient(135deg, #515358, #7c87a0); color: white;
+      cursor: grab; user-select: none;
     }
+    .ai-assistant-header:active { cursor: grabbing; }
     .ai-assistant-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
-.ai-header-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-  border-radius: 4px;
-}
-.ai-avatar-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 50%;
-}
+    .ai-header-icon {
+      width: 24px; height: 24px; object-fit: contain; border-radius: 4px;
+    }
+    .ai-avatar-img {
+      width: 100%; height: 100%; object-fit: contain; border-radius: 50%;
+    }
     .ai-assistant-actions { display: flex; gap: 4px; }
     .ai-btn-icon {
       background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
@@ -126,17 +129,11 @@ import { environment } from '../../../../environments/environment';
       flex: 1; padding: 10px 14px; border: 1px solid #d0d0d0; border-radius: 20px;
       font-size: 13px; outline: none; font-family: inherit;
     }
-      .ai-user-initial {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
-  font-size: 14px;
-  border-radius: 50%;
-}
+    .ai-user-initial {
+      width: 100%; height: 100%; display: flex; align-items: center;
+      justify-content: center; color: white; font-weight: bold;
+      font-size: 14px; border-radius: 50%;
+    }
     .ai-chat-input input:focus { border-color: #0a246a; }
     .ai-chat-input button {
       width: 40px; height: 40px; border-radius: 50%; background: #0a246a;
@@ -149,46 +146,80 @@ import { environment } from '../../../../environments/environment';
       0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
       30% { opacity: 1; transform: translateY(-4px); }
     }
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
     @media (max-width: 500px) {
       .ai-assistant-panel { width: 95vw; height: 70vh; }
-      .ai-assistant-overlay { right: 10px; bottom: 60px; }
     }
   `]
 })
 export class AiAssistantComponent {
   @Input() context: any = {};
+  @Input() userPhotoUrl: string = '';
+  @Input() userAvatarColor: string = '#0a246a';
+  @Input() userInitial: string = '?';
   
   isOpen = false;
   query = '';
   loading = false;
   history: { role: string; content: string }[] = [];
+  
+  // Dragging properties
+  panelPosition = { x: 0, y: 0 };
+  private isDragging = false;
+  private dragOffsetX = 0;
+  private dragOffsetY = 0;
 
   constructor(private http: HttpClient) {}
 
-  open() {
+ open() {
     this.isOpen = true;
+    // Position at bottom-right like the original
+    this.panelPosition.x = window.innerWidth - 420; // 400px width + 20px margin from right
+    this.panelPosition.y = window.innerHeight - 550; // 510px height + 20px margin from bottom
+    
     if (this.history.length === 0) {
       this.history.push({
         role: 'assistant',
         content: 'Hello! I\'m your EDPTech AI Assistant, powered by Google Gemini. How can I help you today?'
       });
     }
-  }
+    
+    // Add global mouse listeners for dragging
+    document.addEventListener('mousemove', this.onDragMove.bind(this));
+    document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
 
-  @Input() userPhotoUrl: string = '';
-@Input() userAvatarColor: string = '#0a246a';
-@Input() userInitial: string = '?';
   close() {
     this.isOpen = false;
+    // Remove global listeners
+    document.removeEventListener('mousemove', this.onDragMove.bind(this));
+    document.removeEventListener('mouseup', this.onDragEnd.bind(this));
   }
 
   clearChat() {
     this.history = [];
-    this.isOpen = false;
+  }
+
+  // Dragging methods
+  startDrag(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    // Only start drag if clicking on the header itself, not on buttons
+    if (target.closest('.ai-btn-icon')) return;
+    
+    this.isDragging = true;
+    this.dragOffsetX = event.clientX - this.panelPosition.x;
+    this.dragOffsetY = event.clientY - this.panelPosition.y;
+    event.preventDefault();
+  }
+
+  onDragMove(event: MouseEvent) {
+    if (!this.isDragging) return;
+    
+    this.panelPosition.x = Math.max(0, event.clientX - this.dragOffsetX);
+    this.panelPosition.y = Math.max(0, event.clientY - this.dragOffsetY);
+  }
+
+  onDragEnd() {
+    this.isDragging = false;
   }
 
   send() {

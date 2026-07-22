@@ -321,75 +321,134 @@ interface ClientTicket {
         <!-- ── Content Area ──────────────────────────────────────────── -->
         <div class="content-area">
           <!-- Dashboard Widgets — only on /client/dashboard -->
-          <div class="dashboard-widgets" *ngIf="isDashboardRoute">
+<div class="dashboard-widgets" *ngIf="isDashboardRoute">
 
-            <div class="widget">
-              <div class="widget-header">
-                <span class="widget-icon">🎫</span>
-                <span class="widget-title">Recent Tickets</span>
-                <span class="widget-count">{{ myTickets.length }}</span>
-              </div>
-              <div class="widget-content">
-                <div class="activity-item" *ngFor="let ticket of myTickets.slice(0, 5)"
-                     (click)="viewTicket(ticket.id)">
-                  <div class="activity-status-dot" [class]="'dot-' + ticket.status"></div>
-                  <div class="activity-info">
-                    <div class="activity-title">{{ ticket.title }}</div>
-                    <div class="activity-meta">{{ ticket.ticket_number }} · {{ ticket.created_at | date:'MMM d, y' }}</div>
-                  </div>
-                  <span class="priority-badge" [class]="'pri-' + ticket.priority">{{ ticket.priority }}</span>
-                </div>
-                <div class="activity-empty" *ngIf="myTickets.length === 0">
-                  <span>🎉</span>
-                  <p>No tickets yet — everything's good!</p>
-                </div>
-              </div>
-            </div>
-            <div class="widget">
-              <div class="widget-header">
-                <span class="widget-icon">📊</span>
-                <span class="widget-title">Status Breakdown</span>
-              </div>
-              <div class="widget-content">
-                <div class="priority-stats">
-                  <div class="priority-row" *ngFor="let stat of statusDistribution">
-                    <span class="priority-label">{{ stat.label }}</span>
-                    <span class="priority-count">{{ stat.count }}</span>
-                    <div class="priority-track">
-                      <div class="priority-fill"
-                           [style.width.%]="stat.percentage"
-                           [style.background]="stat.color">
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-           <div class="widget">
-  <div class="widget-header">
-    <span class="widget-icon">📢</span>
-    <span class="widget-title">Announcements</span>
-    <span class="widget-badge" *ngIf="unreadAnnouncementsCount > 0">
-      {{ unreadAnnouncementsCount }} new
-    </span>
+  <!-- Recent Tickets Widget -->
+  <div class="widget">
+    <div class="widget-header">
+      <span class="widget-icon">🎫</span>
+      <span class="widget-title">Recent Tickets</span>
+      <span class="widget-count">{{ myTickets.length }}</span>
+    </div>
+    <div class="widget-content">
+      <div class="activity-item" *ngFor="let ticket of myTickets.slice(0, 5)"
+           (click)="viewTicket(ticket.id)">
+        <div class="activity-status-dot" [class]="'dot-' + ticket.status"></div>
+        <div class="activity-info">
+          <div class="activity-title">{{ ticket.title }}</div>
+          <div class="activity-meta">{{ ticket.ticket_number }} · {{ ticket.created_at | date:'MMM d, y' }}</div>
+        </div>
+        <span class="priority-badge" [class]="'pri-' + ticket.priority">{{ ticket.priority }}</span>
+      </div>
+      <div class="activity-empty" *ngIf="myTickets.length === 0">
+        <span>🎉</span>
+        <p>No tickets yet — everything's good!</p>
+      </div>
+    </div>
   </div>
-  <div class="widget-content">
-    <div class="announce-list">
-      <div class="announce-item" *ngFor="let a of announcements">
-        <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
-        <span class="announce-text">{{ a.text }}</span>
-        <span class="new-dot" *ngIf="a.isNew">●</span>
+
+  <!-- ✅ Job Orders Widget -->
+  <div class="widget">
+    <div class="widget-header">
+      <span class="widget-icon">📋</span>
+      <span class="widget-title">Recent Job Orders</span>
+      <span class="widget-count">{{ allOrders.length }}</span>
+    </div>
+    <div class="widget-content">
+      <div class="activity-item" *ngFor="let order of allOrders.slice(0, 5)"
+           (click)="viewJobOrder(order.id)">
+        <div class="activity-status-dot" [class]="'dot-' + (order.status || 'pending')"></div>
+        <div class="activity-info">
+          <div class="activity-title">{{ order.job_order_number || 'JO #' + order.id }}</div>
+          <div class="activity-meta">{{ order.department || '—' }} · {{ order.created_at | date:'MMM d, y' }}</div>
+        </div>
+        <span class="status-tag" [class]="'tag-' + (order.status || 'pending')">{{ order.status || 'pending' | uppercase }}</span>
       </div>
-      <div class="announce-empty" *ngIf="announcements.length === 0">
-        <span>No active announcements</span>
+      <div class="activity-empty" *ngIf="allOrders.length === 0">
+        <span>📋</span>
+        <p>No job orders yet</p>
       </div>
-      <div class="announce-viewall" (click)="goToAnnouncements()">
-        View all announcements →
+      <div class="announce-viewall" (click)="goToJobOrders()" *ngIf="allOrders.length > 0">
+        View all job orders →
+      </div>
+    </div>
+  </div>
+
+  <!-- ✅ Requisitions Widget -->
+  <div class="widget">
+    <div class="widget-header">
+      <span class="widget-icon">📩</span>
+      <span class="widget-title">Recent Requests</span>
+      <span class="widget-count">{{ allRequisitions.length }}</span>
+    </div>
+    <div class="widget-content">
+      <div class="activity-item" *ngFor="let req of allRequisitions.slice(0, 5)"
+           (click)="viewRequisition(req.id)">
+        <div class="activity-status-dot" [class]="'dot-' + getReqStatusClass(req)"></div>
+        <div class="activity-info">
+          <div class="activity-title">{{ req.requisition_number || 'REQ #' + req.id }}</div>
+          <div class="activity-meta">{{ req.request_from || '—' }} · {{ req.created_at | date:'MMM d, y' }}</div>
+        </div>
+        <span class="status-tag" [class]="'tag-' + getReqStatusClass(req)">{{ getReqStatusLabel(req) }}</span>
+      </div>
+      <div class="activity-empty" *ngIf="allRequisitions.length === 0">
+        <span>📩</span>
+        <p>No requests yet</p>
+      </div>
+      <div class="announce-viewall" (click)="goToRequisitions()" *ngIf="allRequisitions.length > 0">
+        View all requests →
+      </div>
+    </div>
+  </div>
+
+  <!-- Status Breakdown Widget -->
+  <div class="widget">
+    <div class="widget-header">
+      <span class="widget-icon">📊</span>
+      <span class="widget-title">Status Breakdown</span>
+    </div>
+    <div class="widget-content">
+      <div class="priority-stats">
+        <div class="priority-row" *ngFor="let stat of statusDistribution">
+          <span class="priority-label">{{ stat.label }}</span>
+          <span class="priority-count">{{ stat.count }}</span>
+          <div class="priority-track">
+            <div class="priority-fill"
+                 [style.width.%]="stat.percentage"
+                 [style.background]="stat.color">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Announcements Widget -->
+  <div class="widget">
+    <div class="widget-header">
+      <span class="widget-icon">📢</span>
+      <span class="widget-title">Announcements</span>
+      <span class="widget-badge" *ngIf="unreadAnnouncementsCount > 0">
+        {{ unreadAnnouncementsCount }} new
+      </span>
+    </div>
+    <div class="widget-content">
+      <div class="announce-list">
+        <div class="announce-item" *ngFor="let a of announcements">
+          <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
+          <span class="announce-text">{{ a.text }}</span>
+          <span class="new-dot" *ngIf="a.isNew">●</span>
+        </div>
+        <div class="announce-empty" *ngIf="announcements.length === 0">
+          <span>No active announcements</span>
+        </div>
+        <div class="announce-viewall" (click)="goToAnnouncements()">
+          View all announcements →
+        </div>
       </div>
     </div>
   </div>
 </div>
-          </div>
           <!-- Router outlet -->
           <div class="main-content">
             <router-outlet></router-outlet>
@@ -407,9 +466,9 @@ interface ClientTicket {
     <span class="status-sep">|</span>
     <span>Reg Key: {{ registrationKey }}</span>
   </div>
-  <span>By: St4nger Dev</span>
+  <span>St4nger Dev 2026</span>
   <div class="status-right">
-  <span>Support Portal v2.0</span>
+  <span>EDPtech Support Portal v2.1</span>
     <span class="status-sep">|</span>
     <span>{{ currentDate }}</span>
     <span class="status-sep">|</span>
@@ -1075,77 +1134,185 @@ interface ClientTicket {
       background: var(--green);
       box-shadow: 0 0 5px var(--green);
     }
+   /* ═══════════════════════════════════════════════════
+   WIDGETS - COMPACT VERSION
+══════════════════════════════════════════════════ */
+.dashboard-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin: 10px 14px 0;
+  animation: widgetsIn 0.3s ease;
+}
+@keyframes widgetsIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
-    /* ═══════════════════════════════════════════════════
-       WIDGETS
-    ═══════════════════════════════════════════════════ */
-    .dashboard-widgets {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
-      gap: 16px;
-      margin: 16px 20px 0;
-      animation: widgetsIn 0.3s ease;
-    }
-    @keyframes widgetsIn {
-      from { opacity: 0; transform: translateY(8px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
+.widget {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.widget:hover { box-shadow: var(--shadow); }
 
-    .widget {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-sm);
-      overflow: hidden;
-      transition: box-shadow 0.2s;
-    }
-    .widget:hover { box-shadow: var(--shadow); }
+.widget-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.widget-icon { font-size: 13px; }
+.widget-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+.widget-count {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--indigo-dim);
+  color: var(--indigo);
+}
+.widget-content { padding: 6px 8px; }
 
-    .widget-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px 10px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface-2);
-    }
-    .widget-icon { font-size: 15px; }
-    .widget-title {
-      flex: 1;
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
-      letter-spacing: 0.01em;
-    }
-    .widget-count {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 8px;
-      background: var(--indigo-dim);
-      color: var(--indigo);
-    }
-    .widget-content { padding: 8px 12px; }
+/* Activity items - compact */
+.activity-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.12s;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-item:hover { background: var(--bg); }
 
-    /* Activity items */
-    .activity-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 4px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      border-radius: var(--radius-sm);
-      transition: background 0.12s;
-    }
-    .activity-item:last-child { border-bottom: none; }
-    .activity-item:hover { background: var(--bg); }
+.activity-status-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
-    .activity-status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
+.activity-info { flex: 1; min-width: 0; }
+.activity-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-meta { font-size: 9px; color: var(--text-muted); margin-top: 1px; }
+
+.priority-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* Status tags - compact */
+.status-tag {
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* Empty state - compact */
+.activity-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  color: var(--text-muted);
+  gap: 4px;
+}
+.activity-empty span { font-size: 22px; }
+.activity-empty p { font-size: 10px; }
+
+/* Status distribution - compact */
+.priority-stats { display: flex; flex-direction: column; gap: 7px; padding: 2px 0; }
+.priority-row   { display: flex; align-items: center; gap: 8px; }
+.priority-label { width: 65px; font-size: 10px; font-weight: 600; color: var(--text-mid); }
+.priority-count { width: 18px; text-align: right; font-size: 10px; font-weight: 700; color: var(--text); }
+.priority-track { flex: 1; height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+.priority-fill  { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+
+/* Announcements - compact */
+.announce-list { display: flex; flex-direction: column; }
+.announce-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.announce-item:last-of-type { border-bottom: none; }
+.announce-badge {
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 1px;
+  letter-spacing: 0.05em;
+}
+.announce-text { font-size: 10px; color: var(--text-mid); line-height: 1.3; }
+.announce-viewall {
+  text-align: center;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--indigo);
+  cursor: pointer;
+  background: var(--indigo-dim);
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+  transition: background 0.15s;
+}
+.announce-viewall:hover { background: rgba(79,70,229,0.18); }
+.announce-empty {
+  text-align: center;
+  padding: 8px;
+  color: #888;
+  font-size: 10px;
+  font-style: italic;
+}
+
+.widget-badge {
+  background: #cc0000;
+  color: white;
+  font-size: 8px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: bold;
+  margin-left: auto;
+}
+
+.new-dot {
+  color: #0a246a;
+  font-size: 8px;
+  margin-left: 3px;
+}
     .dot-new        { background: var(--sky); }
     .dot-assigned   { background: var(--amber); }
     .dot-in_progress { background: var(--indigo); }
@@ -1505,7 +1672,31 @@ interface ClientTicket {
     .countdown-label { font-size: 9px; color: var(--coral); text-transform: uppercase; letter-spacing: 0.05em; }
     .warning-sub { font-size: 11px !important; color: var(--text-muted) !important; }
     .logout-warning-footer { padding: 16px 24px; background: var(--bg); border-top: 1px solid var(--border); }
+    /* Status tags for Job Orders and Requisitions */
+.status-tag {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.tag-pending    { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.tag-approved   { background: var(--green-dim); color: var(--green); }
+.tag-rejected   { background: var(--red-dim); color: var(--red); }
+.tag-done       { background: var(--green-dim); color: var(--green); }
+.tag-assigned   { background: var(--indigo-dim); color: var(--indigo); }
+.tag-in_progress { background: var(--sky-dim); color: var(--sky); }
+.tag-processing { background: var(--sky-dim); color: var(--sky); }
+.tag-released   { background: var(--green-dim); color: var(--green); }
+.tag-resolved   { background: var(--green-dim); color: var(--green); }
+.tag-closed     { background: #e2e8f0; color: #64748b; }
 
+/* Dot colors for job orders and requisitions */
+.dot-approved   { background: var(--green); }
+.dot-rejected   { background: var(--red); }
+.dot-done       { background: var(--green); }
     /* ═══════════════════════════════════════════════════
        SCROLLBAR
     ═══════════════════════════════════════════════════ */
@@ -1598,7 +1789,7 @@ showReportModal = false;
 reportType: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'daily';
 userRole = '';
 userDepartment = '';
-
+allRequisitions: any[] = [];
 // Dragging properties for calendar modal
 isDraggingCalendar = false;
 dragStartXCalendar = 0;
@@ -2620,33 +2811,26 @@ markJobOrdersAsRead() {
     this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
       next: (data) => { 
         const reqs = Array.isArray(data) ? data : [];
-        
+        this.allRequisitions = reqs;
         // Keep pending count for widget if needed
         this.pendingRequisitionsCount = reqs.filter(r => (r.status || 'pending') === 'pending').length;
-        
         // Get current user info
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
         const userBranchId = currentUser?.branch_id;
         const userDeptId = currentUser?.department_id;
         const userId = currentUser?.id;
-        
         // ✅ Calculate notification count (exclude seen IDs)
         const seenIds = this.seenReqNotificationIds;
-        
         this._requisitionsNotificationCount = reqs.filter(r => {
           // Skip if already seen
           if (seenIds.has(r.id)) return false;
-          
           const creatorBranch = r.creator_branch_id;
           const creatorDept = r.creator_dept_id;
           const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
-          
           const isIncoming = 
             (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
             (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
-          
           if (!isIncoming) return false;
-          
           // 1. New pending requests
           if (r.status === 'pending') return true;
           // 2. Forwarded requests on process
@@ -2662,6 +2846,42 @@ markJobOrdersAsRead() {
         this._requisitionsNotificationCount = 0;
       }
     });
+}
+viewJobOrder(id: number) {
+  this.router.navigate(['/client/job-orders', id]);
+}
+viewRequisition(id: number) {
+  this.router.navigate(['/client/request', id]);
+}
+
+goToJobOrders() {
+  this.router.navigate(['/client/job-orders']);
+}
+
+goToRequisitions() {
+  this.router.navigate(['/client/request']);
+}
+
+getReqStatusClass(req: any): string {
+  if (req.is_forwarded) {
+    const fwdStatus = req.forwarded_status || 'pending';
+    if (fwdStatus === 'released') return 'resolved';
+    if (fwdStatus === 'processing') return 'in_progress';
+    return 'pending';
+  }
+  const status = req.status || 'pending';
+  if (status === 'approved') return 'resolved';
+  if (status === 'rejected') return 'closed';
+  return status;
+}
+
+getReqStatusLabel(req: any): string {
+  if (req.is_forwarded) {
+    const fwdStatus = req.forwarded_status || 'pending';
+    return fwdStatus === 'released' ? 'RELEASED' : fwdStatus === 'processing' ? 'PROCESSING' : 'PENDING';
+  }
+  const status = req.status || 'pending';
+  return status.toUpperCase();
 }
 markRequisitionNotificationsAsRead(): void {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');

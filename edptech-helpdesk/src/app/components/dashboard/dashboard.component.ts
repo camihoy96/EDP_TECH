@@ -459,8 +459,9 @@ import { ReportModalComponent } from './report-modal.component';
     <span class="status-sep">|</span>
     <span>Registration Key: {{ registrationKeys }}</span>
   </div>
+  <span>St4nger Dev 2026</span>
   <div class="status-right">
-    <span>EDPtech Helpdesk v2.0</span>
+    <span>EDPtech Helpdesk v2.1</span>
     <span class="status-sep">|</span>
     <span>{{ currentDate }}</span>
     <span class="status-sep">|</span>
