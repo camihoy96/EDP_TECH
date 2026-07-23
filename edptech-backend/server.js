@@ -271,6 +271,9 @@ app.post('/api/auth/login', async (req, res) => {
         
         if (!user) {
             console.log('❌ User not found in either table');
+            // ✅ LOG: Failed login - user not found
+            await logSystemEvent('WARNING', 'auth', null, username, null, 
+                `Failed login attempt - user not found: ${username}`, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid username or password' });
         }
         
@@ -279,6 +282,9 @@ app.post('/api/auth/login', async (req, res) => {
             const lockTime = new Date(user.locked_until);
             const minutesLeft = Math.ceil((lockTime.getTime() - Date.now()) / 60000);
             console.log('🔒 Account locked until:', user.locked_until);
+            // ✅ LOG: Account locked
+            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
+                `Login attempt on locked account - locked for ${minutesLeft} more minutes`, req.ip);
             return res.status(423).json({ 
                 success: false, 
                 message: `Account is locked. Try again in ${minutesLeft} minute(s).` 
@@ -294,6 +300,10 @@ app.post('/api/auth/login', async (req, res) => {
             console.log('❌ Password does not match for user:', user.username);
             const newFailedAttempts = (user.failed_attempts || 0) + 1;
             
+            // ✅ LOG: Failed password
+            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
+                `Failed login - incorrect password (attempt ${newFailedAttempts}/10)`, req.ip);
+            
             if (newFailedAttempts >= 10) {
                 const lockUntil = new Date(Date.now() + 30 * 60 * 1000);
                 await pool.query(
@@ -301,6 +311,9 @@ app.post('/api/auth/login', async (req, res) => {
                     [newFailedAttempts, lockUntil, user.id]
                 );
                 console.log('🔒 Account locked for user:', user.username);
+                // ✅ LOG: Account locked after max attempts
+                await logSystemEvent('ERROR', 'auth', user.id, user.username, userTable, 
+                    'Account locked after 10 failed login attempts', req.ip);
                 return res.status(423).json({ 
                     success: false, 
                     message: 'Account locked due to too many failed attempts. Try again in 30 minutes.' 
@@ -327,6 +340,10 @@ app.post('/api/auth/login', async (req, res) => {
         
         console.log('✅ Login successful for user:', user.username);
         
+        // ✅ LOG: Successful login
+        await logSystemEvent('INFO', 'auth', user.id, user.username, userTable, 
+            'User logged in successfully', req.ip);
+        
         // Generate token
         const token = jwt.sign(
             { id: user.id, username: user.username, role: user.role, userTable: userTable },
@@ -342,8 +359,8 @@ app.post('/api/auth/login', async (req, res) => {
             email: user.email,
             role: user.role,
             department: user.department || '',
-            branch_name: user.branch_name || '',      // NOW INCLUDED
-            company_name: user.company_name || '',    // NOW INCLUDED
+            branch_name: user.branch_name || '',
+            company_name: user.company_name || '',
             branch_id: user.branch_id || null,
             department_id: user.department_id || null,
             avatar_color: user.avatar_color || '#00c878',
@@ -368,6 +385,9 @@ app.post('/api/auth/login', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Login error:', error);
+        // ✅ LOG: Login error
+        await logSystemEvent('ERROR', 'auth', null, null, null, 
+            `Login system error: ${error.message}`, req.ip);
         res.status(500).json({ success: false, error: error.message });
     }
 });
@@ -5548,10 +5568,80 @@ app.delete('/api/requisitions/:id', async (req, res) => {
         res.status(500).json({ error: error.message }); 
     }
 });
+
+// ============================================
+// SYSTEM HEALTH CHECK ENDPOINTS
+// ============================================
+
+// Quick ping endpoint
+app.get('/api/admin/health/ping', async (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Database health check
+app.get('/api/admin/health/db-check', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const startTime = Date.now();
+        await pool.query('SELECT 1');
+        const latency = Date.now() - startTime;
+        res.json({ 
+            connected: true, 
+            latency_ms: latency,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.json({ 
+            connected: false, 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+// File storage check
+app.get('/api/admin/health/file-check', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const fs = require('fs');
+        const path = require('path');
+        const testDir = path.join(__dirname, 'uploads');
+        
+        // Check if uploads directory exists and is writable
+        if (!fs.existsSync(testDir)) {
+            fs.mkdirSync(testDir, { recursive: true });
+        }
+        
+        // Try writing a test file
+        const testFile = path.join(testDir, '.health_check');
+        fs.writeFileSync(testFile, 'health_check');
+        fs.unlinkSync(testFile);
+        
+        res.json({ 
+            writable: true, 
+            path: testDir,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.json({ 
+            writable: false, 
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 // ============================================
 // SYSTEM HEALTH API ENDPOINTS
 // ============================================
-
 // GET - System Health Status
 app.get('/api/admin/health', async (req, res) => {
     try {
@@ -5660,7 +5750,8 @@ app.get('/api/admin/health', async (req, res) => {
             memory_percent: memoryPercent,
             memory_used_mb: parseFloat(memoryUsedMB),
             memory_total_mb: parseFloat(memoryTotalMB),
-            
+            api_port: PORT,  // This is the 'PORT' variable you already have
+            db_port: pool.pool?.config?.connectionConfig?.port || process.env.DB_PORT || 3307,
             // Disk
             disk_usage: diskUsage.used !== 'N/A' ? `${diskUsage.used} / ${diskUsage.total}` : 'N/A',
             disk_percent: diskUsage.percent,
@@ -5783,15 +5874,15 @@ app.post('/api/admin/restart', async (req, res) => {
 }); 
 
 // Helper function to log system events (if not already defined)
-async function logSystemEvent(level, type, action, userId, username, ip) {
+async function logSystemEvent(level, type, userId, userName, userTable, action, ip, details = null) {
     try {
         await pool.query(
-            `INSERT INTO system_logs (level, type, action, user_id, user_name, ip_address)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [level.toUpperCase(), type, action, userId, username || 'System', ip || '127.0.0.1']
+            `INSERT INTO system_logs (level, type, user_id, user_name, user_table, action, details, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [level, type, userId || null, userName || 'System', userTable || null, action, details ? JSON.stringify(details) : null, ip || null]
         );
     } catch (error) {
-        console.error('Failed to log system event:', error.message);
+        console.error('Failed to log event:', error.message);
     }
 }
 // ============================================
@@ -6419,9 +6510,10 @@ app.get('/api/knowledge-base', async (req, res) => {
         const [articles] = await pool.query(
             `SELECT id, title, category, summary, content, featured, 
                     author_name, views, helpful_yes, helpful_no,
+                    status, display_order, tags,
                     created_at, updated_at
              FROM knowledge_base 
-             ORDER BY featured DESC, updated_at DESC`
+             ORDER BY featured DESC, display_order ASC, updated_at DESC`
         );
         res.json(articles);
     } catch (error) {
@@ -6429,7 +6521,6 @@ app.get('/api/knowledge-base', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 // GET - Single article
 app.get('/api/knowledge-base/:id', async (req, res) => {
     try {
@@ -6463,12 +6554,16 @@ app.post('/api/knowledge-base', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        const { title, category, summary, content, featured } = req.body;
+        const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
         const [result] = await pool.query(
-            `INSERT INTO knowledge_base (title, category, summary, content, featured, author_name)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [title, category, summary, content, featured || false, decoded.fullname || decoded.username]
+            `INSERT INTO knowledge_base (title, category, summary, content, featured, author_name, status, display_order, tags)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [title, category, summary, content, featured || false, 
+             author_name || decoded.username, 
+             status || 'published', 
+             display_order || 0, 
+             tags ? (Array.isArray(tags) ? tags.join(',') : tags) : null]
         );
         
         res.json({ success: true, id: result.insertId });
@@ -6486,13 +6581,17 @@ app.put('/api/knowledge-base/:id', async (req, res) => {
         const token = authHeader.split(' ')[1];
         jwt.verify(token, 'secret_key');
         
-        const { title, category, summary, content, featured } = req.body;
+        const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
         await pool.query(
             `UPDATE knowledge_base 
-             SET title = ?, category = ?, summary = ?, content = ?, featured = ?, updated_at = NOW()
+             SET title = ?, category = ?, summary = ?, content = ?, featured = ?, 
+                 author_name = ?, status = ?, display_order = ?, tags = ?, updated_at = NOW()
              WHERE id = ?`,
-            [title, category, summary, content, featured || false, req.params.id]
+            [title, category, summary, content, featured || false, 
+             author_name, status || 'published', display_order || 0, 
+             tags ? (Array.isArray(tags) ? tags.join(',') : tags) : null,
+             req.params.id]
         );
         
         res.json({ success: true });
@@ -6501,7 +6600,6 @@ app.put('/api/knowledge-base/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 // DELETE - Delete article
 app.delete('/api/knowledge-base/:id', async (req, res) => {
     try {
@@ -8219,6 +8317,54 @@ app.get('/api/new-users', async (req, res) => {
 });
 
 // ============================================
+// ENHANCED LOGGING SYSTEM
+// ============================================
+
+// Enhanced log function with details support
+async function logSystemEvent(level, type, userId, userName, userTable, action, ip, details = null) {
+    try {
+        await pool.query(
+            `INSERT INTO system_logs (level, type, user_id, user_name, user_table, action, details, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [level, type, userId || null, userName || 'System', userTable || null, action, details ? JSON.stringify(details) : null, ip || null]
+        );
+    } catch (error) {
+        console.error('Failed to log event:', error.message);
+    }
+}
+
+// Middleware to extract user info from JWT token
+app.use((req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    if (authHeader) {
+        try {
+            const token = authHeader.split(' ')[1];
+            if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
+                const decoded = jwt.verify(token, 'secret_key');
+                req.userInfo = {
+                    userId: decoded.id,
+                    userName: decoded.username,
+                    userTable: decoded.userTable || 'users',
+                    role: decoded.role
+                };
+            }
+        } catch(e) {
+            // Token invalid - continue without user info
+        }
+    }
+    next();
+});
+
+// Helper to get user info from request
+function getUserInfo(req) {
+    return {
+        userId: req.userInfo?.userId || null,
+        userName: req.userInfo?.userName || 'Unknown',
+        userTable: req.userInfo?.userTable || null
+    };
+}
+
+// ============================================
 // SYSTEM LOGS API ENDPOINTS
 // ============================================
 
@@ -8230,7 +8376,7 @@ app.get('/api/admin/logs', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
         
@@ -8281,20 +8427,20 @@ app.get('/api/admin/logs', async (req, res) => {
         }
         
         if (search) {
-            conditions.push('(action LIKE ? OR user_name LIKE ? OR ip_address LIKE ? OR type LIKE ?)');
+            conditions.push('(action LIKE ? OR user_name LIKE ? OR ip_address LIKE ? OR type LIKE ? OR user_table LIKE ?)');
             const searchTerm = `%${search}%`;
-            params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+            params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
         }
         
         if (conditions.length > 0) {
             query += ' WHERE ' + conditions.join(' AND ');
         }
         
-        const logLimit = limit ? parseInt(limit) : 500;
+        const logLimit = limit ? parseInt(limit) : 1000;
         query += ' ORDER BY created_at DESC LIMIT ?';
         params.push(logLimit);
         
-        console.log('📋 Logs query:', query, params);
+        console.log('📋 Logs query:', query.substring(0, 100) + '...');
         
         const [logs] = await pool.query(query, params);
         res.json(logs);
@@ -8313,7 +8459,7 @@ app.delete('/api/admin/logs', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
         
@@ -8321,17 +8467,12 @@ app.delete('/api/admin/logs', async (req, res) => {
             return res.status(403).json({ error: 'Access denied.' });
         }
         
-        // Log who cleared the logs
-        console.log(`🗑️ System logs cleared by user: ${decoded.id} (${decoded.username})`);
-        
         const [result] = await pool.query('DELETE FROM system_logs');
         
-        // Insert a log about clearing logs (using direct insert to avoid the log function)
-        await pool.query(
-            `INSERT INTO system_logs (level, type, action, user_id, user_name, ip_address)
-             VALUES ('WARNING', 'system', 'All system logs cleared', ?, ?, ?)`,
-            [decoded.id, decoded.username || 'Unknown', req.ip]
-        );
+        // Log who cleared the logs using the enhanced function
+        await logSystemEvent('WARNING', 'system', decoded.id, decoded.username || 'Unknown', 
+            decoded.userTable || 'users', 'All system logs cleared', req.ip,
+            { cleared_count: result.affectedRows });
         
         res.json({ 
             success: true, 
@@ -8371,7 +8512,13 @@ app.get('/api/admin/logs/stats', async (req, res) => {
             'SELECT COUNT(*) as count FROM system_logs WHERE DATE(created_at) = CURDATE()'
         );
         const [latestLog] = await pool.query(
-            'SELECT created_at FROM system_logs ORDER BY created_at DESC LIMIT 1'
+            'SELECT * FROM system_logs ORDER BY created_at DESC LIMIT 1'
+        );
+        const [userActivity] = await pool.query(
+            `SELECT user_name, user_table, COUNT(*) as count 
+             FROM system_logs WHERE user_name IS NOT NULL 
+             GROUP BY user_name, user_table 
+             ORDER BY count DESC LIMIT 10`
         );
         
         res.json({
@@ -8379,7 +8526,8 @@ app.get('/api/admin/logs/stats', async (req, res) => {
             today: todayCount[0].count,
             byLevel: levelCounts,
             byType: typeCounts,
-            latestEntry: latestLog.length > 0 ? latestLog[0].created_at : null
+            latestEntry: latestLog.length > 0 ? latestLog[0] : null,
+            topUsers: userActivity
         });
         
     } catch (error) {
@@ -8387,18 +8535,7 @@ app.get('/api/admin/logs/stats', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// Helper function to log system events
-async function logSystemEvent(level, type, userId, userName, userTable, action, ip) {
-    try {
-        await pool.query(
-            `INSERT INTO system_logs (level, type, user_id, user_name, user_table, action, ip_address)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [level, type, userId || null, userName || 'System', userTable || null, action, ip || null]
-        );
-    } catch (error) {
-        console.error('Failed to log event:', error);
-    }
-}
+
 // ============================================
 // Department stats API
 // ============================================
@@ -9647,7 +9784,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
         res.status(500).json({ message: 'Server error. Please try again.' });
     }
 });
-
+app.listen(PORT, () => {
+    console.log(`✅ Server is ready on port ${PORT}!`);
+});
 // Start server
 async function startServer() {
     await testConnection();

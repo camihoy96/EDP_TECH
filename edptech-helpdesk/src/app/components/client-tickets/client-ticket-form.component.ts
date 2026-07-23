@@ -1374,7 +1374,15 @@ insertCodeBlock() {
   getFileIcon(name: string): string { const ext = name.split('.').pop()?.toLowerCase(); const map: Record<string, string> = { pdf: '📕', doc: '📝', docx: '📝', xls: '📊', xlsx: '📊', png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', txt: '📄', log: '📋', zip: '📦', rar: '📦' }; return map[ext ?? ''] ?? '📎'; }
   formatFileSize(bytes: number): string { if (bytes === 0) return '0 B'; const k = 1024; const sizes = ['B', 'KB', 'MB', 'GB']; const i = Math.floor(Math.log(bytes) / Math.log(k)); return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]; }
   getPriorityLabel(val: string): string { return this.priorityOptions.find(p => p.value === val)?.label ?? val; }
-  getSLAText(): string { const map: Record<string, string> = { critical: 'Within 1 minute', high: 'Within 2 minutes', medium: 'Within 10 minutes', low: 'Within 20 minutes' }; return map[this.ticket.priority] ?? 'Within 1 minute'; }
+ getSLAText(): string { 
+    const map: Record<string, string> = { 
+        critical: 'Within 10 seconds', 
+        high: 'Within 20 seconds', 
+        medium: 'Within 40 seconds', 
+        low: 'Within 90 seconds (2 minutes)' 
+    }; 
+    return map[this.ticket.priority] ?? 'Within 60 seconds'; 
+}
   get fileNamesList(): string { return this.files.map(f => f.name).join(', '); }
 
   onSubmit() {

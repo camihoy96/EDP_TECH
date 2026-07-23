@@ -59,7 +59,7 @@ export const routes: Routes = [
       { path: 'tickets/:id', component: TicketDetailComponent },
        { path: 'features', component: ClientFeaturesComponent },
       // Knowledge Base routes
-      { path: 'knowledge-base', component: KnowledgeBaseComponent },
+      { path: 'knowledge-base', component: KnowledgeBaseAdminComponent },
       { path: 'knowledge-base/create', component: KnowledgeBaseAdminComponent },
       { path: 'knowledge-base/edit', component: KnowledgeBaseAdminComponent },
        {

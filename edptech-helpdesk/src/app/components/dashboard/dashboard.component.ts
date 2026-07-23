@@ -2120,7 +2120,12 @@ loadRegistrationKeys() {
 get isProfileRoute(): boolean {
   return this.router.url === '/profile';
 }
-  goToKnowledgeBase(){ this.router.navigate(['/knowledge-base']); }
+goToKnowledgeBase() { 
+    // Navigate to admin knowledge base (with CRUD capabilities)
+    this.router.navigate(['/admin/knowledge-base']); 
+    // OR if it's the same route:
+    // this.router.navigate(['/knowledge-base']);
+}
 
   refreshData() {
   window.location.reload();

@@ -38,13 +38,16 @@ import { interval, Subscription } from 'rxjs';
         <div class="filter-group">
           <label>Type:</label>
           <select [(ngModel)]="logType" (change)="applyFilters()" class="filter-select">
-            <option value="all">All Types</option>
-            <option value="auth">🔐 Auth</option>
-            <option value="ticket">🎫 Ticket</option>
-            <option value="system">⚙️ System</option>
-            <option value="database">🗄️ Database</option>
-            <option value="user">👤 User</option>
-          </select>
+          <option value="all">All Types</option>
+          <option value="auth">🔐 Auth</option>
+          <option value="ticket">🎫 Ticket</option>
+          <option value="job_order">📋 Job Order</option>
+          <option value="requisition">📩 Requisition</option>
+          <option value="user">👤 User</option>
+          <option value="system">⚙️ System</option>
+          <option value="database">🗄️ Database</option>
+      </select>
+
         </div>
         <div class="filter-group">
           <label>Date:</label>
@@ -134,33 +137,41 @@ import { interval, Subscription } from 'rxjs';
     </tr>
     <!-- ✅ Moved INSIDE the ng-container so 'log' is accessible -->
     <tr *ngIf="expandedLogId === log.id" class="detail-row">
-      <td colspan="8">
-        <div class="log-details">
-          <div class="detail-grid">
-            <div class="detail-item">
-              <label>Log ID:</label>
-              <span>{{ log.id }}</span>
-            </div>
-            <div class="detail-item">
-              <label>User ID:</label>
-              <span>{{ log.user_id || 'N/A' }}</span>
-            </div>
-            <div class="detail-item">
-              <label>User Table:</label>
-              <span>{{ log.user_table || 'N/A' }}</span>
-            </div>
-            <div class="detail-item">
-              <label>Full Timestamp:</label>
-              <span>{{ log.created_at }}</span>
-            </div>
-            <div class="detail-item full-width" *ngIf="log.details">
-              <label>Additional Details:</label>
-              <pre>{{ log.details | json }}</pre>
-            </div>
-          </div>
+  <td colspan="8">
+    <div class="log-details">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <label>Log ID:</label>
+          <span>{{ log.id }}</span>
         </div>
-      </td>
-    </tr>
+        <div class="detail-item">
+          <label>Username:</label>
+          <span>{{ log.user_name || 'System' }}</span>
+        </div>
+        <div class="detail-item">
+          <label>User ID:</label>
+          <span>{{ log.user_id || 'N/A' }}</span>
+        </div>
+        <div class="detail-item">
+          <label>User Table:</label>
+          <span>{{ log.user_table || 'N/A' }}</span>
+        </div>
+        <div class="detail-item">
+          <label>IP Address:</label>
+          <span>{{ log.ip_address || 'N/A' }}</span>
+        </div>
+        <div class="detail-item">
+          <label>Full Timestamp:</label>
+          <span>{{ log.created_at }}</span>
+        </div>
+        <div class="detail-item full-width" *ngIf="log.details">
+          <label>Additional Details:</label>
+          <pre>{{ log.details | json }}</pre>
+        </div>
+      </div>
+    </div>
+  </td>
+</tr>
   </ng-container>
   <!-- Empty State -->
   <tr *ngIf="filteredLogs.length === 0 && !isLoading">
@@ -363,12 +374,12 @@ export class SystemLogsComponent implements OnInit, OnDestroy {
   getTypeIcon(type: string): string {
     const icons: Record<string, string> = {
       auth: '🔐', login: '🔐', logout: '🚪',
-      ticket: '🎫', system: '⚙️', database: '🗄️',
+      ticket: '🎫', job_order: '📋', requisition: '📩',
+      system: '⚙️', database: '🗄️',
       user: '👤', error: '❌', security: '🛡️'
     };
     return icons[type?.toLowerCase()] || '📋';
-  }
-
+}
   loadLogs() {
     this.isLoading = true;
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
