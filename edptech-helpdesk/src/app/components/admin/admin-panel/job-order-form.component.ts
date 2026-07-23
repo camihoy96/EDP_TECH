@@ -27,7 +27,7 @@ import { environment } from '../../../../environments/environment';
       <div class="req-form" id="print-section">
         <div class="req-form-header">
           <h2>{{ companyName }}</h2>
-          <div style="font-size:10px;color:#555;" *ngIf="userBranch?.name">
+          <div style="font-size:12px;color:#555;" *ngIf="userBranch?.name">
             🏢 {{ userBranch.name }}
           </div>
           <h3>JOB ORDER FORM</h3>
@@ -276,21 +276,21 @@ import { environment } from '../../../../environments/environment';
     .req-container { padding: 16px; max-width: 1500px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #d4d0c8; min-height: 100vh; }
     .req-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 8px 14px; background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; border: 2px solid; border-color: #fff #808080 #808080 #fff; }
     .header-left h1 { margin: 0; font-size: 16px; }
-    .header-sub { font-size: 10px; opacity: 0.8; }
-    .print-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 4px 12px; cursor: pointer; font-size: 10px; }
-    .close-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; padding: 4px 10px; font-size: 14px; font-weight: bold; border-radius: 0px; line-height: 1; }
+    .header-sub { font-size: 12px; opacity: 0.8; }
+    .print-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 4px 12px; cursor: pointer; font-size: 12px; }
+    .close-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: white; cursor: pointer; padding: 4px 12px; font-size: 14px; font-weight: bold; border-radius: 0px; line-height: 1; }
     .close-btn:hover { background: rgba(255,0,0,0.7); border-color: rgba(255,255,255,0.6); }
     .req-form { background: white; border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 20px; font-family: 'Courier New', monospace; }
-    .req-form-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 16px; }
+    .req-form-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
     .req-form-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; color: #0a246a; }
     .req-form-header h3 { margin: 4px 0; font-size: 14px; color: #04060c; }
     .ctrl-no { font-size: 9px; color: #cc0000; font-weight: bold; }
     .req-top-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .field-row { display: flex; align-items: center; gap: 4px; }
-    .field-row label { font-weight: bold; font-size: 10px; white-space: nowrap; color: #0f0e0e; }
-    .req-input { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 10px; color: #0f0e0e; font-family: 'Courier New', monospace; }
+    .field-row label { font-weight: bold; font-size: 12px; white-space: nowrap; color: #0f0e0e; }
+    .req-input { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 12px; color: #0f0e0e; font-family: 'Courier New', monospace; }
     .req-input:disabled { background: #e8e8e8; color: #666; cursor: not-allowed; }
-    .req-textarea { width: 100%; padding: 6px; border: 1px solid #888; font-size: 10px; font-family: 'Courier New', monospace; resize: vertical; box-sizing: border-box; }
+    .req-textarea { width: 100%; padding: 6px; border: 1px solid #888; font-size: 12px; font-family: 'Courier New', monospace; resize: vertical; box-sizing: border-box; }
     .req-section { margin-bottom: 12px; color: #0f0e0e; font-weight: bold; }
     .req-signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .sig-block { border: 1px solid #ccc; padding: 8px; background: #fafafa; }
@@ -298,10 +298,10 @@ import { environment } from '../../../../environments/environment';
     .sig-block h5 { margin: 0 0 6px 0; font-size: 9px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
     .sig-field { display: flex; align-items: center; margin-bottom: 3px; }
     .sig-field label { width: 30px; font-size: 9px; font-weight: bold; color: #0f0e0e; }
-    .req-input-sm { flex: 1; padding: 3px 5px; border: 1px solid #ccc; font-size: 10px; font-family: 'Courier New', monospace; }
+    .req-input-sm { flex: 1; padding: 3px 5px; border: 1px solid #ccc; font-size: 12px; font-family: 'Courier New', monospace; }
     .req-footer { align-items: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .req-footer p { margin: 2px 0; }
-    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px; }
     .action-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 3px; }
     .action-btn.cancel { background: #f0f0f0; color: #000; }
     .action-btn.submit { background: #0a3a8c; color: white; border-color: #1c5fb5 #042070 #042070 #1c5fb5; }
@@ -321,7 +321,7 @@ import { environment } from '../../../../environments/environment';
     .sig-image-small { max-width: 100px; max-height: 40px; object-fit: contain; }
     .sig-saved-label { font-size: 9px; color: #008800; font-weight: bold; }
     .sig-clear { background: rgba(204,0,0,0.8); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 8px; padding: 1px 4px; margin-left: 6px; }
-    .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 10px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 3000; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 12px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 3000; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .toast-notification.show { transform: translateY(0); opacity: 1; }
     .toast-notification.success { background: #008800; }
     .toast-notification.error { background: #cc0000; }
@@ -333,8 +333,8 @@ import { environment } from '../../../../environments/environment';
     .sig-modal-close:hover { background: rgba(255,0,0,0.7); }
     .sig-modal-body { padding: 20px; background: #f5f5f5; display: flex; justify-content: center; }
     .sig-modal-canvas { border: 2px solid #ccc; background: white; cursor: crosshair; display: block; width: 750px; height: 300px; touch-action: none; }
-    .sig-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 20px; border-top: 1px solid #ddd; background: #fafafa; }
-    .sig-modal-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 3px; }
+    .sig-modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 12px 20px; border-top: 1px solid #ddd; background: #fafafa; }
+    .sig-modal-btn { padding: 8px 20px; border: 2px solid; border-color: #fff #808080 #584a4a #fff; cursor: pointer; font-size: 12px; font-weight: bold; border-radius: 3px; }
     .sig-modal-btn.clear { background: #f0f0f0; color: #cc0000; }
     .sig-modal-btn.cancel { background: #f0f0f0; color: #000; }
     .sig-modal-btn.save { background: #008800; color: white; border-color: #00aa00 #006600 #006600 #00aa00; }

@@ -19,7 +19,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
 // Middleware
 app.use(cors({
-    origin: ['http://localhost:4000', 'http://192.168.10.250:4000', 'http://127.0.0.1:4000'],
+    origin: [
+        'http://localhost:4000', 
+        'http://192.168.10.250:4000', 
+        'http://127.0.0.1:4000',
+        'https://ktg7tr76-4000.asse.devtunnels.ms',
+        'https://ktg7tr76-6001.asse.devtunnels.ms'  
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
     allowedHeaders: ['Content-Type', 'Authorization']
