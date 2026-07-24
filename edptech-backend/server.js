@@ -5496,30 +5496,41 @@ app.get('/api/admin/users', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-// GET - Client users by department (for assign modal)
+// GET - Users by department (for ATTN dropdown - queries BOTH tables)
 app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
         const token = authHeader.split(' ')[1];
         jwt.verify(token, 'secret_key');
         
         const { departmentId } = req.params;
         
-        // ✅ Get users from new_user table only, filtered by department_id
+        // ✅ Get users from BOTH tables
         const [users] = await pool.query(
-            `SELECT id, fullname, username, role, branch_id, department_id 
-             FROM new_user 
-             WHERE department_id = ? AND role != 'admin'
+            `SELECT id, fullname, username, role, branch_id, department_id, 'users' as user_table
+             FROM users 
+             WHERE department_id = ?
              ORDER BY fullname`,
             [departmentId]
         );
         
-        console.log(`📋 /api/client/users/by-dept/${departmentId} - Returning ${users.length} users`);
-        res.json(users);
+        const [newUsers] = await pool.query(
+            `SELECT id, fullname, username, role, branch_id, department_id, 'new_user' as user_table
+             FROM new_user 
+             WHERE department_id = ?
+             ORDER BY fullname`,
+            [departmentId]
+        );
+        
+        // Combine both results
+        const allUsers = [...users, ...newUsers];
+        
+        console.log(`📋 /api/client/users/by-dept/${departmentId} - Returning ${allUsers.length} users (${users.length} from users, ${newUsers.length} from new_user)`);
+        res.json(allUsers);
+        
     } catch (error) {
-        console.error('Error fetching client users by dept:', error);
+        console.error('Error fetching users by department:', error);
         res.status(500).json({ error: error.message });
     }
 });

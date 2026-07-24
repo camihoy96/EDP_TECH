@@ -661,15 +661,15 @@ export class AdminRequisitionFormComponent implements OnInit {
 
   onDepartmentChange() {
     if (!this.reqData.department_id) {
-      this.attnUsers = [];
-      return;
+        this.attnUsers = [];
+        return;
     }
     
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
-      console.warn('⚠️ No valid token available for admin/users call');
-      this.attnUsers = [];
-      return;
+        console.warn('⚠️ No valid token available for admin/users call');
+        this.attnUsers = [];
+        return;
     }
     
     const headers = { 'Authorization': `Bearer ${token}` };
@@ -677,29 +677,63 @@ export class AdminRequisitionFormComponent implements OnInit {
     const deptBranchId = selectedDept?.branch_id;
     const deptId = selectedDept?.id;
     
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
-      next: (users) => {
-        this.attnUsers = (users || []).filter(u => {
-          const userBranchId = Number(u.branch_id);
-          const userDeptId = Number(u.department_id);
-          const matchBranch = userBranchId === Number(deptBranchId);
-          const matchDept = !deptId || userDeptId === Number(deptId);
-          const role = (u.role || '').toLowerCase();
-          const matchRole = role === 'head/manager' || role === 'supervisor';
-          return matchBranch && matchDept && matchRole;
-        });
-        
-        if (this.attnUsers.length > 0 && !this.reqData.attn) {
-          this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+    console.log('🔍 Loading ATTN users for admin - dept:', deptId, 'branch:', deptBranchId);
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/client/users`, { headers }).subscribe({
+        next: (users) => {
+            console.log('📥 Received', users?.length, 'users from admin API');
+            
+            // ✅ Filter by branch, department, AND role (Head/Manager & Supervisor only)
+            this.attnUsers = (users || []).filter(u => {
+                const userBranchId = Number(u.branch_id);
+                const userDeptId = Number(u.department_id || u.dept_id);
+                const matchBranch = userBranchId === Number(deptBranchId);
+                const matchDept = !deptId || userDeptId === Number(deptId);
+                const role = (u.role || '').toLowerCase().trim();
+                // ✅ Only Head/Manager and Supervisor
+                const matchRole = role === 'head/manager' || role === 'head manager' || role === 'supervisor';
+                return matchBranch && matchDept && matchRole;
+            });
+            
+            console.log('👥 ATTN users (Head/Manager & Supervisor):', this.attnUsers.length);
+            
+            // ✅ Also add department supervisor if available
+            if (selectedDept?.supervisor) {
+                const hasSupervisor = this.attnUsers.some(u => 
+                    (u.fullname || u.username) === selectedDept.supervisor
+                );
+                if (!hasSupervisor) {
+                    this.attnUsers.unshift({
+                        fullname: selectedDept.supervisor,
+                        username: selectedDept.supervisor,
+                        role: 'supervisor'
+                    });
+                }
+            }
+            
+            // Auto-select first user if ATTN is empty
+            if (this.attnUsers.length > 0 && !this.reqData.attn) {
+                this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+            }
+        },
+        error: (err) => {
+            console.warn('Could not load ATTN users (status:', err.status, ')');
+            
+            // Fallback: Use department supervisor
+            this.attnUsers = [];
+            if (selectedDept?.supervisor) {
+                this.attnUsers = [{ 
+                    fullname: selectedDept.supervisor, 
+                    username: selectedDept.supervisor, 
+                    role: 'supervisor' 
+                }];
+                if (!this.reqData.attn) {
+                    this.reqData.attn = selectedDept.supervisor;
+                }
+            }
         }
-      },
-      error: (err) => {
-        console.warn('Could not load ATTN users (status:', err.status, ')');
-        this.attnUsers = [];
-      }
     });
-  }
-
+}
   loadRequisition(id: string) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };

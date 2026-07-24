@@ -1094,7 +1094,6 @@ forwardFilteredDepartments: any[] = [];
     this.loadBranchesAndDepartments();
     this.loadUserRoles();
     this.loadRequisitions();
-    
     this.routerSub = this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe(() => {
@@ -1163,19 +1162,43 @@ private userRolesMap: Map<string, string> = new Map();
 
 // Add this to ngOnInit after loadBranchesAndDepartments()
 loadUserRoles() {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}` };
-  
-  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
-    next: (users) => {
-      (users || []).forEach(u => {
-        const name = u.fullname || u.username;
-        if (name) {
-          this.userRolesMap.set(name, u.role || 'Staff');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}` };
+    
+    // Load from users table
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+        next: (users) => {
+            (users || []).forEach(u => {
+                const name = u.fullname || u.username;
+                if (name) {
+                    this.userRolesMap.set(name, u.role || 'Staff');
+                }
+            });
+            
+            // ✅ Also load from new_user table
+            this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
+                next: (newUsers) => {
+                    (newUsers || []).forEach(u => {
+                        const name = u.fullname || u.username;
+                        if (name) {
+                            this.userRolesMap.set(name, u.role || 'Staff');
+                        }
+                    });
+                    console.log('👥 User roles loaded:', this.userRolesMap.size);
+                    
+                    // Re-apply filters to refresh ATTN roles display
+                    this.applyFilters();
+                },
+                error: () => {
+                    console.log('⚠️ Could not load new_user roles, using users table only');
+                    this.applyFilters();
+                }
+            });
+        },
+        error: (err) => {
+            console.warn('Could not load user roles:', err);
         }
-      });
-    }
-  });
+    });
 }
 // Check if current user can Accept/Reject this requisition
 canAcceptReject(req: any): boolean {
@@ -1294,8 +1317,19 @@ showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
 }
 // Simplified getAttnRole method
 getAttnRole(attnName: string): string {
-  if (!attnName) return '';
-  return this.userRolesMap.get(attnName) || '';
+    if (!attnName) return '';
+    // Check cache first
+    const cached = this.userRolesMap.get(attnName);
+    if (cached) return cached;
+    
+    // If not found, try to match by partial name
+    for (const [name, role] of this.userRolesMap.entries()) {
+        if (name.includes(attnName) || attnName.includes(name)) {
+            return role;
+        }
+    }
+    
+    return '';
 }
 onFilterBranchChange() {
   if (this.filters.branchId) {
