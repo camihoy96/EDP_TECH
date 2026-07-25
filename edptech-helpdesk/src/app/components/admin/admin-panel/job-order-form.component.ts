@@ -602,25 +602,31 @@ onSigDragEnd = () => {
   document.removeEventListener('mousemove', this.onSigDragMove);
   document.removeEventListener('mouseup', this.onSigDragEnd);
 }
-  onBranchChange() {
-  if (!this.selectedBranchId) { 
-    this.filteredDepartments = []; 
-    if (!this.editMode) {
-      this.joData.department_id = null;
-      this.joData.attn = ''; // Only clear if not editing
+onBranchChange() {
+    if (this.selectedBranchId) {
+        // ✅ Create new array reference to trigger change detection
+        this.filteredDepartments = [...this.allDepartments.filter(d => d.branch_id == this.selectedBranchId)];
+        
+        console.log('🔍 Admin JO - Branch changed to:', this.selectedBranchId, 'Departments:', this.filteredDepartments.length);
+        
+        // ✅ Always reset department and ATTN when branch changes
+        this.joData.department_id = null;
+        this.joData.attn = '';
+        this.attnUsers = [];
+        
+        // ✅ Auto-select first department if available
+        if (this.filteredDepartments.length > 0) {
+            this.joData.department_id = this.filteredDepartments[0].id;
+            setTimeout(() => this.onDepartmentChange(), 50);
+        }
+    } else {
+        this.filteredDepartments = [];
+        this.joData.department_id = null;
+        this.joData.attn = '';
+        this.attnUsers = [];
     }
-    this.loadAttnUsers(); 
-    return; 
-  }
-  this.filteredDepartments = this.allDepartments.filter(d => d.branch_id == this.selectedBranchId);
-  const currentDeptInFilter = this.filteredDepartments.find(d => d.id == this.joData.department_id);
-  if (!currentDeptInFilter && !this.editMode) { 
-    this.joData.department_id = null;
-    this.joData.attn = ''; // Only clear if not editing
-  }
-  this.loadAttnUsers();
+    this.generateCtrlNumber();
 }
-
  loadAttnUsers() {
   if (!this.selectedBranchId || !this.joData.department_id) {
     if (!this.editMode && !this.approvalMode) {
@@ -667,6 +673,8 @@ onDepartmentChange() {
     const deptBranchId = selectedDept?.branch_id;
     const deptId = selectedDept?.id;
     
+    console.log('🔍 Admin JO - Loading ATTN users - dept:', deptId, 'branch:', deptBranchId);
+    
     // ✅ First, set supervisor as default if available
     if (selectedDept?.supervisor) {
       this.joData.attn = selectedDept.supervisor;
@@ -680,39 +688,42 @@ onDepartmentChange() {
       this.attnUsers = [];
     }
     
-    // ✅ Then try to load more users from API
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+    // ✅ Use the CLIENT endpoint to get users by department (loads from BOTH tables)
+    this.http.get<any[]>(`${environment.apiUrl}/api/client/users/by-dept/${deptId}`, { headers }).subscribe({
       next: (users) => {
+        console.log('📥 Admin JO - Received', users?.length, 'users from API');
+        
+        // Filter by branch AND role (Head/Manager & Supervisor only)
         const apiUsers = (users || []).filter(u => {
           const userBranchId = Number(u.branch_id);
           const userDeptId = Number(u.department_id || u.dept_id);
           const matchBranch = userBranchId === Number(deptBranchId);
-          const matchDept = !deptId || userDeptId === Number(deptId);
-          const role = (u.role || '').toLowerCase();
-          // ✅ Only Head/Manager and Supervisor
-          const matchRole = role === 'head/manager' || role === 'supervisor';
+          const matchDept = userDeptId === Number(deptId);
+          const role = (u.role || '').toLowerCase().trim();
+          const matchRole = role === 'head/manager' || role === 'head manager' || role === 'supervisor';
           return matchBranch && matchDept && matchRole;
         });
         
-        // ✅ Merge with existing supervisor entry (avoid duplicates)
+        console.log('👥 Admin JO - ATTN users:', apiUsers.length);
+        
+        // Merge with existing supervisor entry (avoid duplicates)
         const existingNames = new Set(this.attnUsers.map(u => u.fullname || u.username));
         const newUsers = apiUsers.filter(u => !existingNames.has(u.fullname || u.username));
         this.attnUsers = [...this.attnUsers, ...newUsers];
         
-        // ✅ If attn is still empty and we have users, auto-select first
+        // If attn is still empty and we have users, auto-select first
         if (!this.joData.attn && this.attnUsers.length > 0) {
           this.joData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
         }
       },
       error: (err) => {
-        console.error('Failed to load attn users:', err);
+        console.error('❌ Admin JO - Failed to load ATTN users:', err.status, err.message);
         // Keep the supervisor as default if API fails
       }
     });
     
     this.generateCtrlNumber();
 }
-
   generateJONumber(): string {
     const yr = new Date().getFullYear().toString().slice(-2);
     const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');

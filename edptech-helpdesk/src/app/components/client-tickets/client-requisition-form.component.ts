@@ -102,7 +102,7 @@ import { environment } from '../../../environments/environment';
               <tr *ngFor="let item of items; let i = index">
                 <td><input type="number" [(ngModel)]="item.qty" class="item-input" min="1" style="width:60px" [readonly]="approvalMode"></td>
                 <td><input type="text" [(ngModel)]="item.item" class="item-input" placeholder="Item description" [readonly]="approvalMode"></td>
-                <td><input type="number" [(ngModel)]="item.unit_price" class="item-input" step="0.01" style="width:100px" [readonly]="!approvalMode"></td>
+                <td><input type="number" [(ngModel)]="item.unit_price" class="item-input" step="0.01" style="width:100px" [readonly]="approvalMode"></td>
                 <td class="item-total">{{ (item.qty || 0) * (item.unit_price || 0) | number:'1.2-2' }}</td>
                 <td *ngIf="!approvalMode"><button type="button" class="remove-item-btn" (click)="removeItem(i)">✕</button></td>
               </tr>
@@ -1745,7 +1745,7 @@ if (isHeadOrManager && (!this.reqData.approved_name || !this.approvedSignature))
             <div class="company">${this.companyName}</div>
             <div class="title">REQUISITION FORM</div>
             <div class="ctrl-no">CTRL NO.: EDR-30</div>
-            <div style="font-size:8px;margin-top:4px;">REQ #: ${this.reqNumber}</div>
+            <div style="font-size:8px;margin-top:4px;">REQ #: ${this. reqNumber}</div>
           </div>
 
           <div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${this.reqData.request_from || '—'}</span></div>

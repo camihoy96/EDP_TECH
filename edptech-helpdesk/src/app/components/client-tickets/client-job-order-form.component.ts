@@ -44,7 +44,7 @@ import { environment } from '../../../environments/environment';
  <!-- Branch Selection (Recipient) -->
 <div class="field-row">
   <label>Recipient:</label>
- <select [(ngModel)]="selectedBranchId" class="req-input" [disabled]="approvalMode || isRecipientEdit">
+  <select [(ngModel)]="selectedBranchId" class="req-input" (change)="onBranchChange()" [disabled]="approvalMode || isRecipientEdit">
     <option value="">— Select Branch —</option>
     <option [value]="userBranch?.id" *ngIf="userBranch">
       🏢 {{ userBranch?.name }} <small>({{ userBranch?.company_name }})</small> - Your Branch
@@ -58,12 +58,13 @@ import { environment } from '../../../environments/environment';
 <!-- Department Selection - based on selected branch -->
 <div class="field-row">
   <label>Dept:</label>
-   <select [(ngModel)]="joData.department_id" class="req-input" [disabled]="approvalMode || isRecipientEdit">
+ <!-- Department Selection -->
+<select [(ngModel)]="joData.department_id" class="req-input" (change)="onDepartmentChange()" [disabled]="approvalMode || isRecipientEdit">
     <option value="">— Select Department —</option>
     <option *ngFor="let dept of filteredDepartments" [value]="dept.id">
       {{ dept.displayName || dept.name }}
     </option>
-  </select>
+</select>
 </div>
 </div>
 <div class="req-top-row">
@@ -657,15 +658,7 @@ onSigModalDrag(event: MouseEvent) {
 }
 
 stopSigModalDrag() { this.isDraggingSigModal = false; }
-  onBranchChange() {
-    if (this.selectedBranchId) {
-      this.filterDepartmentsByBranch(this.selectedBranchId);
-      this.joData.department_id = null;
-      this.joData.attn = '';
-      this.attnUsers = [];
-    }
-    this.generateCtrlNumber();
-  }
+
 startDrag(event: MouseEvent) {
   const target = event.target as HTMLElement;
   if (!target.closest('.modal-titlebar')) return;
@@ -706,18 +699,54 @@ onDragEnd() {
   this.isDragging = false;
   this.currentDragModal = null;
 }
-  filterDepartmentsByBranch(branchId: number) {
-    this.filteredDepartments = this.allDepartments.filter(d => d.branch_id == branchId);
-    if (this.filteredDepartments.length > 0 && !this.joData.department_id) {
-      this.joData.department_id = this.filteredDepartments[0].id;
-      this.onDepartmentChange();
-    }
-  }
 
+onBranchChange() {
+    console.log('🔍 onBranchChange - selectedBranchId:', this.selectedBranchId);
+    
+    if (this.selectedBranchId) {
+        // ✅ Filter departments for the selected branch
+        const newDepts = this.allDepartments.filter(d => d.branch_id == this.selectedBranchId);
+        this.filteredDepartments = [...newDepts];  // New array reference
+        
+        console.log('🔍 Filtered departments:', this.filteredDepartments.length, 
+            this.filteredDepartments.map(d => `${d.id}:${d.name}`));
+        
+        // ✅ Reset department and ATTN
+        this.joData.department_id = null;
+        this.joData.attn = '';
+        this.attnUsers = [];
+        
+        // ✅ Auto-select first department after Angular updates
+        if (this.filteredDepartments.length > 0) {
+            setTimeout(() => {
+                this.joData.department_id = this.filteredDepartments[0].id;
+                console.log('🔍 Auto-selected department:', this.joData.department_id);
+                this.onDepartmentChange();
+            }, 100);
+        }
+    } else {
+        this.filteredDepartments = [];
+        this.joData.department_id = null;
+        this.joData.attn = '';
+        this.attnUsers = [];
+    }
+    this.generateCtrlNumber();
+}
+filterDepartmentsByBranch(branchId: number) {
+    // ✅ Create new array reference
+    this.filteredDepartments = [...this.allDepartments.filter(d => d.branch_id == branchId)];
+    
+    console.log('🔍 Filtered departments for branch', branchId, ':', this.filteredDepartments.length);
+    
+    if (this.filteredDepartments.length > 0) {
+        this.joData.department_id = this.filteredDepartments[0].id;
+        setTimeout(() => this.onDepartmentChange(), 50);
+    }
+}
   onDepartmentChange() {
     if (!this.joData.department_id) {
-      this.attnUsers = [];
-      return;
+        this.attnUsers = [];
+        return;
     }
     
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -726,26 +755,65 @@ onDragEnd() {
     const deptBranchId = selectedDept?.branch_id;
     const deptId = selectedDept?.id;
     
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
-      next: (users) => {
-        this.attnUsers = (users || []).filter(u => {
-          const userBranchId = Number(u.branch_id);
-          const userDeptId = Number(u.department_id);
-          const matchBranch = userBranchId === Number(deptBranchId);
-          const matchDept = !deptId || userDeptId === Number(deptId);
-          const role = (u.role || '').toLowerCase();
-          const matchRole = role === 'head/manager' || role === 'supervisor';
-          return matchBranch && matchDept && matchRole;
-        });
-        
-        if (this.attnUsers.length > 0 && !this.joData.attn) {
-          this.joData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+    console.log('🔍 JO - Loading ATTN users - dept:', deptId, 'branch:', deptBranchId);
+    
+    // ✅ USE THE CLIENT ENDPOINT (same as requisition form)
+    this.http.get<any[]>(`${environment.apiUrl}/api/client/users/by-dept/${deptId}`, { headers }).subscribe({
+        next: (users) => {
+            console.log('📥 JO - Received', users?.length, 'users from API');
+            
+            // Filter by branch AND role (Head/Manager & Supervisor only)
+            this.attnUsers = (users || []).filter(u => {
+                const userBranchId = Number(u.branch_id);
+                const userDeptId = Number(u.department_id || u.dept_id);
+                const matchBranch = userBranchId === Number(deptBranchId);
+                const matchDept = userDeptId === Number(deptId);
+                const role = (u.role || '').toLowerCase().trim();
+                const matchRole = role === 'head/manager' || role === 'head manager' || role === 'supervisor';
+                return matchBranch && matchDept && matchRole;
+            });
+            
+            console.log('👥 JO - ATTN users:', this.attnUsers.length);
+            
+            // Also add department supervisor if available
+            if (selectedDept?.supervisor) {
+                const hasSupervisor = this.attnUsers.some(u => 
+                    (u.fullname || u.username) === selectedDept.supervisor
+                );
+                if (!hasSupervisor) {
+                    this.attnUsers.unshift({
+                        fullname: selectedDept.supervisor,
+                        username: selectedDept.supervisor,
+                        role: 'supervisor'
+                    });
+                }
+            }
+            
+            // Auto-select first user if ATTN is empty
+            if (this.attnUsers.length > 0 && !this.joData.attn) {
+                this.joData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+            }
+        },
+        error: (err) => {
+            console.error('❌ JO - Failed to load ATTN users:', err.status, err.message);
+            
+            // Fallback: Use department supervisor
+            this.attnUsers = [];
+            if (selectedDept?.supervisor) {
+                this.attnUsers = [{ 
+                    fullname: selectedDept.supervisor, 
+                    username: selectedDept.supervisor, 
+                    role: 'supervisor' 
+                }];
+                if (!this.joData.attn) {
+                    this.joData.attn = selectedDept.supervisor;
+                }
+            }
         }
-      },
-      error: () => { this.attnUsers = []; }
     });
+    
     this.generateCtrlNumber();
-  }
+}
 
   generateCtrlNumber(): string {
     let branchCode = 'BR';

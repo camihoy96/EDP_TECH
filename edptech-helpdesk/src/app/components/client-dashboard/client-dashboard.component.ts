@@ -331,8 +331,9 @@ interface ClientTicket {
       <span class="widget-count">{{ myTickets.length }}</span>
     </div>
     <div class="widget-content">
-      <div class="activity-item" *ngFor="let ticket of myTickets.slice(0, 5)"
-           (click)="viewTicket(ticket.id)">
+      <!-- In your widget items, update the click handlers -->
+<div class="activity-item" *ngFor="let ticket of myTickets.slice(0, 5)"
+     (click)="viewTicket(ticket.id); $event.stopPropagation()">
         <div class="activity-status-dot" [class]="'dot-' + ticket.status"></div>
         <div class="activity-info">
           <div class="activity-title">{{ ticket.title }}</div>
@@ -355,8 +356,9 @@ interface ClientTicket {
       <span class="widget-count">{{ allOrders.length }}</span>
     </div>
     <div class="widget-content">
-      <div class="activity-item" *ngFor="let order of allOrders.slice(0, 5)"
-           (click)="viewJobOrder(order.id)">
+     <!-- In your widget items, update the click handlers -->
+<div class="activity-item" *ngFor="let order of allOrders.slice(0, 5)"
+     (click)="viewJobOrder(order.id); $event.stopPropagation()">
         <div class="activity-status-dot" [class]="'dot-' + (order.status || 'pending')"></div>
         <div class="activity-info">
           <div class="activity-title">{{ order.job_order_number || 'JO #' + order.id }}</div>
@@ -383,7 +385,7 @@ interface ClientTicket {
     </div>
     <div class="widget-content">
       <div class="activity-item" *ngFor="let req of allRequisitions.slice(0, 5)"
-           (click)="viewRequisition(req.id)">
+     (click)="viewRequisition(req.id); $event.stopPropagation()">
         <div class="activity-status-dot" [class]="'dot-' + getReqStatusClass(req)"></div>
         <div class="activity-info">
           <div class="activity-title">{{ req.requisition_number || 'REQ #' + req.id }}</div>
@@ -2848,10 +2850,16 @@ markJobOrdersAsRead() {
     });
 }
 viewJobOrder(id: number) {
-  this.router.navigate(['/client/job-orders', id]);
+  // Navigate to job order detail or list with query param
+  this.router.navigate(['/client/job-orders'], { 
+    queryParams: { id: id } 
+  });
 }
 viewRequisition(id: number) {
-  this.router.navigate(['/client/request', id]);
+  // Navigate to request detail or list with query param  
+  this.router.navigate(['/client/request'], { 
+    queryParams: { id: id } 
+  });
 }
 
 goToJobOrders() {
@@ -3165,7 +3173,10 @@ get unreadAnnouncementsCount(): number {
   }
 
   newTicket() { this.router.navigate(['/client/tickets/new']); this.activeMenu = null; }
-  viewTicket(id: number) { this.router.navigate(['/client/tickets', id]); }
+viewTicket(id: number) { 
+  // Keep existing
+  this.router.navigate(['/client/tickets', id]); 
+}
   toggleMenu(menu: string) { this.activeMenu = this.activeMenu === menu ? null : menu; }
   closeAllMenus() { this.activeMenu = null; }
 

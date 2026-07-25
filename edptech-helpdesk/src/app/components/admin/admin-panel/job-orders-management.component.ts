@@ -1348,8 +1348,10 @@ loadReadOrdersFromStorage() {
   }
 
   receiveOrder(jo: any) {
+    // Always use the numeric id, fallback to job_order_number only if id doesn't exist
+    const orderId = jo.id || jo.job_order_number;
     this.router.navigate(['/admin/job-orders/approve'], { 
-      queryParams: { id: jo.id || jo.job_order_number, mode: 'approve' } 
+      queryParams: { id: orderId, mode: 'approve' } 
     });
   }
 
