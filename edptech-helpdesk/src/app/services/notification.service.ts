@@ -364,60 +364,79 @@ export class NotificationService {
 
   private shownToastIds: Set<string> = new Set();
 
-  private loadNotificationsFromServer(): void {
+private loadNotificationsFromServer(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
     
+    // ✅ Track if user has marked all as read
+    const allReadTimestamp = localStorage.getItem('edp_notifications_all_read_timestamp');
+    
     fetch(`${environment.apiUrl}/api/notifications`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` }
     })
     .then(res => { if (!res.ok) throw new Error('Failed to fetch'); return res.json(); })
     .then((data: any[]) => {
-      if (!Array.isArray(data)) { console.log('📭 Server returned no notifications array'); return; }
-      console.log('📥 Server notifications received:', data.length);
-      
-      const current = this.notificationsSubject.value;
-      const currentMap = new Map(current.map(n => [n.id, n]));
-      const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
-      const serverNotifications: Notification[] = [];
-      
-      data.forEach(n => {
-        const srvId = 'srv_' + n.id;
-        const existing = currentMap.get(srvId);
-        if (existing) {
-          existing.read = n.is_read === 1;
-          serverNotifications.push(existing);
-        } else {
-          const localDuplicate = localNotifications.find(ln => ln.title === n.title && ln.message === n.message);
-          if (localDuplicate) {
-            console.log('⚠️ Skipping server notification - local duplicate exists:', n.title);
-            localDuplicate.read = n.is_read === 1;
-            serverNotifications.push(localDuplicate);
-          } else {
-            serverNotifications.push({
-              id: srvId, type: n.type || 'info', title: n.title, message: n.message,
-              ticketId: n.ticket_id, ticketNumber: n.ticket_number,
-              jobOrderId: n.job_order_id,
-              jobOrderNumber: n.job_order_number,
-              targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
-              countInBadge: true, timestamp: new Date(n.created_at), read: n.is_read === 1,
-            });
-          }
-          if (n.type === 'message' && n.is_read === 0 && !this.shownToastIds.has(srvId)) {
-            this.shownToastIds.add(srvId);
-            this.showToastPopup('💬 New Message', n.message.substring(0, 60), undefined);
-          }
-        }
-      });
-      
-      const merged = [...serverNotifications, ...localNotifications];
-      console.log('🔔 Merged notifications:', { server: serverNotifications.length, local: localNotifications.length, total: merged.length });
-      this.notificationsSubject.next(merged);
-      this.saveNotifications(merged);
+        if (!Array.isArray(data)) { console.log('📭 Server returned no notifications array'); return; }
+        console.log('📥 Server notifications received:', data.length);
+        
+        const current = this.notificationsSubject.value;
+        const currentMap = new Map(current.map(n => [n.id, n]));
+        const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
+        const serverNotifications: Notification[] = [];
+        
+        data.forEach(n => {
+            const srvId = 'srv_' + n.id;
+            const existing = currentMap.get(srvId);
+            
+            if (existing) {
+                // ✅ Keep existing read state (don't overwrite with server)
+                serverNotifications.push(existing);
+            } else {
+                // New notification from server
+                // ✅ Check if it was created after "mark all read" timestamp
+                let isRead = n.is_read === 1;
+                if (allReadTimestamp) {
+                    const createdAt = new Date(n.created_at).getTime();
+                    const allReadTime = parseInt(allReadTimestamp);
+                    // If notification was created before "mark all read", mark it as read
+                    if (createdAt <= allReadTime) {
+                        isRead = true;
+                    }
+                }
+                
+                serverNotifications.push({
+                    id: srvId,
+                    type: n.type || 'info',
+                    title: n.title,
+                    message: n.message,
+                    ticketId: n.ticket_id,
+                    ticketNumber: n.ticket_number,
+                    jobOrderId: n.job_order_id,
+                    jobOrderNumber: n.job_order_number,
+                    targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
+                    countInBadge: true,
+                    timestamp: new Date(n.created_at),
+                    read: isRead,  // ✅ Respect the all-read timestamp
+                });
+            }
+            
+            if (n.type === 'message' && !existing?.read && !this.shownToastIds.has(srvId)) {
+                this.shownToastIds.add(srvId);
+                this.showToastPopup('💬 New Message', n.message.substring(0, 60), undefined);
+            }
+        });
+        
+        const merged = [...serverNotifications, ...localNotifications];
+        console.log('🔔 Merged notifications:', { 
+            server: serverNotifications.length, 
+            local: localNotifications.length, 
+            total: merged.length 
+        });
+        this.notificationsSubject.next(merged);
+        this.saveNotifications(merged);
     })
     .catch((err) => { console.log('⚠️ Failed to load server notifications:', err.message); });
-  }
-
+}
   private loadCurrentUser(): void {
     try {
       const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -853,7 +872,7 @@ public addBellNotification(notif: Partial<Notification>): void {
 }
  clearAll(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    
+     localStorage.removeItem('edp_notifications_all_read_timestamp');
     if (token) {
         // Mark all ticket notifications as cleared for THIS user
         fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, { 
@@ -1012,6 +1031,9 @@ private loadTicketNotificationsFromServer(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
     
+    // ✅ Track if user has marked all as read
+    const allReadTimestamp = localStorage.getItem('edp_notifications_all_read_timestamp');
+    
     fetch(`${environment.apiUrl}/api/ticket-notifications`, {
         headers: { 'Authorization': `Bearer ${token}` }
     })
@@ -1021,11 +1043,9 @@ private loadTicketNotificationsFromServer(): void {
         
         console.log('📥 Server ticket notifications received:', data.length);
         
-        // The server now only returns non-cleared notifications
         const newNotifications: Notification[] = [];
         
         data.forEach(n => {
-            // Skip if cleared_at is set
             if (n.cleared_at) {
                 console.log('⏭️ Skipping cleared notification:', n.id);
                 return;
@@ -1038,6 +1058,16 @@ private loadTicketNotificationsFromServer(): void {
             }
             if (this.recentlyCreatedIds.has(tId)) return;
             
+            // ✅ Check if it was created after "mark all read" timestamp
+            let isRead = n.is_read === 1;
+            if (allReadTimestamp && !isRead) {
+                const createdAt = new Date(n.created_at).getTime();
+                const allReadTime = parseInt(allReadTimestamp);
+                if (createdAt <= allReadTime) {
+                    isRead = true;
+                }
+            }
+            
             newNotifications.push({
                 id: tId,
                 type: n.type || 'info',
@@ -1048,11 +1078,10 @@ private loadTicketNotificationsFromServer(): void {
                 targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : (n.user_id === null && n.user_table === null ? null : undefined),
                 countInBadge: true,
                 timestamp: new Date(n.created_at),
-                read: n.is_read === 1,
+                read: isRead,  // ✅ Respect the all-read timestamp
             });
         });
         
-        // Replace server notifications, keep local ones
         const current = this.notificationsSubject.value;
         const localOnly = current.filter(n => 
             !n.id.startsWith('ticket_') && !n.id.startsWith('srv_')
@@ -1081,12 +1110,36 @@ getComputerMonitoringNotifications(): number {
     this.saveNotifications(updated); 
   }
 
-  markAllAsRead(): void { 
+markAllAsRead(): void {
+    // Store timestamp of when "mark all read" was clicked
+    if (this.isBrowser) {
+        localStorage.setItem('edp_notifications_all_read_timestamp', Date.now().toString());
+    }
+    
     const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true })); 
     this.notificationsSubject.next(updated); 
     this.saveNotifications(updated); 
-  }
-
+    
+    // ✅ Also mark all as read on the server
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+    
+    fetch(`${environment.apiUrl}/api/notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    }).catch(err => console.log('Failed to mark server notifications as read:', err));
+    
+    fetch(`${environment.apiUrl}/api/ticket-notifications/mark-all-read`, {
+        method: 'PUT',
+        headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    }).catch(err => console.log('Failed to mark ticket notifications as read:', err));
+}
   getUnreadCount(): number { 
     return this.notificationsSubject.value.filter(n => !n.read && n.countInBadge !== false).length; 
   }
