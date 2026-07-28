@@ -37,6 +37,8 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
+     dateStrings: true,    // ✅ CRITICAL: Return dates as strings
+    timezone: '+08:00', 
     port: process.env.DB_PORT || 3307,
     waitForConnections: true,
     connectionLimit: 10,
@@ -162,9 +164,15 @@ app.post('/api/auth/register', async (req, res) => {
         // All others → new_user table
         const isMainBranch = (branch_id == 1 || branch_id == 5);
         const deptName = (department || '').toLowerCase();
-        const isEDPIT = deptName === 'edp' || deptName === 'it' || 
-                        deptName === 'edp/it' || deptName === 'it/edp' ||
-                        deptName.includes('edp') || deptName.includes('it');
+        // ✅ BEST OPTION: Use exact matches only
+        const isEDPIT = deptName === 'edp' || 
+                deptName === 'it' || 
+                deptName === 'edp/it' || 
+                deptName === 'it/edp' ||
+                deptName === 'edp department' ||
+                deptName === 'it department' ||
+                deptName === 'information technology' ||
+                deptName === 'edp - it';
         
         const tableName = (isMainBranch && isEDPIT) ? 'users' : 'new_user';
         
@@ -3695,7 +3703,91 @@ app.get('/api/reports', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// ============================================
+// DEDUPLICATION MIDDLEWARE
+// ============================================
 
+// In-memory request cache (use Redis in production)
+const requestCache = new Map();
+
+// Clean up old cache entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of requestCache) {
+    if (now - entry.timestamp > 120000) { // 2 minutes TTL
+      requestCache.delete(key);
+    }
+  }
+}, 300000);
+
+/**
+ * Deduplication middleware for state-changing requests (PUT, POST, DELETE)
+ * Prevents duplicate requests within a time window
+ */
+function deduplicateRequests(windowMs = 2000) {
+  return (req, res, next) => {
+    // Skip GET requests and health checks
+    if (req.method === 'GET' || req.path.includes('/health')) {
+      return next();
+    }
+
+    const userId = req.user?.id || 'anonymous';
+    const bodyHash = JSON.stringify(req.body || {}).substring(0, 200); // Limit hash size
+    const key = `${req.method}:${req.originalUrl}:${userId}:${bodyHash}`;
+
+    const existing = requestCache.get(key);
+    if (existing && (Date.now() - existing.timestamp) < windowMs) {
+      console.log(`🔄 DEDUP: Blocked duplicate ${req.method} ${req.originalUrl} (${Math.round((Date.now() - existing.timestamp) / 1000)}s ago)`);
+      return res.status(429).json({ 
+        error: 'Duplicate request detected', 
+        retryAfter: Math.ceil((windowMs - (Date.now() - existing.timestamp)) / 1000)
+      });
+    }
+
+    requestCache.set(key, { timestamp: Date.now() });
+    next();
+  };
+}
+
+/**
+ * Idempotency middleware - checks X-Idempotency-Key header
+ * Caches the response for the same idempotency key
+ */
+const idempotencyCache = new Map();
+
+function idempotencyMiddleware(req, res, next) {
+  // Skip GET requests
+  if (req.method === 'GET') return next();
+
+  const idempotencyKey = req.headers['x-idempotency-key'];
+  if (!idempotencyKey) return next(); // No key provided, proceed normally
+
+  // Check if this request was already processed
+  if (idempotencyCache.has(idempotencyKey)) {
+    const cached = idempotencyCache.get(idempotencyKey);
+    console.log(`🔄 IDEMPOTENT: Returning cached response for key ${idempotencyKey}`);
+    return res.status(cached.status).json(cached.body);
+  }
+
+  // Override res.json to cache the response
+  const originalJson = res.json.bind(res);
+  res.json = function(body) {
+    idempotencyCache.set(idempotencyKey, {
+      status: res.statusCode,
+      body: body,
+      timestamp: Date.now()
+    });
+    // Clean up after 1 hour
+    setTimeout(() => idempotencyCache.delete(idempotencyKey), 3600000);
+    return originalJson(body);
+  };
+
+  next();
+}
+
+// Apply deduplication middleware to all routes
+app.use(deduplicateRequests(2000)); // 2 second window
+app.use(idempotencyMiddleware);
 // ============================================
 // JOB ORDER API ENDPOINTS
 // ============================================
@@ -4322,6 +4414,7 @@ app.put('/api/admin/job-orders/:id', async (req, res) => {
 });
 
 // PUT - Update job order status (Admin)
+// PUT - Update job order status (Admin) - WITH IDEMPOTENCY CHECK
 app.put('/api/admin/job-orders/:id/status', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
@@ -4354,68 +4447,111 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
             return res.status(400).json({ error: 'Invalid status' });
         }
         
-        const [orders] = await pool.query('SELECT * FROM job_orders WHERE id = ?', [id]);
-        if (orders.length === 0) {
-            return res.status(404).json({ error: 'Job order not found' });
-        }
-        
-        const jo = orders[0];
-        const updates = [];
-        const values = [];
-        
-        if (jo.is_forwarded) {
-            if (status === 'assigned') {
-                updates.push('forwarded_status = ?');
-                values.push('assigned');
-            } else if (status === 'done') {
-                updates.push('status = ?');
-                values.push('done');
-                updates.push('forwarded_status = ?');
-                values.push('done');
+        // ✅ DEDUP CHECK: Use database transaction with SELECT FOR UPDATE
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
+            
+            // Lock the row to prevent concurrent updates
+            const [orders] = await connection.query(
+                'SELECT * FROM job_orders WHERE id = ? FOR UPDATE', [id]
+            );
+            
+            if (orders.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({ error: 'Job order not found' });
+            }
+            
+            const jo = orders[0];
+            
+            // ✅ Check if status is already the same (prevent redundant updates)
+            if (jo.is_forwarded) {
+                if (status === 'assigned' && jo.forwarded_status === 'assigned') {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Status already assigned', skipped: true });
+                }
+                if (status === 'done' && jo.status === 'done' && jo.forwarded_status === 'done') {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Already marked as done', skipped: true });
+                }
+            } else {
+                if (jo.status === status) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Status already ' + status, skipped: true });
+                }
+            }
+            
+            const updates = [];
+            const values = [];
+            
+            if (jo.is_forwarded) {
+                if (status === 'assigned') {
+                    updates.push('forwarded_status = ?');
+                    values.push('assigned');
+                } else if (status === 'done') {
+                    updates.push('status = ?');
+                    values.push('done');
+                    updates.push('forwarded_status = ?');
+                    values.push('done');
+                } else {
+                    updates.push('status = ?');
+                    values.push(status);
+                }
             } else {
                 updates.push('status = ?');
                 values.push(status);
             }
-        } else {
-            updates.push('status = ?');
-            values.push(status);
+            
+            if (done_name !== undefined) {
+                updates.push('done_name = ?');
+                values.push(done_name || null);
+            }
+            if (done_date !== undefined) {
+                updates.push('done_date = ?');
+                values.push(done_date || null);
+            }
+            if (assigned_to !== undefined) {
+                updates.push('assigned_to = ?');
+                values.push(assigned_to || null);
+            }
+            if (assigned_users !== undefined) {
+                updates.push('assigned_users = ?');
+                values.push(JSON.stringify(assigned_users) || null);
+            }
+            if (assigned_names !== undefined) {
+                updates.push('assigned_names = ?');
+                values.push(assigned_names || null);
+            }
+            
+            if (updates.length > 0) {
+                values.push(id);
+                await connection.query(
+                    `UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, 
+                    values
+                );
+            }
+            
+            await connection.commit();
+            connection.release();
+            
+            console.log('✅ Admin job order status updated:', { id, status });
+            res.json({ success: true, message: `Job order ${status}` });
+            
+        } catch (txError) {
+            await connection.rollback();
+            connection.release();
+            throw txError;
         }
-        
-        if (done_name !== undefined) {
-            updates.push('done_name = ?');
-            values.push(done_name || null);
-        }
-        if (done_date !== undefined) {
-            updates.push('done_date = ?');
-            values.push(done_date || null);
-        }
-        if (assigned_to !== undefined) {
-            updates.push('assigned_to = ?');
-            values.push(assigned_to || null);
-        }
-        if (assigned_users !== undefined) {
-            updates.push('assigned_users = ?');
-            values.push(JSON.stringify(assigned_users) || null);
-        }
-        if (assigned_names !== undefined) {
-            updates.push('assigned_names = ?');
-            values.push(assigned_names || null);
-        }
-        
-        if (updates.length > 0) {
-            values.push(id);
-            await pool.query(`UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, values);
-        }
-        
-        console.log('✅ Admin job order status updated:', { id, status });
-        res.json({ success: true, message: `Job order ${status}` });
         
     } catch (error) {
         console.error('❌ Error updating job order status:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // PUT - Receive job order (Admin)
 app.put('/api/admin/job-orders/:id/receive', async (req, res) => {
     try {
@@ -5051,7 +5187,6 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
         
-        // ✅ Get user info
         let userBranchId = null;
         let userDeptId = null;
         
@@ -5075,129 +5210,125 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         
         const { id } = req.params;
         
-        // ✅ Get existing requisition with forwarded info
-        const [existing] = await pool.query(
-            'SELECT * FROM requisitions WHERE id = ?', [id]
-        );
-        
-        if (existing.length === 0) {
-            return res.status(404).json({ error: 'Requisition not found' });
-        }
-        
-        const reqData = existing[0];
-        
-        // ✅ Check access
-        const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
-        const isOriginalRecipient = userBranchId && userDeptId &&
-                                    reqData.branch_id == userBranchId && 
-                                    reqData.department_id == userDeptId;
-        const isForwardedRecipient = reqData.is_forwarded && userBranchId && userDeptId &&
-                                     reqData.forwarded_to_branch_id == userBranchId && 
-                                     reqData.forwarded_to_department_id == userDeptId;
-        
-        console.log('🔍 Status update access check:', {
-            isAdmin,
-            isOriginalRecipient,
-            isForwardedRecipient,
-            userBranchId,
-            userDeptId,
-            reqBranchId: reqData.branch_id,
-            reqDeptId: reqData.department_id,
-            forwardedToBranch: reqData.forwarded_to_branch_id,
-            forwardedToDept: reqData.forwarded_to_department_id,
-            isForwarded: reqData.is_forwarded,
-            currentStatus: reqData.status,
-            forwardedStatus: reqData.forwarded_status
-        });
-        
-        if (!isAdmin && !isOriginalRecipient && !isForwardedRecipient) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        
-        const { 
-            status, 
-            approved_name, approved_date, approved_signature,
-            items_prepared_name, items_prepared_date, items_prepared_signature,
-            released_name, released_date
-        } = req.body;
-        
-        // ✅ Handle forwarded request status updates
-        if (reqData.is_forwarded) {
+        // ✅ Use transaction with row locking for deduplication
+        const connection = await pool.getConnection();
+        try {
+            await connection.beginTransaction();
             
-            if (status === 'processing') {
-                // 🔑 Recipient processing - keep status as 'forwarded', only update forwarded_status
-                const updates = ['forwarded_status = ?'];
-                const values = ['processing'];
-                
-                if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
-                if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
-                
-                values.push(id);
-                await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                console.log('✅ Forwarded request processing (status stays forwarded):', id);
-                
-            } else if (status === 'released') {
-                
-                // 🔑 Check WHO is releasing
-                if (isForwardedRecipient && !isOriginalRecipient) {
-                    // RECIPIENT releasing - keep status as 'forwarded', set forwarded_status to 'released'
-                    const updates = ['forwarded_status = ?'];
-                    const values = ['released'];
-                    
-                    if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
-                    if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
-                    
-                    values.push(id);
-                    await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                    console.log('✅ Forwarded request released by recipient (status stays forwarded):', id);
-                    
-                } else if (isOriginalRecipient || isAdmin) {
-                    // FORWARDING DEPT releasing - FINAL release, change status to 'released'
-                    const updates = ['status = ?', 'forwarded_status = NULL'];
-                    const values = ['released'];
-                    
-                    if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
-                    if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
-                    
-                    values.push(id);
-                    await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                    console.log('✅ Forwarding dept FINAL release:', id, '→ released');
+            const [existing] = await connection.query(
+                'SELECT * FROM requisitions WHERE id = ? FOR UPDATE', [id]
+            );
+            
+            if (existing.length === 0) {
+                await connection.rollback();
+                connection.release();
+                return res.status(404).json({ error: 'Requisition not found' });
+            }
+            
+            const reqData = existing[0];
+            
+            const isAdmin = decoded.role === 'admin' || decoded.role === 'Technician';
+            const isOriginalRecipient = userBranchId && userDeptId &&
+                                        reqData.branch_id == userBranchId && 
+                                        reqData.department_id == userDeptId;
+            const isForwardedRecipient = reqData.is_forwarded && userBranchId && userDeptId &&
+                                         reqData.forwarded_to_branch_id == userBranchId && 
+                                         reqData.forwarded_to_department_id == userDeptId;
+            
+            if (!isAdmin && !isOriginalRecipient && !isForwardedRecipient) {
+                await connection.rollback();
+                connection.release();
+                return res.status(403).json({ error: 'Access denied' });
+            }
+            
+            const { 
+                status, 
+                approved_name, approved_date, approved_signature,
+                items_prepared_name, items_prepared_date, items_prepared_signature,
+                released_name, released_date
+            } = req.body;
+            
+            // ✅ Check for duplicate status update
+            if (reqData.is_forwarded) {
+                if (status === 'processing' && reqData.forwarded_status === 'processing') {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Already processing', skipped: true });
                 }
-                
+                if (status === 'released' && reqData.forwarded_status === 'released') {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Already released', skipped: true });
+                }
             } else {
-                // Other status updates (approve, reject, etc.)
+                if (reqData.status === status) {
+                    await connection.rollback();
+                    connection.release();
+                    return res.json({ success: true, message: 'Status already ' + status, skipped: true });
+                }
+            }
+            
+            // Process the update (same logic as before)
+            if (reqData.is_forwarded) {
+                if (status === 'processing') {
+                    const updates = ['forwarded_status = ?'];
+                    const values = ['processing'];
+                    if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
+                    if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
+                    values.push(id);
+                    await connection.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                } else if (status === 'released') {
+                    if (isForwardedRecipient && !isOriginalRecipient) {
+                        const updates = ['forwarded_status = ?'];
+                        const values = ['released'];
+                        if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+                        if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
+                        values.push(id);
+                        await connection.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                    } else if (isOriginalRecipient || isAdmin) {
+                        const updates = ['status = ?', 'forwarded_status = NULL'];
+                        const values = ['released'];
+                        if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+                        if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
+                        values.push(id);
+                        await connection.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                    }
+                } else {
+                    const updates = ['status = ?'];
+                    const values = [status];
+                    if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
+                    if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
+                    if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
+                    values.push(id);
+                    await connection.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
+                }
+            } else {
                 const updates = ['status = ?'];
                 const values = [status];
-                
                 if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
                 if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
                 if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
-                
+                if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
+                if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
+                if (items_prepared_signature !== undefined) { updates.push('items_prepared_signature = ?'); values.push(items_prepared_signature); }
+                if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
+                if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
                 values.push(id);
-                await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
-                console.log('✅ Forwarded request other update:', id, '→', status);
+                await connection.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
             }
             
-        } else {
-            // ✅ Normal (non-forwarded) status update
-            const updates = ['status = ?'];
-            const values = [status];
+            await connection.commit();
+            connection.release();
             
-            if (approved_name !== undefined) { updates.push('approved_name = ?'); values.push(approved_name); }
-            if (approved_date !== undefined) { updates.push('approved_date = ?'); values.push(approved_date); }
-            if (approved_signature !== undefined) { updates.push('approved_signature = ?'); values.push(approved_signature); }
-            if (items_prepared_name !== undefined) { updates.push('items_prepared_name = ?'); values.push(items_prepared_name); }
-            if (items_prepared_date !== undefined) { updates.push('items_prepared_date = ?'); values.push(items_prepared_date); }
-            if (items_prepared_signature !== undefined) { updates.push('items_prepared_signature = ?'); values.push(items_prepared_signature); }
-            if (released_name !== undefined) { updates.push('released_name = ?'); values.push(released_name); }
-            if (released_date !== undefined) { updates.push('released_date = ?'); values.push(released_date); }
-            
-            values.push(id);
-            await pool.query(`UPDATE requisitions SET ${updates.join(', ')} WHERE id = ?`, values);
             console.log('✅ Status update:', id, '→', status);
+            res.json({ success: true });
+            
+        } catch (txError) {
+            await connection.rollback();
+            connection.release();
+            throw txError;
         }
         
-        res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/status error:', error);
         res.status(500).json({ error: error.message }); 

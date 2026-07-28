@@ -233,7 +233,7 @@ import { ReportModalComponent } from './report-modal.component';
   </a>
 </ng-container>
 
-   <!-- System Section (admin, head/manager, supervisor) -->
+<!-- System Section (admin, head/manager, supervisor) -->
 <ng-container *ngIf="hasSystemAccess()">
   <div class="sidebar-divider"></div>
   <div class="sidebar-section-title">System</div>
@@ -242,7 +242,7 @@ import { ReportModalComponent } from './report-modal.component';
     <span class="nav-icon">⚙️</span> System Settings
   </a>
   
-  <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link">
+  <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
     <span class="nav-icon">🗄️</span> Database
   </a>
   
@@ -250,7 +250,7 @@ import { ReportModalComponent } from './report-modal.component';
     <span class="nav-icon">📋</span> System Logs
   </a>
   
-  <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link">
+  <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
     <span class="nav-icon">🩺</span> System Health
   </a>
 </ng-container>
@@ -2860,6 +2860,26 @@ hasSystemAccess(): boolean {
          role === 'head manager' ||
          role === 'supervisor' || 
          role === 'branch manager';
+}
+/**
+ * ✅ Check if current user is an Admin (for restricted features)
+ * Only Admin users can see Database and System Health
+ */
+isAdminUser(): boolean {
+  if (!this.currentUser) {
+    const storedUser = JSON.parse(
+      localStorage.getItem('currentUser') || 
+      sessionStorage.getItem('currentUser') || 
+      '{}'
+    );
+    if (!storedUser.role) return false;
+    
+    const role = (storedUser.role || '').toLowerCase().trim();
+    return role === 'admin';
+  }
+  
+  const role = (this.currentUser.role || '').toLowerCase().trim();
+  return role === 'admin';
 }
 performCacheClear() {
   this.cacheClearing = true;

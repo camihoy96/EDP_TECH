@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http'; 
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
-
+import { ClientNotificationService } from '../../services/client-notification.service';
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -841,6 +841,7 @@ export class LoginComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService, 
     private router: Router, 
+     private clientNotificationService: ClientNotificationService,
     private http: HttpClient
   ) {}
 
@@ -886,6 +887,7 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.authService.login(this.loginUsername, this.loginPassword).subscribe({
       next: (response) => { 
         console.log('✅ Login success');
+        this.clientNotificationService.resetForNewUser();
         this.loginLoading = false;
         this.failedAttempts = 0;
         

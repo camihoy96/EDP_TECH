@@ -1804,6 +1804,17 @@ private dragTargetCalendar: HTMLElement | null = null;
   clientNotifications: ClientNotification[] = [];
   private _requisitionsNotificationCount: number = 0;
 announcements: any[] = [];
+ // ✅ DEDUPLICATION CACHING PROPERTIES
+  private requestsCache = new Map<string, {
+    data: any;
+    timestamp: number;
+    signature: string;
+  }>();
+  
+  private readonly CACHE_DURATION_MS = 30000;  // 30 seconds
+  private readonly STALE_DURATION_MS = 60000;  // 1 minute
+  private pendingRequests = new Map<string, Promise<any>>();
+  private readonly DEBOUNCE_MS = 2000;  // 2 second debounce
   constructor(
     private authService: AuthService,
     private ticketService: TicketService,
@@ -1814,7 +1825,128 @@ announcements: any[] = [];
   ) {}
 
   private destroy$ = new Subject<void>();
+ // ✅ Generate a unique request signature
+  private getRequestSignature(method: string, url: string, params?: any): string {
+    const userId = this.currentUser?.id || 'anonymous';
+    const paramStr = params ? JSON.stringify(params) : '';
+    return `client_dash_${method}_${url}_${userId}_${paramStr}`;
+  }
 
+  // ✅ Check if cache is still valid
+  private isCacheValid(key: string): boolean {
+    const cached = this.requestsCache.get(key);
+    if (!cached) return false;
+    
+    const age = Date.now() - cached.timestamp;
+    return age < this.CACHE_DURATION_MS;
+  }
+
+  // ✅ Check if cache is stale (can use but should refresh)
+  private isCacheStale(key: string): boolean {
+    const cached = this.requestsCache.get(key);
+    if (!cached) return true;
+    
+    const age = Date.now() - cached.timestamp;
+    return age >= this.CACHE_DURATION_MS && age < this.STALE_DURATION_MS;
+  }
+
+  // ✅ Deduplicated HTTP GET with caching
+  private cachedHttpGet<T>(url: string, options?: any, forceRefresh: boolean = false): Promise<T> {
+    const signature = this.getRequestSignature('GET', url, options?.params);
+    
+    // Check cache if not forcing refresh
+    if (!forceRefresh) {
+      const cached = this.requestsCache.get(signature);
+      if (cached && this.isCacheValid(signature)) {
+        console.log(`📦 Dashboard Cache HIT: ${url.split('/').pop()}, age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s`);
+        return Promise.resolve(cached.data as T);
+      }
+      
+      // Return stale cache + background refresh
+      if (cached && this.isCacheStale(signature)) {
+        console.log(`📦 Dashboard Cache STALE: ${url.split('/').pop()}, background refresh`);
+        this.fetchAndCache(url, options, signature).catch(() => {});
+        return Promise.resolve(cached.data as T);
+      }
+    }
+    
+    // Check for pending request (deduplication)
+    const pendingKey = `pending_${signature}`;
+    const pending = this.pendingRequests.get(pendingKey);
+    if (pending) {
+      console.log(`⏭️ Dashboard: Reusing pending request for ${url.split('/').pop()}`);
+      return pending as Promise<T>;
+    }
+    
+    // Check debounce (within 2 seconds of last request)
+    if (!forceRefresh) {
+      const lastRequest = this.requestsCache.get(signature);
+      if (lastRequest && (Date.now() - lastRequest.timestamp) < this.DEBOUNCE_MS) {
+        console.log(`⏭️ Dashboard: Debounced request for ${url.split('/').pop()}`);
+        return Promise.resolve(lastRequest.data as T);
+      }
+    }
+    
+    return this.fetchAndCache(url, options, signature);
+  }
+
+  // ✅ Fetch and cache the data
+  private async fetchAndCache<T>(url: string, options: any, signature: string): Promise<T> {
+    const pendingKey = `pending_${signature}`;
+    
+    const promise = new Promise<T>((resolve, reject) => {
+      const headers = options?.headers || this.getAuthHeaders();
+      
+      this.http.get<T>(url, { headers }).subscribe({
+        next: (data) => {
+          // Cache the result
+          this.requestsCache.set(signature, {
+            data,
+            timestamp: Date.now(),
+            signature
+          });
+          
+          // Clean up pending
+          this.pendingRequests.delete(pendingKey);
+          
+          console.log(`🌐 Dashboard Fresh: ${url.split('/').pop()} loaded`);
+          resolve(data);
+        },
+        error: (err) => {
+          this.pendingRequests.delete(pendingKey);
+          
+          // Try to use stale cache on error
+          const cached = this.requestsCache.get(signature);
+          if (cached) {
+            console.log(`⚠️ Dashboard: Using stale cache for ${url.split('/').pop()} after error`);
+            resolve(cached.data as T);
+          } else {
+            reject(err);
+          }
+        }
+      });
+    });
+    
+    this.pendingRequests.set(pendingKey, promise);
+    return promise;
+  }
+
+  // ✅ Clear specific cache entry
+  private clearCacheEntry(url: string): void {
+    const signature = this.getRequestSignature('GET', url);
+    this.requestsCache.delete(signature);
+  }
+
+  // ✅ Clear all dashboard caches
+  private clearAllCaches(): void {
+    this.requestsCache.clear();
+    this.pendingRequests.clear();
+  }
+
+  private getAuthHeaders() {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    return { 'Authorization': `Bearer ${token}` };
+  }
 ngOnInit() {
   // First, verify authentication before loading anything
   this.verifyAuthentication();
@@ -2176,15 +2308,16 @@ closeReportModal() {
     }
   }
 
-  private clearAllSessionData(): void {
+ private clearAllSessionData(): void {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     localStorage.removeItem('currentUser');
     sessionStorage.removeItem('currentUser');
     localStorage.removeItem('system_settings_cache');
     localStorage.removeItem('clientSidebarHidden');
+    this.clearAllCaches();  // ✅ Clear dashboard caches
     sessionStorage.clear();
-  }
+}
 
   private initializeComponent(): void {
     this.clientNotificationService.notifications$
@@ -2271,15 +2404,15 @@ private addSeenReqIds(ids: number[]): void {
     }, this.WARNING_BEFORE * 1000);
   }
 
-  performLogout() {
+ performLogout() {
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();
+    this.clearAllCaches();  // ✅ Clear all dashboard caches
     this.authService.logout();
     sessionStorage.setItem('logoutMessage', 'Your session has expired due to inactivity. Please login again.');
     this.router.navigate(['/login']);
-  }
-
+}
   cancelLogout() { 
     this.clearLogoutTimers(); 
     this.showLogoutWarning = false; 
@@ -2378,7 +2511,7 @@ private addSeenReqIds(ids: number[]): void {
   // =============================================
   // LOAD USER BRANCH
   // =============================================
-  loadUserBranch() {
+ loadUserBranch() {
     if (!this.currentUser) {
       console.log('No current user found');
       return;
@@ -2387,7 +2520,7 @@ private addSeenReqIds(ids: number[]): void {
     const branchId = this.currentUser.branch_id;
     
     if (!branchId) {
-      console.log('No branch_id found for user, using department as fallback');
+      console.log('No branch_id found for user');
       this.currentBranch = {
         name: this.currentUser.department || 'General',
         company_name: '',
@@ -2396,31 +2529,32 @@ private addSeenReqIds(ids: number[]): void {
       return;
     }
 
-    this.http.get<any[]>(`${this.apiUrl}/api/public/branches`).subscribe({
-      next: (branches) => {
+    const url = `${this.apiUrl}/api/public/branches`;
+    
+    this.cachedHttpGet<any[]>(url)
+      .then((branches) => {
         const found = branches.find((b: any) => b.id === Number(branchId));
         if (found) {
           this.currentBranch = found;
-          console.log('✅ Loaded user branch from public API:', found);
+          console.log('✅ Loaded user branch from cache/API:', found);
         } else {
-          console.log('⚠️ Branch not found in public list');
+          console.log('⚠️ Branch not found');
           this.currentBranch = {
             name: this.currentUser.department || 'General',
             company_name: '',
             address: ''
           };
         }
-      },
-      error: (err) => {
-        console.error('❌ Failed to load branches from public API:', err);
+      })
+      .catch((err) => {
+        console.error('❌ Failed to load branches:', err);
         this.currentBranch = {
           name: this.currentUser.department || 'General',
           company_name: '',
           address: ''
         };
-      }
-    });
-  }
+      });
+}
 
   goToSlaInfo() { this.router.navigate(['/client/sla-info']); this.activeMenu = null; }
 
@@ -2494,30 +2628,28 @@ private addSeenReqIds(ids: number[]): void {
 }
 // refresh all data
 refreshAll() {
-  // Set loading state
-  this.isRefreshing = true;
-  console.log('🔄 Refreshing all data...');
-  
-  // Refresh system settings (clears cache too)
-  this.forceRefreshSettings();
-  
-  // Refresh tickets
-  this.loadMyTickets();
-  
-  // Refresh counts
-  this.loadJobOrdersCount();
-  this.loadRequisitionsCount();
-  this.loadMessageNotificationCount();
-  this.loadRegistrationKeys();
-  
-  // Refresh user branch
-  this.loadUserBranch();
-  
-  // Reset loading state after a short delay
-  setTimeout(() => {
-    this.isRefreshing = false;
-  }, 1000);
+    this.isRefreshing = true;
+    console.log('🔄 Refreshing all data...');
+    
+    // Clear specific caches
+    this.clearCacheEntry(`${environment.apiUrl}/api/requisitions/my`);
+    this.clearCacheEntry(`${environment.apiUrl}/api/job-orders/my`);
+    this.clearCacheEntry(`${this.apiUrl}/api/public/branches`);
+    
+    // Force refresh all data
+    this.forceRefreshSettings();
+    this.loadMyTickets();
+    this.loadJobOrdersCount(true);  // Force refresh
+    this.loadRequisitionsCount(true);  // Force refresh
+    this.loadMessageNotificationCount();
+    this.loadRegistrationKeys();
+    this.loadUserBranch();
+    
+    setTimeout(() => {
+      this.isRefreshing = false;
+    }, 1000);
 }
+
   loadMessageNotificationCount() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
@@ -2763,25 +2895,24 @@ checkForNewOrders() {
     }
   });
 }
- loadJobOrdersCount() {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  if (!token) return;
-  const headers = { 'Authorization': `Bearer ${token}` };
-  
-  this.http.get<any[]>(`${environment.apiUrl}/api/job-orders/my`, { headers }).subscribe({
-    next: (data) => {
-      this.allOrders = Array.isArray(data) ? data : [];
-      
-      // ✅ Check for new notifications
-      this.checkForNewOrders();
-      
-      // ✅ Update notification counts
-      this.updateNotificationCounts();
-    },
-    error: () => {
-      this.pendingJobOrdersCount = 0;
+ loadJobOrdersCount(forceRefresh: boolean = false) {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) {
+        this.pendingJobOrdersCount = 0;
+        return;
     }
-  });
+    
+    const url = `${environment.apiUrl}/api/job-orders/my`;
+    
+    this.cachedHttpGet<any[]>(url, { headers: this.getAuthHeaders() }, forceRefresh)
+      .then((data) => {
+        this.allOrders = Array.isArray(data) ? data : [];
+        this.checkForNewOrders();
+        this.updateNotificationCounts();
+      })
+      .catch(() => {
+        this.pendingJobOrdersCount = 0;
+      });
 }
 // ✅ Mark all job orders as read when clicking the link
 markJobOrdersAsRead() {
@@ -2806,25 +2937,29 @@ markJobOrdersAsRead() {
   goToAbout() { this.router.navigate(['/client/about']); this.activeMenu = null; }
   goToShortcuts() { this.router.navigate(['/client/shortcuts']); this.activeMenu = null; }
 
- loadRequisitionsCount() {
+ loadRequisitionsCount(forceRefresh: boolean = false) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) return;
-    const headers = { 'Authorization': `Bearer ${token}` };
-    this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
-      next: (data) => { 
+    if (!token) {
+        this.pendingRequisitionsCount = 0;
+        this._requisitionsNotificationCount = 0;
+        return;
+    }
+    
+    const url = `${environment.apiUrl}/api/requisitions/my`;
+    
+    this.cachedHttpGet<any[]>(url, { headers: this.getAuthHeaders() }, forceRefresh)
+      .then((data) => {
         const reqs = Array.isArray(data) ? data : [];
         this.allRequisitions = reqs;
-        // Keep pending count for widget if needed
         this.pendingRequisitionsCount = reqs.filter(r => (r.status || 'pending') === 'pending').length;
-        // Get current user info
+        
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
         const userBranchId = currentUser?.branch_id;
         const userDeptId = currentUser?.department_id;
         const userId = currentUser?.id;
-        // ✅ Calculate notification count (exclude seen IDs)
+        
         const seenIds = this.seenReqNotificationIds;
         this._requisitionsNotificationCount = reqs.filter(r => {
-          // Skip if already seen
           if (seenIds.has(r.id)) return false;
           const creatorBranch = r.creator_branch_id;
           const creatorDept = r.creator_dept_id;
@@ -2833,22 +2968,18 @@ markJobOrdersAsRead() {
             (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
             (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
           if (!isIncoming) return false;
-          // 1. New pending requests
           if (r.status === 'pending') return true;
-          // 2. Forwarded requests on process
           if (r.is_forwarded && r.forwarded_status === 'processing') return true;
-          // 3. Forwarded requests released by recipient
           if (r.is_forwarded && r.forwarded_status === 'released') return true;
-          
           return false;
         }).length;
-      },
-      error: () => { 
-        this.pendingRequisitionsCount = 0; 
+      })
+      .catch(() => {
+        this.pendingRequisitionsCount = 0;
         this._requisitionsNotificationCount = 0;
-      }
-    });
+      });
 }
+
 viewJobOrder(id: number) {
   // Navigate to job order detail or list with query param
   this.router.navigate(['/client/job-orders'], { 
@@ -2892,40 +3023,41 @@ getReqStatusLabel(req: any): string {
   return status.toUpperCase();
 }
 markRequisitionNotificationsAsRead(): void {
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  if (!token) return;
-  const headers = { 'Authorization': `Bearer ${token}` };
-  
-  this.http.get<any[]>(`${environment.apiUrl}/api/requisitions/my`, { headers }).subscribe({
-    next: (data) => {
-      const reqs = Array.isArray(data) ? data : [];
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      const userBranchId = currentUser?.branch_id;
-      const userDeptId = currentUser?.department_id;
-      const userId = currentUser?.id;
-      
-      const idsToMark: number[] = [];
-      
-      reqs.forEach(r => {
-        const creatorBranch = r.creator_branch_id;
-        const creatorDept = r.creator_dept_id;
-        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+    
+    const url = `${environment.apiUrl}/api/requisitions/my`;
+    
+    this.cachedHttpGet<any[]>(url, { headers: this.getAuthHeaders() }, true)  // Force refresh to get latest
+      .then((data) => {
+        const reqs = Array.isArray(data) ? data : [];
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        const userBranchId = currentUser?.branch_id;
+        const userDeptId = currentUser?.department_id;
+        const userId = currentUser?.id;
         
-        const isIncoming = 
-          (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
-          (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+        const idsToMark: number[] = [];
         
-        if (isIncoming) {
-          idsToMark.push(r.id);
-        }
-      });
-      
-      this.addSeenReqIds(idsToMark);
-      this._requisitionsNotificationCount = 0;
-    },
-    error: () => {}
-  });
+        reqs.forEach(r => {
+          const creatorBranch = r.creator_branch_id;
+          const creatorDept = r.creator_dept_id;
+          const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+          
+          const isIncoming = 
+            (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) ||
+            (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept);
+          
+          if (isIncoming) {
+            idsToMark.push(r.id);
+          }
+        });
+        
+        this.addSeenReqIds(idsToMark);
+        this._requisitionsNotificationCount = 0;
+      })
+      .catch(() => {});
 }
+
 getNotificationCount(): number {
   if (this.isEDPUser()) {
     return this.allTicketsNotificationCount;
@@ -2940,18 +3072,18 @@ markAllTicketsRead(): void {
     this.myTicketsNotificationCount = 0;
   }
 }
- ngOnDestroy() {
+ngOnDestroy() {
     if (this.clockInterval) clearInterval(this.clockInterval);
     if (this.messageCountInterval) clearInterval(this.messageCountInterval);
     if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
     if (this.sessionCheckInterval) clearInterval(this.sessionCheckInterval);
     if (this.tokenCheckInterval) clearInterval(this.tokenCheckInterval);
     if (this.chatCountInterval) clearInterval(this.chatCountInterval);
+    this.clearAllCaches();  // ✅ Clean up
     this.destroy$.next();
     this.clearLogoutTimers();
     this.destroy$.complete();
-  }
-
+}
   get isContactRoute(): boolean { return this.router.url === '/client/contact'; }
 
   get isDashboardRoute(): boolean { return this.router.url === '/client/dashboard' || this.router.url === '/client'; }

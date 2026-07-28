@@ -596,220 +596,160 @@ handleStatusChange(ticket: Ticket, newStatus: string, changedByName: string): vo
     }
 }
 
-  // ── EXISTING REQUISITION METHODS ──
+  // ── FIXED REQUISITION METHODS ──
 
-  handleRequisitionProcessed(req: any, processedByName: string, submittedById?: number): void {
+handleRequisitionProcessed(req: any, processedByName: string, submittedById?: number): void {
     const key = `requisition-processed-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator (submittedById), NOT broadcast to all admins
     if (submittedById) {
       this.addBellNotification({
         type: 'info',
         title: '⚙️ Requisition Processing',
         message: `Your requisition #${req.requisition_number} is now being processed by ${processedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,  // ✅ Target the client creator
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'info',
-      title: '⚙️ Requisition Processing',
-      message: `${processedByName} started processing requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
+    // ❌ REMOVED: Broadcast to all admins (targetUserId: null)
+}
 
-  handleRequisitionReleased(req: any, releasedByName: string, submittedById?: number): void {
+handleRequisitionReleased(req: any, releasedByName: string, submittedById?: number): void {
     const key = `requisition-released-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'success',
         title: '📦 Requisition Released',
         message: `Your requisition #${req.requisition_number} has been released by ${releasedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'success',
-      title: '📦 Requisition Released',
-      message: `${releasedByName} released requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
+    // ❌ REMOVED: Broadcast to all admins
+}
 
-  handleRequisitionForwarded(req: any, forwardedByName: string, toBranchName: string, toDeptName: string, submittedById?: number): void {
+handleRequisitionForwarded(req: any, forwardedByName: string, toBranchName: string, toDeptName: string, submittedById?: number): void {
     const key = `requisition-forwarded-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'info',
         title: '📤 Requisition Forwarded',
         message: `Your requisition #${req.requisition_number} was forwarded to ${toBranchName} - ${toDeptName} by ${forwardedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'info',
-      title: '📤 Requisition Forwarded',
-      message: `${forwardedByName} forwarded requisition #${req.requisition_number} to ${toBranchName} - ${toDeptName}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-    
-    if (this.getCurrentUserTable() === 'users') {
-      this.showToastPopup('📤 Requisition Forwarded', 
-        `${forwardedByName} forwarded #${req.requisition_number} to ${toBranchName} - ${toDeptName}`, 
-        undefined);
-    }
-  }
+    // ❌ REMOVED: Broadcast to all admins
+    // ❌ REMOVED: Toast popup for all admins
+}
 
-  handleRequisitionForwardedProcessed(req: any, processedByName: string, submittedById?: number): void {
+handleRequisitionForwardedProcessed(req: any, processedByName: string, submittedById?: number): void {
     const key = `requisition-fwd-processed-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'info',
         title: '⚙️ Forwarded Req Processing',
         message: `Forwarded requisition #${req.requisition_number} is being processed by ${processedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'info',
-      title: '⚙️ Forwarded Req Processing',
-      message: `${processedByName} is processing forwarded requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
+    // ❌ REMOVED: Broadcast to all admins
+}
 
-  handleRequisitionForwardedReleased(req: any, releasedByName: string, submittedById?: number): void {
+handleRequisitionForwardedReleased(req: any, releasedByName: string, submittedById?: number): void {
     const key = `requisition-fwd-released-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'warning',
         title: '📦 Forwarded Req Released - Action Needed',
         message: `Forwarded requisition #${req.requisition_number} was released by ${releasedByName}. Final release needed.`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'warning',
-      title: '📦 Forwarded Req Released',
-      message: `${releasedByName} released forwarded requisition #${req.requisition_number}. Awaiting final release.`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
+    // ❌ REMOVED: Broadcast to all admins
+}
 
-  handleRequisitionFinalReleased(req: any, releasedByName: string, submittedById?: number): void {
+handleRequisitionFinalReleased(req: any, releasedByName: string, submittedById?: number): void {
     const key = `requisition-final-released-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'success',
         title: '✅ Requisition Fully Released',
         message: `Your requisition #${req.requisition_number} has been fully released by ${releasedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'success',
-      title: '✅ Requisition Fully Released',
-      message: `${releasedByName} completed final release for requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-    
-    if (this.getCurrentUserTable() === 'users') {
-      this.showToastPopup('✅ Requisition Fully Released', 
-        `${releasedByName} completed final release for #${req.requisition_number}`, 
-        undefined);
-    }
-  }
+    // ❌ REMOVED: Broadcast to all admins
+}
 
-  handleRequisitionReceived(req: any, receivedByName: string, submittedById?: number): void {
+handleRequisitionReceived(req: any, receivedByName: string, submittedById?: number): void {
     const key = `requisition-received-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'success',
         title: '📥 Requisition Received',
         message: `${receivedByName} received your requisition #${req.requisition_number}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'success',
-      title: '📥 Requisition Received',
-      message: `${receivedByName} received requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
+    // ❌ REMOVED: Broadcast to all admins
+}
 
-  handleRequisitionRejected(req: any, rejectedByName: string, submittedById?: number): void {
+handleRequisitionRejected(req: any, rejectedByName: string, submittedById?: number): void {
     const key = `requisition-rejected-${req.id || req.requisition_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
     
+    // ✅ Only notify the creator
     if (submittedById) {
       this.addBellNotification({
         type: 'warning',
         title: '❌ Requisition Rejected',
         message: `Your requisition #${req.requisition_number} was rejected by ${rejectedByName}`,
         ticketNumber: req.requisition_number,
-        targetUserId: submittedById,
+        targetUserId: `new_user_${submittedById}`,
         countInBadge: true,
       });
     }
-    this.addBellNotification({
-      type: 'warning',
-      title: '❌ Requisition Rejected',
-      message: `${rejectedByName} rejected requisition #${req.requisition_number}`,
-      ticketNumber: req.requisition_number,
-      targetUserId: null,
-      countInBadge: true,
-    });
-  }
-
+    // ❌ REMOVED: Broadcast to all admins
+}
   // ── BELL NOTIFICATIONS ──
 public addBellNotification(notif: Partial<Notification>): void {
     const newNotif: Notification = {

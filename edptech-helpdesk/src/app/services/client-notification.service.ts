@@ -35,7 +35,7 @@ export class ClientNotificationService {
   private currentUserBranchId: number | null = null;
   private serverPolling: any;
   private shownToastIds: Set<string> = new Set();
-
+  private previousUserId: number | null = null;
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.isBrowser = isPlatformBrowser(this.platformId);
     if (this.isBrowser) {
@@ -45,16 +45,29 @@ export class ClientNotificationService {
       this.loadNotificationsFromStorage();
       setTimeout(() => {
         this.loadNotificationsFromServer();
-        this.serverPolling = setInterval(() => this.loadNotificationsFromServer(), 30000);
+        this.serverPolling = setInterval(() => {
+          // ✅ Check for user change before polling
+          this.loadCurrentUser();
+          this.loadNotificationsFromServer();
+        }, 30000);
       }, 2000);
     }
-  }
+}
 
   // ── CURRENT USER ──
-  private loadCurrentUser(): void {
+private loadCurrentUser(): void {
     try {
       const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      this.currentUserId = user.id || null;
+      const newUserId = user.id || null;
+      
+      // ✅ Detect user change and clear data
+      if (newUserId !== this.previousUserId && this.previousUserId !== null) {
+        console.log('🔄 ClientNotificationService - User changed! Clearing notifications...');
+        this.clearAllNotificationData();
+      }
+      
+      this.previousUserId = newUserId;
+      this.currentUserId = newUserId;
       this.currentUserDeptId = user.department_id || user.dept_id || null;
       this.currentUserBranchId = user.branch_id || null;
     } catch {
@@ -62,8 +75,44 @@ export class ClientNotificationService {
       this.currentUserDeptId = null;
       this.currentUserBranchId = null;
     }
-  }
-
+}
+/**
+ * ✅ Clear all notification data when user changes
+ */
+private clearAllNotificationData(): void {
+    // Clear all notifications
+    this.notificationsSubject.next([]);
+    this.ticketNotifications = [];
+    this.shownToastIds.clear();
+    
+    // Clear all notification-related localStorage
+    try {
+        // Get all keys and clear notification-related ones
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+                key.startsWith('client_notifications_') ||
+                key.startsWith('client_ticket_notifications_')
+            )) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+    } catch (e) {
+        // Ignore storage errors
+    }
+}
+/**
+ * ✅ Public method to call when user logs out
+ */
+public resetForNewUser(): void {
+    this.clearAllNotificationData();
+    this.previousUserId = null;
+    this.currentUserId = null;
+    this.currentUserDeptId = null;
+    this.currentUserBranchId = null;
+}
   updateCurrentUser(userId: number): void {
     this.currentUserId = userId;
   }

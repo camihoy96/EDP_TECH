@@ -1048,19 +1048,147 @@ export class JobOrdersManagementComponent implements OnInit {
   assignUsers: any[] = [];
   filteredAssignUsers: any[] = [];
   selectedAssignUsers: any[] = [];
-
+  // ✅ CACHING PROPERTIES
+  private ordersCache: {
+    data: any[];
+    timestamp: number;
+    currentUserId: number;
+    currentUserBranchId: number;
+    currentUserDeptId: number;
+  } | null = null;
+  
+  private readonly CACHE_DURATION_MS = 30000; // 30 seconds cache
+  private readonly STALE_DURATION_MS = 60000; // 1 minute before forcing refresh
+  private readonly POLLING_INTERVAL = 30000; // Poll every 30 seconds
+  private isFetching = false;
+  private lastRequestSignature: string = '';
+  private pollingInterval: any;
   constructor(private http: HttpClient, private authService: AuthService, private router: Router) {}
-
-    ngOnInit() {
+     ngOnInit() {
     this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     this.loadReadOrdersFromStorage();
-    this.loadNotificationMapFromStorage(); // ✅ Load notification map
+    this.loadNotificationMapFromStorage();
     this.loadAllOrders();
     this.loadFilterBranches();
     this.loadDepartments();
+    
     document.addEventListener('mousemove', this.onMouseMove.bind(this));
     document.addEventListener('mouseup', this.onMouseUp.bind(this));
+    
+    // ✅ Smart polling - only fetch when cache is stale
+    this.pollingInterval = setInterval(() => {
+      if (this.isCacheStale() && !this.isFetching) {
+        this.loadAllOrders(false);
+      }
+    }, this.POLLING_INTERVAL);
   }
+    // ✅ Generate request signature for deduplication
+  private getRequestSignature(): string {
+    return `admin_jo_${this.currentUser?.id}_${this.currentUser?.branch_id}_${this.currentUser?.department_id}_${this.viewMode}_${this.activeTab}`;
+  }
+
+  // ✅ Check if cache is still valid
+  private isCacheValid(): boolean {
+    if (!this.ordersCache) return false;
+    if (!this.ordersCache.data || this.ordersCache.data.length === 0) return false;
+    
+    const now = Date.now();
+    const cacheAge = now - this.ordersCache.timestamp;
+    
+    if (cacheAge < this.CACHE_DURATION_MS) {
+      if (this.ordersCache.currentUserId === this.currentUser?.id) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+   // ✅ Check if cache is stale
+  private isCacheStale(): boolean {
+    if (!this.ordersCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.ordersCache.timestamp;
+    
+    return cacheAge >= this.CACHE_DURATION_MS || 
+           this.ordersCache.currentUserId !== this.currentUser?.id;
+  }
+  // ✅ Check if cache is expired
+  private isCacheExpired(): boolean {
+    if (!this.ordersCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.ordersCache.timestamp;
+    
+    return cacheAge >= this.STALE_DURATION_MS || 
+           this.ordersCache.currentUserId !== this.currentUser?.id;
+  }
+ // ✅ Update cache with fresh data
+  private updateCache(data: any[]): void {
+    this.ordersCache = {
+      data: data,
+      timestamp: Date.now(),
+      currentUserId: this.currentUser?.id,
+      currentUserBranchId: this.currentUser?.branch_id,
+      currentUserDeptId: this.currentUser?.department_id
+    };
+    
+    try {
+      sessionStorage.setItem('admin_jo_cache', JSON.stringify({
+        data: data.slice(0, 100),
+        timestamp: Date.now(),
+        userId: this.currentUser?.id
+      }));
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+   // ✅ Load from sessionStorage as fallback
+  private loadFromSessionStorage(): any[] | null {
+    try {
+      const cached = sessionStorage.getItem('admin_jo_cache');
+      if (!cached) return null;
+      
+      const parsed = JSON.parse(cached);
+      const cacheAge = Date.now() - parsed.timestamp;
+      
+      if (cacheAge < 300000 && parsed.userId === this.currentUser?.id) {
+        console.log('📦 Using admin JO sessionStorage cache, age:', Math.round(cacheAge / 1000), 's');
+        return parsed.data;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return null;
+  }
+  // ✅ Clear all caches
+  private clearCache(): void {
+    this.ordersCache = null;
+    try {
+      sessionStorage.removeItem('admin_jo_cache');
+    } catch (e) {
+      // Ignore
+    }
+  }
+  private updateLocalOrder(orderId: number, updates: Partial<any>): void {
+    const index = this.allOrders.findIndex(o => o.id === orderId);
+    if (index !== -1) {
+      this.allOrders[index] = { ...this.allOrders[index], ...updates };
+    }
+    
+    if (this.ordersCache) {
+      const cacheIndex = this.ordersCache.data.findIndex(o => o.id === orderId);
+      if (cacheIndex !== -1) {
+        this.ordersCache.data[cacheIndex] = { 
+          ...this.ordersCache.data[cacheIndex], 
+          ...updates 
+        };
+      }
+    }
+    
+    this.applyFilters();
+  }
+
  loadNotificationMapFromStorage() {
   const stored = localStorage.getItem('jobOrderNotifications');
   if (stored) {
@@ -1296,21 +1424,113 @@ loadReadOrdersFromStorage() {
   }
 
   // ✅ Override loadAllOrders
-  loadAllOrders() {
+   loadAllOrders(useCacheIfAvailable: boolean = false): void {
+    // Check if we can use cache
+    if (useCacheIfAvailable && this.isCacheValid()) {
+      console.log('📦 Admin JO: Using valid cache, age:', 
+        Math.round((Date.now() - this.ordersCache!.timestamp) / 1000), 's');
+      this.allOrders = this.ordersCache!.data;
+      this.checkForNewOrders();
+      this.updateNotificationCounts();
+      this.applyFilters();
+      return;
+    }
+    
+    // Stale cache: return cached data immediately, refresh in background
+    if (!useCacheIfAvailable && this.ordersCache && this.ordersCache.data.length > 0 && !this.isCacheExpired()) {
+      console.log('📦 Admin JO: Using stale cache (background refresh)');
+      this.allOrders = this.ordersCache.data;
+      this.checkForNewOrders();
+      this.updateNotificationCounts();
+      this.applyFilters();
+      this.fetchOrdersInBackground();
+      return;
+    }
+    
+    // Try sessionStorage as last resort
+    if (!useCacheIfAvailable && !this.isFetching) {
+      const sessionData = this.loadFromSessionStorage();
+      if (sessionData && sessionData.length > 0) {
+        console.log('📦 Admin JO: Using sessionStorage cache while fetching');
+        this.allOrders = sessionData;
+        this.checkForNewOrders();
+        this.updateNotificationCounts();
+        this.applyFilters();
+      }
+    }
+    
+    // Fetch fresh data
+    this.fetchOrdersFromServer();
+  }
+   // ✅ Fetch orders from server (deduplicated)
+  private fetchOrdersFromServer(): void {
+    const currentSignature = this.getRequestSignature();
+    
+    if (this.isFetching) {
+      console.log('⏭️ Admin JO: Already fetching, skipping');
+      return;
+    }
+    
+    if (currentSignature === this.lastRequestSignature && 
+        this.ordersCache && 
+        (Date.now() - this.ordersCache.timestamp) < 2000) {
+      console.log('⏭️ Admin JO: Duplicate request skipped (within 2s)');
+      return;
+    }
+    
+    this.lastRequestSignature = currentSignature;
+    this.isFetching = true;
+    
     const headers = this.getAuthHeaders();
+    
     this.http.get<any[]>(`${environment.apiUrl}/api/admin/job-orders`, { headers }).subscribe({
       next: (data) => { 
-        this.allOrders = Array.isArray(data) ? data : [];
-        
-        // ✅ Check for new/forwarded orders and add notifications
+        let allOrders = Array.isArray(data) ? data : [];
+        this.updateCache(allOrders);
+        this.allOrders = allOrders;
         this.checkForNewOrders();
-        
         this.updateNotificationCounts();
-        this.applyFilters(); 
+        this.applyFilters();
+        this.isFetching = false;
       },
-      error: () => this.showToastMsg('Failed to load job orders', 'error')
+      error: (err) => {
+        console.error('Failed to load orders:', err);
+        
+        if (this.ordersCache && this.ordersCache.data.length > 0) {
+          console.log('⚠️ Admin JO: Using cached data after error');
+          this.allOrders = this.ordersCache.data;
+          this.applyFilters();
+        }
+        
+        this.isFetching = false;
+        this.showToastMsg('Failed to load job orders', 'error');
+      }
     });
   }
+   // ✅ Fetch in background
+  private fetchOrdersInBackground(): void {
+    if (this.isFetching) return;
+    
+    this.isFetching = true;
+    
+    const headers = this.getAuthHeaders();
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/job-orders`, { headers }).subscribe({
+      next: (data) => { 
+        let allOrders = Array.isArray(data) ? data : [];
+        this.updateCache(allOrders);
+        this.allOrders = allOrders;
+        this.checkForNewOrders();
+        this.updateNotificationCounts();
+        this.applyFilters();
+        this.isFetching = false;
+      },
+      error: () => {
+        this.isFetching = false;
+      }
+    });
+  }
+
   // ✅ Check for new or forwarded orders
   checkForNewOrders() {
     const currentUserBranchId = Number(this.currentUser?.branch_id);
@@ -1599,46 +1819,47 @@ loadReadOrdersFromStorage() {
 confirmForward() {
     if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
     
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    
+    const jo = this.forwardTargetReq;
     const payload = {
       forwarded_to_branch_id: this.forwardBranchId,
       forwarded_to_department_id: this.forwardDepartmentId,
       forwarded_by_name: this.currentUser?.fullname || 'Admin'
     };
     
-    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
-      next: (response: any) => {
-        // ✅ Update local object
-        this.forwardTargetReq.is_forwarded = 1;
-        this.forwardTargetReq.forwarded_to_branch_id = this.forwardBranchId;
-        this.forwardTargetReq.forwarded_to_department_id = this.forwardDepartmentId;
-        this.forwardTargetReq.forwarded_by_name = this.currentUser?.fullname;
-        this.forwardTargetReq.status = 'forwarded';
-        this.forwardTargetReq.forwarded_status = 'pending';
-        
-        // ✅ Add incoming notification for the recipient
-        // The recipient will see this in J.O. Request Management
-        this.addIncomingNotification(this.forwardTargetReq.id);
-        
-        // ✅ Also update in allOrders array
-        const index = this.allOrders.findIndex(o => o.id === this.forwardTargetReq.id);
-        if (index !== -1) {
-          this.allOrders[index] = { ...this.allOrders[index], ...this.forwardTargetReq };
-        }
-        
-        this.applyFilters();
+    // Optimistic update
+    this.updateLocalOrder(jo.id, {
+      is_forwarded: 1,
+      status: 'forwarded',
+      forwarded_status: 'pending',
+      ...payload
+    });
+    this.addIncomingNotification(jo.id);
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/forward`, payload, { headers }).subscribe({
+      next: () => {
         this.cancelForward();
         this.showToastMsg('📤 Job Order forwarded successfully!', 'success');
+        setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: (err) => {
         console.error('Forward failed:', err);
+        // Revert
+        this.updateLocalOrder(jo.id, { 
+          status: 'approved', 
+          is_forwarded: 0, 
+          forwarded_status: null,
+          forwarded_to_branch_id: null,
+          forwarded_to_department_id: null,
+          forwarded_by_name: null
+        });
+        this.cancelForward();
         this.showToastMsg('⚠️ Failed to forward', 'error');
       }
     });
   }
-
 
   // Reassign methods
   openReassignModal(req: any) {
@@ -1703,27 +1924,33 @@ confirmForward() {
     }
   }
 
-  confirmReassign() {
+   confirmReassign() {
     if (!this.reassignTarget || this.selectedReassignUsers.length === 0) return;
     
+    const jo = this.reassignTarget;
     const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
     const assignedNames = this.selectedReassignUsers.map(u => u.fullname || u.username).join(', ');
-    const payload = {
-      status: 'assigned',
+    
+    const payload: any = {
       assigned_to: this.selectedReassignUsers[0].id,
       assigned_users: this.selectedReassignUsers.map(u => u.id),
       assigned_names: assignedNames
     };
     
-    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.reassignTarget.id}/status`, payload, { headers }).subscribe({
+    // Optimistic update
+    this.updateLocalOrder(jo.id, { assigned_names: assignedNames });
+    
+    this.closeReassignModal();
+    
+    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
-        this.reassignTarget.status = 'assigned';
-        this.reassignTarget.assigned_names = assignedNames;
-        this.applyFilters();
-        this.closeReassignModal();
-        this.showToastMsg('✅ Users assigned successfully!', 'success');
+        this.showToastMsg('✅ Users reassigned successfully!', 'success');
+        setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
-      error: () => this.showToastMsg('⚠️ Failed to assign users', 'error')
+      error: () => {
+        this.updateLocalOrder(jo.id, { assigned_names: jo.assigned_names });
+        this.showToastMsg('⚠️ Failed to reassign users', 'error');
+      }
     });
   }
 
@@ -1865,7 +2092,7 @@ confirmForward() {
     });
   }
 
-   confirmStatusUpdate() {
+  confirmStatusUpdate() {
     if (!this.confirmTarget) return;
     const jo = this.confirmTarget;
     
@@ -1888,6 +2115,16 @@ confirmForward() {
       return; 
     }
     
+    // Optimistic update
+    const updates: any = { ...extraPayload };
+    if (jo.is_forwarded) {
+      updates.forwarded_status = status;
+    } else {
+      updates.status = status;
+    }
+    this.updateLocalOrder(jo.id, updates);
+    this.addStatusUpdateNotification(jo.id, status);
+    
     const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
     const payload: any = { ...extraPayload };
     
@@ -1899,37 +2136,23 @@ confirmForward() {
     
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
-        if (jo.is_forwarded) {
-          jo.forwarded_status = status;
-        } else {
-          jo.status = status;
-        }
-        if (status === 'done') { 
-          jo.done_name = extraPayload.done_name; 
-          jo.done_date = extraPayload.done_date; 
-        }
-        
-        // ✅ Add status update notification for the recipient
-        // This will appear in "Our Job Orders" for the recipient
-        this.addStatusUpdateNotification(jo.id, status);
-        
-        this.applyFilters();
         this.showConfirmModal = false; 
         this.confirmTarget = null; 
         this.confirmAction = null;
         this.showToastMsg(`✅ Job Order ${status === 'done' ? 'marked as Done' : 'rejected'}!`, 'success');
+        setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: () => {
+        // Revert on error
         if (jo.is_forwarded) {
-          jo.forwarded_status = status;
+          this.updateLocalOrder(jo.id, { forwarded_status: jo.forwarded_status });
         } else {
-          jo.status = status;
+          this.updateLocalOrder(jo.id, { status: jo.status });
         }
-        this.applyFilters();
         this.showConfirmModal = false; 
         this.confirmTarget = null; 
         this.confirmAction = null;
-        this.showToastMsg('⚠️ Updated locally', 'error');
+        this.showToastMsg('⚠️ Failed to update', 'error');
       }
     });
   }
@@ -1943,25 +2166,29 @@ confirmForward() {
 saveNotificationMapToStorage() {
   localStorage.setItem('jobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
-  confirmDelete() {
+    confirmDelete() {
     if (!this.confirmTarget) return;
     const jo = this.confirmTarget;
-    this.http.delete(`${environment.apiUrl}/api/admin/job-orders/${jo.id}`, { headers: this.getAuthHeaders() }).subscribe({
+    const orderId = jo.id;
+    
+    // Optimistic delete
+    this.allOrders = this.allOrders.filter(o => o.id !== orderId);
+    if (this.ordersCache) {
+      this.ordersCache.data = this.ordersCache.data.filter(o => o.id !== orderId);
+    }
+    this.applyFilters();
+    this.showConfirmModal = false; 
+    this.confirmTarget = null; 
+    this.confirmAction = null;
+    
+    this.http.delete(`${environment.apiUrl}/api/admin/job-orders/${orderId}`, { headers: this.getAuthHeaders() }).subscribe({
       next: () => {
-        this.allOrders = this.allOrders.filter(o => o.id !== jo.id);
-        this.applyFilters();
-        this.showConfirmModal = false; 
-        this.confirmTarget = null; 
-        this.confirmAction = null;
         this.showToastMsg('✅ Job Order deleted!', 'success');
       },
       error: () => {
-        this.allOrders = this.allOrders.filter(o => o.id !== jo.id);
-        this.applyFilters();
-        this.showConfirmModal = false; 
-        this.confirmTarget = null; 
-        this.confirmAction = null;
-        this.showToastMsg('⚠️ Removed locally', 'error');
+        // Restore on error
+        this.loadAllOrders(true);
+        this.showToastMsg('⚠️ Delete failed, restored', 'error');
       }
     });
   }
@@ -2155,6 +2382,8 @@ saveNotificationMapToStorage() {
 
   confirmAssign() {
     if (!this.assignTarget || this.selectedAssignUsers.length === 0) return;
+    
+    const jo = this.assignTarget;
     const headers = { ...this.getAuthHeaders(), 'Content-Type': 'application/json' };
     const assignedNames = this.selectedAssignUsers.map(u => u.fullname || u.username).join(', ');
     
@@ -2164,25 +2393,36 @@ saveNotificationMapToStorage() {
       assigned_names: assignedNames
     };
     
-    if (this.assignTarget.is_forwarded) {
+    // Optimistic update
+    const updates: any = {
+      assigned_names: assignedNames,
+      assigned_users: JSON.stringify(this.selectedAssignUsers.map(u => u.id))
+    };
+    if (jo.is_forwarded) {
+      updates.forwarded_status = 'assigned';
       payload.forwarded_status = 'assigned';
     } else {
+      updates.status = 'assigned';
       payload.status = 'assigned';
     }
+    this.updateLocalOrder(jo.id, updates);
     
-    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${this.assignTarget.id}/status`, payload, { headers }).subscribe({
+    this.closeAssignModal();
+    
+    this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
-        if (this.assignTarget.is_forwarded) {
-          this.assignTarget.forwarded_status = 'assigned';
-        } else {
-          this.assignTarget.status = 'assigned';
-        }
-        this.assignTarget.assigned_names = assignedNames;
-        this.applyFilters();
-        this.closeAssignModal();
         this.showToastMsg('✅ Users assigned successfully!', 'success');
+        setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
-      error: () => this.showToastMsg('⚠️ Failed to assign users', 'error')
+      error: () => {
+        // Revert
+        if (jo.is_forwarded) {
+          this.updateLocalOrder(jo.id, { forwarded_status: 'approved', assigned_names: null });
+        } else {
+          this.updateLocalOrder(jo.id, { status: 'approved', assigned_names: null });
+        }
+        this.showToastMsg('⚠️ Failed to assign users', 'error');
+      }
     });
   }
 
@@ -2192,5 +2432,11 @@ saveNotificationMapToStorage() {
     this.selectedAssignUsers = [];
     this.assignSearchTerm = '';
     this.assignModalPos = { x: 0, y: 0 };
+  }
+  ngOnDestroy() {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    if (this.pollingInterval) clearInterval(this.pollingInterval);
+    document.removeEventListener('mousemove', this.onMouseMove.bind(this));
+    document.removeEventListener('mouseup', this.onMouseUp.bind(this));
   }
 }

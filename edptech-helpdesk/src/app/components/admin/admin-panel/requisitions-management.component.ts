@@ -6,6 +6,7 @@ import { AuthService } from '../../../services/auth.service';
 import { Router, NavigationEnd } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import { NotificationService } from '../../../services/notification.service';
+import { ClientNotificationService } from '../../../services/client-notification.service';
 import { environment } from '../../../../environments/environment';
 import { RouterLink } from '@angular/router';
 @Component({
@@ -74,14 +75,16 @@ import { RouterLink } from '@angular/router';
     <span>🔄</span> Clear
   </button>
 </div>
+<!-- Status Bar with Bulk Actions - UPDATED -->
 <div class="classic-status-bar">
   <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Requests' : '📥 Request Management' }}</strong></span>
   <span class="status-sep">|</span>
   <span>Showing: <strong>{{ filteredReqs.length }}</strong> requisitions</span>
   <span class="status-sep">|</span>
   <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
-  <!-- Bulk Actions -->
-  <ng-container *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
+  
+  <!-- ✅ Bulk Actions - ONLY for authorized users -->
+  <ng-container *ngIf="canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
     <span class="status-sep">|</span>
     <label class="select-all-label">
       <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
@@ -95,14 +98,22 @@ import { RouterLink } from '@angular/router';
     <button class="btn btn-delete" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" (click)="bulkDelete()" style="background: #cc0000; color: white; border-color: #cc0000;">
       🗑️ Delete ({{ selectedReqIds.length }})
     </button>
-</ng-container>
+  </ng-container>
+  
+  <!-- ✅ Message for unauthorized users -->
+  <ng-container *ngIf="!canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
+    <span class="status-sep">|</span>
+    <span class="permission-hint" style="font-size: 9px; color: #888; font-style: italic;">
+      🔒 Bulk actions require Admin, Head/Manager, or Supervisor role
+    </span>
+  </ng-container>
 </div>
 
       <div class="table-container">
         <table class="data-table">
       <thead>
   <tr>
-    <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" style="width:30px;">
+  <th *ngIf="canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" style="width:30px;">
   <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
 </th>
     <th>REQ Code</th>
@@ -120,7 +131,7 @@ import { RouterLink } from '@angular/router';
 
 <tbody>
   <tr *ngFor="let req of filteredReqs" class="clickable-row" (click)="viewDetail(req)">
-  <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" 
+  <td *ngIf="canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected' || activeTab === 'all')" 
     (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
   <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
 </td>
@@ -201,12 +212,11 @@ import { RouterLink } from '@angular/router';
     <button class="action-btn approve" *ngIf="req.status === 'pending'" (click)="receiveReq(req)" title="Accept">✅</button>
     <button class="action-btn forward-btn" *ngIf="req.status === 'approved' && viewMode === 'incoming' && isHeadOrSupervisor()" (click)="openForwardModal(req)" title="Forward">📤</button>
     
-    <!-- Process for approved -->
-    <button class="action-btn process" *ngIf="req.status === 'approved' && !req.is_forwarded" (click)="processReq(req)" title="Process">⚙️</button>
-    
-    <!-- Process for forwarded (only when not yet processed) -->
-    <button class="action-btn process" *ngIf="req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" (click)="processReq(req)" title="Process Forwarded">⚙️</button>
-    
+   <!-- Process for approved -->
+<button class="action-btn process" *ngIf="req.status === 'approved' && !req.is_forwarded" (click)="openProcessConfirm(req)" title="Process">⚙️</button>
+
+<!-- Process for forwarded -->
+<button class="action-btn process" *ngIf="req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" (click)="openProcessConfirm(req)" title="Process Forwarded">⚙️</button>
     <!-- Release for forwarded (after processing) -->
     <button class="action-btn release-btn" *ngIf="req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" (click)="releaseReq(req)" title="Release Forwarded">📦</button>
     
@@ -325,15 +335,20 @@ import { RouterLink } from '@angular/router';
     </div>
     <!-- Approved By -->
     <div class="sig-card">
-      <h5>Form Approved By</h5>
-      <div class="sig-image-container" *ngIf="selectedReq.approved_signature">
-        <img [src]="selectedReq.approved_signature" alt="Approved Signature">
-      </div>
-      <div class="sig-info">
-        <strong>{{ selectedReq.approved_name || '—' }}</strong>
-        <span>{{ formatDate(selectedReq.approved_date) }}</span>
-      </div>
-    </div>
+  <h5>Form Approved By</h5>
+  <div class="sig-image-container" *ngIf="selectedReq.approved_signature">
+    <img [src]="selectedReq.approved_signature" alt="Approved Signature">
+  </div>
+  <!-- ✅ Show placeholder if no signature -->
+  <div class="sig-image-container" *ngIf="!selectedReq.approved_signature" style="border: 1px dashed #ccc;">
+    <span style="font-size: 9px; color: #aaa;">No signature</span>
+  </div>
+  <div class="sig-info">
+    <!-- ✅ Try multiple possible field names -->
+    <strong>{{ selectedReq.approved_name || selectedReq.items_prepared_name || selectedReq.received_name || '—' }}</strong>
+    <span>{{ formatDate(selectedReq.approved_date || selectedReq.items_prepared_date || selectedReq.received_date) }}</span>
+  </div>
+</div>
     <!-- Items Prepared By -->
     <div class="sig-card">
       <h5>Items Prepared By</h5>
@@ -487,6 +502,35 @@ import { RouterLink } from '@angular/router';
         <button class="btn btn-process" style="background: #0a3a8c; color: white;" (click)="confirmForward()" [disabled]="!forwardBranchId || !forwardDepartmentId">
           📤 Forward
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Process Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showProcessConfirm" (click)="cancelProcess()">
+  <div class="modal-window" 
+       id="processReqModal"
+       (click)="$event.stopPropagation()"
+       (mousedown)="startDrag($event, 'processReqModal')">
+    <div class="modal-titlebar" style="background: #cc6600;">
+      <span>⚙️ Process Requisition</span>
+      <button type="button" (click)="cancelProcess()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <div class="warning-message">
+          <h3>Start processing this requisition?</h3>
+          <p>Requisition: <strong>#{{ processTargetReq?.requisition_number }}</strong></p>
+          <p class="resolve-title">"{{ processTargetReq?.prepared_name || 'Unknown' }} - {{ processTargetReq?.request_from || 'N/A' }}"</p>
+          <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
+            This will change the status to <strong>On Process</strong>. The requester will be notified.
+          </p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" (click)="cancelProcess()">Cancel</button>
+        <button class="btn btn-process" style="background: #cc6600; color: white;" (click)="confirmProcess()">⚙️ Start Processing</button>
       </div>
     </div>
   </div>
@@ -892,6 +936,17 @@ import { RouterLink } from '@angular/router';
   background: rgba(255,0,0,0.7); 
   color: white;
 }
+  .resolve-title { 
+  font-style: italic; 
+  color: #555; 
+  margin: 4px 0; 
+  font-size: 11px; 
+  padding: 4px 8px; 
+  background: #f5f5f5; 
+  border-radius: 2px; 
+  border-left: 3px solid #ccc; 
+  word-break: break-word; 
+}
   .toast-notification.warning { background: #cc6600; }
     .warning-content { display: flex; gap: 14px; align-items: flex-start; }
     .warning-icon { font-size: 36px; flex-shrink: 0; }
@@ -932,6 +987,8 @@ filters = {
   departmentId: '',
   branchId: ''
 };
+showProcessConfirm = false;
+processTargetReq: any = null;
 // ✅ Persist seen IDs to localStorage so they survive page reloads
 private get seenReqIds(): Set<number> {
   const stored = localStorage.getItem('reqMgmt_seenIds');
@@ -962,29 +1019,168 @@ filteredBranches: any[] = [];
 filteredFilterDepartments: any[] = [];
 departments: any[] = [];
 mainBranchIds = [1, 5];
-  constructor(
+  // ✅ CACHING PROPERTIES
+  private requisitionsCache: {
+    data: any[];
+    timestamp: number;
+    currentUserId: number;
+    currentUserBranchId: number;
+    currentUserDeptId: number;
+  } | null = null;
+  
+  private readonly CACHE_DURATION_MS = 30000; // 30 seconds cache
+  private readonly STALE_DURATION_MS = 60000; // 1 minute before forcing refresh
+  private readonly POLLING_INTERVAL = 30000; // Poll every 30 seconds
+  private isFetching = false;
+  private lastRequestSignature: string = '';
+  private pollingInterval: any;
+   constructor(
     private http: HttpClient,
     private authService: AuthService,
     private router: Router,
-    private notificationService: NotificationService
-  ) {
+    private notificationService: NotificationService,
+    private clientNotificationService: ClientNotificationService  // ✅ ADD THIS
+) {
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe(() => {
       if (this.router.url.includes('/requisitions')) {
-        this.loadAll();
+        this.loadAll(true); // ✅ Use cache when navigating back
       }
     });
   }
 
  ngOnInit() {
-   console.log('🔴🔴🔴 ADMIN FORM LOADED - URL:', this.router.url);
-  this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-  this.loadBranchesAndDepartments(); 
-   this.loadUserRoles();
-  this.loadAll();
-   document.addEventListener('mousemove', this.onDragMove.bind(this));
-  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    console.log('🔴🔴🔴 ADMIN FORM LOADED - URL:', this.router.url);
+    this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    this.loadBranchesAndDepartments(); 
+    this.loadUserRoles();
+    this.loadAll();
+    
+    document.addEventListener('mousemove', this.onDragMove.bind(this));
+    document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    
+    // ✅ Smart polling - only fetch when cache is stale
+    this.pollingInterval = setInterval(() => {
+      if (this.isCacheStale() && !this.isFetching) {
+        this.loadAll(false);
+      }
+    }, this.POLLING_INTERVAL);
+  }
+  ngOnDestroy() {
+    if (this.pollingInterval) clearInterval(this.pollingInterval);
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    document.removeEventListener('mousemove', this.onDragMove.bind(this));
+    document.removeEventListener('mouseup', this.onDragEnd.bind(this));
+  }
+    private getRequestSignature(): string {
+    return `admin_req_${this.currentUser?.id}_${this.currentUser?.branch_id}_${this.currentUser?.department_id}_${this.viewMode}_${this.activeTab}`;
+  }
+
+  // ✅ Check if cache is still valid
+  private isCacheValid(): boolean {
+    if (!this.requisitionsCache) return false;
+    if (!this.requisitionsCache.data || this.requisitionsCache.data.length === 0) return false;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    if (cacheAge < this.CACHE_DURATION_MS) {
+      if (this.requisitionsCache.currentUserId === this.currentUser?.id) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  // ✅ Check if cache is stale
+  private isCacheStale(): boolean {
+    if (!this.requisitionsCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    return cacheAge >= this.CACHE_DURATION_MS || 
+           this.requisitionsCache.currentUserId !== this.currentUser?.id;
+  }
+
+  // ✅ Check if cache is expired
+  private isCacheExpired(): boolean {
+    if (!this.requisitionsCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    return cacheAge >= this.STALE_DURATION_MS || 
+           this.requisitionsCache.currentUserId !== this.currentUser?.id;
+  }
+
+  // ✅ Update cache with fresh data
+  private updateCache(data: any[]): void {
+    this.requisitionsCache = {
+      data: data,
+      timestamp: Date.now(),
+      currentUserId: this.currentUser?.id,
+      currentUserBranchId: this.currentUser?.branch_id,
+      currentUserDeptId: this.currentUser?.department_id
+    };
+    
+    // Save to sessionStorage
+    try {
+      sessionStorage.setItem('admin_req_cache', JSON.stringify({
+        data: data.slice(0, 100),
+        timestamp: Date.now(),
+        userId: this.currentUser?.id
+      }));
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+ // ✅ Load from sessionStorage as fallback
+  private loadFromSessionStorage(): any[] | null {
+    try {
+      const cached = sessionStorage.getItem('admin_req_cache');
+      if (!cached) return null;
+      
+      const parsed = JSON.parse(cached);
+      const cacheAge = Date.now() - parsed.timestamp;
+      
+      if (cacheAge < 300000 && parsed.userId === this.currentUser?.id) {
+        console.log('📦 Using admin sessionStorage cache, age:', Math.round(cacheAge / 1000), 's');
+        return parsed.data;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return null;
+  }
+
+  // ✅ Clear all caches
+  private clearCache(): void {
+    this.requisitionsCache = null;
+    try {
+      sessionStorage.removeItem('admin_req_cache');
+    } catch (e) {
+      // Ignore
+    }
+  }
+// Add these methods:
+openProcessConfirm(req: any) {
+  this.processTargetReq = req;
+  this.showProcessConfirm = true;
+}
+
+cancelProcess() {
+  this.showProcessConfirm = false;
+  this.processTargetReq = null;
+}
+
+confirmProcess() {
+  if (!this.processTargetReq) return;
+  this.showProcessConfirm = false;
+  this.processReq(this.processTargetReq);
+  this.processTargetReq = null;
 }
 startDrag(event: MouseEvent, modalId: string) {
   const target = event.target as HTMLElement;
@@ -1029,20 +1225,134 @@ onDragEnd() {
     return { 'Authorization': `Bearer ${token}` };
   }
 
- loadAll() {
-    // ✅ Don't clear seenReqIds here - only clear when switching views
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { headers: this.getAuthHeaders() }).subscribe({
-      next: (data) => { this.allReqs = Array.isArray(data) ? data : []; this.applyFilters(); },
-      error: () => this.showToastMsg('Failed to load requisitions', 'error')
+  loadAll(useCacheIfAvailable: boolean = false): void {
+    // Check if we can use cache
+    if (useCacheIfAvailable && this.isCacheValid()) {
+      console.log('📦 Admin: Using valid cache, age:', 
+        Math.round((Date.now() - this.requisitionsCache!.timestamp) / 1000), 's');
+      this.allReqs = this.requisitionsCache!.data;
+      this.applyFilters();
+      return;
+    }
+    
+    // Stale cache: return cached data immediately, refresh in background
+    if (!useCacheIfAvailable && this.requisitionsCache && this.requisitionsCache.data.length > 0 && !this.isCacheExpired()) {
+      console.log('📦 Admin: Using stale cache (background refresh)');
+      this.allReqs = this.requisitionsCache.data;
+      this.applyFilters();
+      this.fetchRequisitionsInBackground();
+      return;
+    }
+    
+    // Try sessionStorage as last resort
+    if (!useCacheIfAvailable && !this.isFetching) {
+      const sessionData = this.loadFromSessionStorage();
+      if (sessionData && sessionData.length > 0) {
+        console.log('📦 Admin: Using sessionStorage cache while fetching');
+        this.allReqs = sessionData;
+        this.applyFilters();
+      }
+    }
+    
+    // Fetch fresh data
+    this.fetchRequisitionsFromServer();
+  }
+   // ✅ Fetch requisitions from server (deduplicated)
+  private fetchRequisitionsFromServer(): void {
+    const currentSignature = this.getRequestSignature();
+    
+    // Deduplication: skip if already fetching
+    if (this.isFetching) {
+      console.log('⏭️ Admin: Already fetching, skipping');
+      return;
+    }
+    
+    // Skip duplicate requests within 2 seconds
+    if (currentSignature === this.lastRequestSignature && 
+        this.requisitionsCache && 
+        (Date.now() - this.requisitionsCache.timestamp) < 2000) {
+      console.log('⏭️ Admin: Duplicate request skipped (within 2s)');
+      return;
+    }
+    
+    this.lastRequestSignature = currentSignature;
+    this.isFetching = true;
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { 
+      headers: this.getAuthHeaders() 
+    }).subscribe({
+      next: (data) => { 
+        let allReqs = Array.isArray(data) ? data : [];
+        
+        // Update cache
+        this.updateCache(allReqs);
+        
+        this.allReqs = allReqs;
+        this.applyFilters();
+        this.isFetching = false;
+      },
+      error: (err) => {
+        console.error('Failed to load requisitions:', err);
+        
+        // Use cache on error
+        if (this.requisitionsCache && this.requisitionsCache.data.length > 0) {
+          console.log('⚠️ Admin: Using cached data after error');
+          this.allReqs = this.requisitionsCache.data;
+          this.applyFilters();
+        }
+        
+        this.isFetching = false;
+        this.showToastMsg('Failed to load requisitions', 'error');
+      }
     });
-}
+  }
+   // ✅ Fetch in background without showing errors
+  private fetchRequisitionsInBackground(): void {
+    if (this.isFetching) return;
+    
+    this.isFetching = true;
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { 
+      headers: this.getAuthHeaders() 
+    }).subscribe({
+      next: (data) => { 
+        let allReqs = Array.isArray(data) ? data : [];
+        this.updateCache(allReqs);
+        this.allReqs = allReqs;
+        this.applyFilters();
+        this.isFetching = false;
+      },
+      error: () => {
+        this.isFetching = false;
+      }
+    });
+  }
+  // ✅ Override status-changing methods to update cache
+  private updateLocalRequisition(reqId: number, updates: Partial<any>): void {
+    const index = this.allReqs.findIndex(r => r.id === reqId);
+    if (index !== -1) {
+      this.allReqs[index] = { ...this.allReqs[index], ...updates };
+    }
+    
+    if (this.requisitionsCache) {
+      const cacheIndex = this.requisitionsCache.data.findIndex(r => r.id === reqId);
+      if (cacheIndex !== -1) {
+        this.requisitionsCache.data[cacheIndex] = { 
+          ...this.requisitionsCache.data[cacheIndex], 
+          ...updates 
+        };
+      }
+    }
+    
+    this.applyFilters();
+  }
 // setViewMode method
-setViewMode(mode: string) {
+ setViewMode(mode: string) {
     this.viewMode = mode;
     this.activeTab = 'pending';
     this.selectedReqIds = [];
     
-    // ✅ Mark all current notifications as "seen" for this view (persisted to localStorage)
+    // Mark all current notifications as "seen"
     const idsToMark: number[] = [];
     
     if (mode === 'our') {
@@ -1071,11 +1381,10 @@ setViewMode(mode: string) {
       });
     }
     
-    // ✅ Persist to localStorage via the helper
     this.addSeenReqIds(idsToMark);
-    
     this.applyFilters();
-}
+  }
+  
 applyFilters() {
     let filtered = [...this.allReqs];
     
@@ -1302,17 +1611,57 @@ getDepartmentName(deptId: number): string {
   confirmBulkProcess() {
     this.showBulkProcessConfirm = false;
     if (this.bulkCount === 0) return;
+    
+    const ids = [...this.selectedReqIds];
+    
+    // Optimistic update
+    ids.forEach(id => this.updateLocalRequisition(id, { status: 'processing' }));
+    this.selectedReqIds = [];
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const ids = [...this.selectedReqIds];
+    
     let completed = 0;
     ids.forEach(id => {
-      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, { status: 'processing' }, { headers }).subscribe({
-        next: () => { completed++; if (completed === ids.length) { this.selectedReqIds = []; this.loadAll(); this.showToastMsg(`⚙️ ${ids.length} processed!`, 'success'); } },
-        error: () => { completed++; const r = this.allReqs.find(x => x.id === id); if (r) r.status = 'processing'; if (completed === ids.length) { this.applyFilters(); this.selectedReqIds = []; } }
+      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, 
+        { status: 'processing' }, { headers }
+      ).subscribe({
+        next: () => { 
+          completed++; 
+          if (completed === ids.length) { 
+            this.showToastMsg(`⚙️ ${ids.length} processed!`, 'success'); 
+            setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+          } 
+        },
+        error: () => { 
+          completed++; 
+          this.updateLocalRequisition(id, { status: 'approved' });
+          if (completed === ids.length) { 
+            this.showToastMsg('⚠️ Some updates may have failed', 'warning');
+          } 
+        }
       });
     });
   }
+/**
+ * ✅ Check if current user can perform bulk actions
+ * Only Admin, Head/Manager, Supervisor, and Branch Manager can use bulk actions
+ */
+canPerformBulkActions(): boolean {
+  if (!this.currentUser) return false;
+  
+  const role = (this.currentUser.role || '').toLowerCase();
+  const allowedRoles = ['admin', 'head/manager', 'supervisor', 'branch manager'];
+  
+  return allowedRoles.includes(role);
+}
+/**
+ * ✅ Check if current user can see select all checkbox (same as bulk actions)
+ */
+canSelectAll(): boolean {
+  return this.canPerformBulkActions();
+}
+
   cancelBulkProcess() { this.showBulkProcessConfirm = false; this.bulkCount = 0; }
 
   bulkRelease() {
@@ -1320,18 +1669,41 @@ getDepartmentName(deptId: number): string {
     this.bulkCount = this.selectedReqIds.length;
     this.showBulkReleaseConfirm = true;
   }
-  confirmBulkRelease() {
+ confirmBulkRelease() {
     this.showBulkReleaseConfirm = false;
     if (this.bulkCount === 0) return;
+    
+    const ids = [...this.selectedReqIds];
+    const payload = { 
+      status: 'released', 
+      released_name: this.currentUser?.fullname || 'Admin', 
+      released_date: new Date().toISOString().split('T')[0] 
+    };
+    
+    // Optimistic update
+    ids.forEach(id => this.updateLocalRequisition(id, payload));
+    this.selectedReqIds = [];
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const payload = { status: 'released', released_name: this.currentUser?.fullname || 'Admin', released_date: new Date().toISOString().split('T')[0] };
-    const ids = [...this.selectedReqIds];
+    
     let completed = 0;
     ids.forEach(id => {
       this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, payload, { headers }).subscribe({
-        next: () => { completed++; if (completed === ids.length) { this.selectedReqIds = []; this.loadAll(); this.showToastMsg(`📦 ${ids.length} released!`, 'success'); } },
-        error: () => { completed++; const r = this.allReqs.find(x => x.id === id); if (r) { r.status = 'released'; r.released_name = payload.released_name; } if (completed === ids.length) { this.applyFilters(); this.selectedReqIds = []; } }
+        next: () => { 
+          completed++; 
+          if (completed === ids.length) { 
+            this.showToastMsg(`📦 ${ids.length} released!`, 'success'); 
+            setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+          } 
+        },
+        error: () => { 
+          completed++; 
+          this.updateLocalRequisition(id, { status: 'processing' });
+          if (completed === ids.length) { 
+            this.showToastMsg('⚠️ Some updates may have failed', 'warning');
+          } 
+        }
       });
     });
   }
@@ -1355,9 +1727,36 @@ canDelete(req: any): boolean {
 }
 
 isHeadOrSupervisor(): boolean {
-    if (!this.currentUser) return false;
-    const role = (this.currentUser.role || '').toLowerCase();
-    return role === 'head/manager' || role === 'branch manager';
+  if (!this.currentUser) return false;
+  const role = (this.currentUser.role || '').toLowerCase();
+  return role === 'admin' || role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+}
+canPerformAction(req: any, action: string): boolean {
+  if (!this.currentUser) return false;
+  
+  const role = (this.currentUser.role || '').toLowerCase();
+  const isAdmin = role === 'admin';
+  const isHeadOrSupervisor = role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+  
+  // Admins can do everything
+  if (isAdmin) return true;
+  
+  // Head/Manager/Supervisor can perform actions in their department
+  if (isHeadOrSupervisor) {
+    const userBranchId = this.currentUser.branch_id;
+    const userDeptId = this.currentUser.department_id;
+    
+    // Check if request is relevant to their department
+    const isSameDept = req.branch_id == userBranchId && req.department_id == userDeptId;
+    const isForwardedToUs = req.is_forwarded && 
+      req.forwarded_to_branch_id == userBranchId && 
+      req.forwarded_to_department_id == userDeptId;
+    
+    if (isSameDept || isForwardedToUs) return true;
+  }
+  
+  // Staff and Technicians cannot perform any actions
+  return false;
 }
 get ourNotificationCount(): number {
   return this.allReqs.filter(r => {
@@ -1431,45 +1830,68 @@ get incomingNotificationCount(): number {
     return false;
   }).length;
 }
-processReq(req: any) {
+ processReq(req: any) {
+    const isForwarded = req.is_forwarded;
+    const userName = this.currentUser?.fullname || 'Admin';
+    
+    // Optimistic update
+    if (isForwarded) {
+      this.updateLocalRequisition(req.id, { forwarded_status: 'processing' });
+    } else {
+      this.updateLocalRequisition(req.id, { status: 'processing' });
+    }
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'processing' }, { headers }).subscribe({
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, 
+      { status: 'processing' }, { headers }
+    ).subscribe({
       next: () => { 
-        if (req.is_forwarded) {
-          req.forwarded_status = 'processing';
-          // ✅ Notify about forwarded requisition being processed
+        this.showToastMsg('⚙️ Processing!', 'success');
+        
+        if (isForwarded) {
+          // ✅ ADMIN SIDE
           this.notificationService.handleRequisitionForwardedProcessed(
-            req,
-            this.currentUser?.fullname || 'Admin',
-            req.submitted_by
+            req, userName, req.submitted_by
+          );
+          // ✅ CLIENT SIDE - notify the forwarding department
+          this.clientNotificationService.handleRequisitionForwardedProcessed(
+            req, userName, req.branch_id, req.department_id
           );
         } else {
-          req.status = 'processing';
-          // ✅ Notify about normal requisition being processed
+          // ✅ ADMIN SIDE
           this.notificationService.handleRequisitionProcessed(
-            req,
-            this.currentUser?.fullname || 'Admin',
-            req.submitted_by
+            req, userName, req.submitted_by
+          );
+          // ✅ CLIENT SIDE - notify the creator
+          this.clientNotificationService.handleRequisitionProcessed(
+            req, userName, this.currentUser?.branch_id, this.currentUser?.department_id
           );
         }
-        this.applyFilters(); 
-        this.showToastMsg('⚙️ Processing!', 'success'); 
+        
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
       },
       error: () => { 
-        if (req.is_forwarded) {
-          req.forwarded_status = 'processing';
+        if (isForwarded) {
+          this.updateLocalRequisition(req.id, { forwarded_status: null });
         } else {
-          req.status = 'processing';
+          this.updateLocalRequisition(req.id, { status: 'approved' });
         }
-        this.applyFilters(); 
+        this.showToastMsg('⚠️ Failed to process', 'error');
       }
     });
 }
 getColspan(): number {
-  let cols = 10; // Base columns (added forwarded column)
-  if (this.viewMode === 'incoming' && (this.activeTab === 'approved' || this.activeTab === 'forwarded' || this.activeTab === 'processing' || this.activeTab === 'released' || this.activeTab === 'rejected' || this.activeTab === 'all')) cols++;
+  let cols = 10; // Base columns (with forwarded column)
+  // Only add checkbox column if user can perform bulk actions
+  if (this.canPerformBulkActions() && 
+      this.viewMode === 'incoming' && 
+      (this.activeTab === 'approved' || this.activeTab === 'forwarded' || 
+       this.activeTab === 'processing' || this.activeTab === 'released' || 
+       this.activeTab === 'rejected' || this.activeTab === 'all')) {
+    cols++;
+  }
   return cols;
 }
 
@@ -1599,43 +2021,52 @@ onForwardBranchChange() {
   this.forwardDepartmentId = null;
 }
 confirmForward() {
-  if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
-  const originalBranchId = this.forwardTargetReq.branch_id;
-  const originalDeptId = this.forwardTargetReq.department_id;
-  if (this.forwardBranchId == originalBranchId && this.forwardDepartmentId == originalDeptId) {
-    this.showToastMsg('⚠️ Cannot forward to the original department!', 'warning');
-    return;
-  }
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  const payload = {
-    forwarded_to_branch_id: this.forwardBranchId,
-    forwarded_to_department_id: this.forwardDepartmentId,
-    forwarded_by_name: this.currentUser.fullname || this.currentUser.username
-  };
-  
-  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
-    next: () => {
-      const toBranchName = this.getBranchName(this.forwardBranchId!) || 'Unknown';
-      const toDeptName = this.getDepartmentName(this.forwardDepartmentId!) || 'Unknown';
-      this.notificationService.handleRequisitionForwarded(
-        this.forwardTargetReq,
-        this.currentUser.fullname || this.currentUser.username,
-        toBranchName,
-        toDeptName,
-        this.forwardTargetReq.submitted_by
-      );
-      this.showToastMsg('📤 Requisition forwarded!', 'success');
-      this.cancelForward();
-      this.loadAll();
-    },
-    error: (err) => {
-      console.error('Forward failed:', err);
-      this.cancelForward();
-      this.showToastMsg('⚠️ Failed to forward', 'warning');
-    }
-  });
+    if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
+    
+    const req = this.forwardTargetReq;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const toBranchName = this.getBranchName(this.forwardBranchId!) || 'Unknown';
+    const toDeptName = this.getDepartmentName(this.forwardDepartmentId!) || 'Unknown';
+    
+    const payload = {
+      forwarded_to_branch_id: this.forwardBranchId,
+      forwarded_to_department_id: this.forwardDepartmentId,
+      forwarded_by_name: userName
+    };
+    
+    this.updateLocalRequisition(req.id, {
+      is_forwarded: true,
+      status: 'forwarded',
+      ...payload
+    });
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/forward`, payload, { headers }).subscribe({
+      next: () => {
+        // ✅ ADMIN SIDE
+        this.notificationService.handleRequisitionForwarded(
+          req, userName, toBranchName, toDeptName, req.submitted_by
+        );
+        
+        // ✅ CLIENT SIDE
+        this.clientNotificationService.handleRequisitionForwarded(
+          req, userName, this.forwardBranchId!, this.forwardDepartmentId!,
+          toBranchName, toDeptName
+        );
+        
+        this.showToastMsg('📤 Requisition forwarded!', 'success');
+        this.cancelForward();
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+      },
+      error: (err) => {
+        console.error('Forward failed:', err);
+        this.updateLocalRequisition(req.id, { status: 'approved', is_forwarded: false });
+        this.cancelForward();
+        this.showToastMsg('⚠️ Failed to forward', 'warning');
+      }
+    });
 }
 
 bulkDelete() {
@@ -1693,34 +2124,48 @@ processBulkDelete() {
   cancelConfirm() { this.closeConfirmModal(); }
   closeConfirmModal() { this.showConfirmModal = false; this.confirmTargetReq = null; }
 
-  processReceive(req: any) {
+ processReceive(req: any) {
+    const userName = this.authService.getCurrentUser()?.fullname || 'Admin';
     const payload = {
       status: 'approved',
-      approved_name: this.authService.getCurrentUser()?.fullname || 'Admin',
+      approved_name: userName,
       approved_date: new Date().toISOString().split('T')[0]
     };
+    
+    this.updateLocalRequisition(req.id, payload);
+    
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
       next: () => {
-        req.status = 'approved';
-        req.approved_name = payload.approved_name;
-        req.approved_date = payload.approved_date;
-        this.applyFilters();
         this.showToastMsg('✅ Requisition received!', 'success');
         
-        // Safely call notification
+        // ✅ ADMIN SIDE
         if (this.notificationService.handleRequisitionReceived) {
           this.notificationService.handleRequisitionReceived(
             { id: req.id, requisition_number: req.requisition_number },
-            payload.approved_name,
+            userName,
             req.submitted_by
           );
         }
+        
+        // ✅ CLIENT SIDE - notify the creator
+        this.clientNotificationService.handleRequisitionReceived(
+          { id: req.id, requisition_number: req.requisition_number, submitted_by: req.submitted_by },
+          userName,
+          req.branch_id,
+          req.department_id
+        );
+        
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
       },
-      error: () => { req.status = 'approved'; this.applyFilters(); this.showToastMsg('⚠️ Updated locally', 'error'); }
+      error: () => {
+        this.updateLocalRequisition(req.id, { status: 'pending' });
+        this.showToastMsg('⚠️ Failed to receive', 'error');
+      }
     });
 }
+
 editReq(req: any) {
   this.router.navigate(['/requisitions/edit'], { 
     queryParams: { id: req.id } 
@@ -1728,61 +2173,62 @@ editReq(req: any) {
 }
   // ✅ NEW: Process release
  processRelease(req: any) {
+    const userName = this.authService.getCurrentUser()?.fullname || 'Admin';
     const payload: any = {
       status: 'released',
-      released_name: this.authService.getCurrentUser()?.fullname || 'Admin',
+      released_name: userName,
       released_date: new Date().toISOString().split('T')[0]
     };
+    
+    const isForwarded = req.is_forwarded;
+    const isFinalRelease = isForwarded && req.forwarded_status === 'released';
+    
+    if (isForwarded && !isFinalRelease) {
+      this.updateLocalRequisition(req.id, { forwarded_status: 'released' });
+    } else {
+      this.updateLocalRequisition(req.id, { status: 'released', ...payload });
+    }
+    
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
       next: () => {
-        if (req.is_forwarded) {
-          // Check if this is the FINAL release (from forwarding dept) or recipient release
-          const isFinalRelease = req.forwarded_status === 'released';
-          
+        this.showToastMsg('📦 Requisition released!', 'success');
+        
+        if (isForwarded) {
           if (isFinalRelease) {
-            req.status = 'released';
-            // ✅ Notify - final release completed
-            this.notificationService.handleRequisitionFinalReleased(
-              req,
-              this.currentUser?.fullname || 'Admin',
-              req.submitted_by
-            );
+            // ✅ ADMIN SIDE
+            this.notificationService.handleRequisitionFinalReleased(req, userName, req.submitted_by);
+            // ✅ CLIENT SIDE
+            this.clientNotificationService.handleRequisitionFinalReleased(req, userName);
           } else {
-            req.forwarded_status = 'released';
-            // ✅ Notify - forwarded request released by recipient
-            this.notificationService.handleRequisitionForwardedReleased(
-              req,
-              this.currentUser?.fullname || 'Admin',
-              req.submitted_by
+            // ✅ ADMIN SIDE
+            this.notificationService.handleRequisitionForwardedReleased(req, userName, req.submitted_by);
+            // ✅ CLIENT SIDE
+            this.clientNotificationService.handleRequisitionForwardedReleased(
+              req, userName, req.branch_id, req.department_id
             );
           }
         } else {
-          req.status = 'released';
-          // ✅ Notify - normal request released
-          this.notificationService.handleRequisitionReleased(
-            req,
-            this.currentUser?.fullname || 'Admin',
-            req.submitted_by
-          );
+          // ✅ ADMIN SIDE
+          this.notificationService.handleRequisitionReleased(req, userName, req.submitted_by);
+          // ✅ CLIENT SIDE
+          this.clientNotificationService.handleRequisitionReleased(req, userName);
         }
-        req.released_name = payload.released_name;
-        req.released_date = payload.released_date;
-        this.applyFilters();
-        this.showToastMsg('📦 Requisition released!', 'success');
+        
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
       },
       error: () => { 
-        if (req.is_forwarded) {
-          req.forwarded_status = 'released';
+        if (isForwarded && !isFinalRelease) {
+          this.updateLocalRequisition(req.id, { forwarded_status: 'processing' });
         } else {
-          req.status = 'released';
+          this.updateLocalRequisition(req.id, { status: 'processing' });
         }
-        this.applyFilters(); 
-        this.showToastMsg('⚠️ Updated locally', 'error'); 
+        this.showToastMsg('⚠️ Failed to release', 'error'); 
       }
     });
 }
+
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
   const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
@@ -1794,29 +2240,61 @@ getBranchName(branchId: number): string {
   const branch = this.branches.find(b => b.id == branchId);
   return branch?.name || 'Branch #' + branchId;
 }
-  processReject(req: any) {
-    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, { status: 'rejected' }, {
+ processReject(req: any) {
+    const userName = this.authService.getCurrentUser()?.fullname || 'Admin';
+    
+    this.updateLocalRequisition(req.id, { status: 'rejected' });
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, 
+      { status: 'rejected' }, {
       headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
       next: () => {
-        req.status = 'rejected';
-        this.applyFilters();
         this.showToastMsg('❌ Requisition rejected!', 'success');
-        this.loadAll();
+        
+        // ✅ ADMIN SIDE
         this.notificationService.handleRequisitionRejected(
           { id: req.id, requisition_number: req.requisition_number },
-          this.authService.getCurrentUser()?.fullname || 'Admin',
+          userName,
           req.submitted_by
         );
+        
+        // ✅ CLIENT SIDE - notify the creator
+        this.clientNotificationService.handleRequisitionRejected(
+          { id: req.id, requisition_number: req.requisition_number, submitted_by: req.submitted_by },
+          userName
+        );
+        
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
       },
-      error: () => { req.status = 'rejected'; this.applyFilters(); this.showToastMsg('Updated locally', 'success'); }
+      error: () => {
+        this.updateLocalRequisition(req.id, { status: 'pending' });
+        this.showToastMsg('⚠️ Failed to reject', 'error');
+      }
     });
-  }
+}
 
   processDelete(req: any) {
-    this.http.delete(`${environment.apiUrl}/api/admin/requisitions/${req.id}`, { headers: this.getAuthHeaders() }).subscribe({
-      next: () => { this.allReqs = this.allReqs.filter(r => r.id !== req.id); this.applyFilters(); this.showToastMsg('🗑️ Requisition deleted!', 'success'); this.loadAll(); },
-      error: () => { this.allReqs = this.allReqs.filter(r => r.id !== req.id); this.applyFilters(); this.showToastMsg('Deleted locally', 'error'); }
+    const reqId = req.id;
+    
+    // Optimistic delete
+    this.allReqs = this.allReqs.filter(r => r.id !== reqId);
+    if (this.requisitionsCache) {
+      this.requisitionsCache.data = this.requisitionsCache.data.filter(r => r.id !== reqId);
+    }
+    this.applyFilters();
+    
+    this.http.delete(`${environment.apiUrl}/api/admin/requisitions/${reqId}`, { 
+      headers: this.getAuthHeaders() 
+    }).subscribe({
+      next: () => {
+        this.showToastMsg('🗑️ Requisition deleted!', 'success');
+      },
+      error: () => {
+        // Restore on error
+        this.loadAll(true);
+        this.showToastMsg('⚠️ Delete failed, restored', 'error');
+      }
     });
   }
  printReq(req: any) {
@@ -1826,14 +2304,29 @@ getBranchName(branchId: number): string {
       return;
     }
 
+    // ✅ FIXED: Timezone-safe date formatter
     const fmtDate = (val: any) => {
       if (!val) return '—';
-      try { 
+      try {
+        // Return MySQL DATE strings directly
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+          return val;
+        }
+        // Extract date from ISO/timestamp strings
+        if (typeof val === 'string' && (val.includes('T') || val.includes(' '))) {
+          const datePart = val.split('T')[0].split(' ')[0];
+          if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return datePart;
+        }
+        // Parse with UTC methods
         const d = new Date(val); 
         if (isNaN(d.getTime())) return String(val);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; 
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      } catch { 
+        return String(val); 
       }
-      catch { return String(val); }
     };
     
     const getTotal = (items: any[]) => items?.reduce((s: number, i: any) => s + ((Number(i.qty)||0)*(Number(i.unit_price)||0)), 0) || 0;
@@ -1936,13 +2429,36 @@ getBranchName(branchId: number): string {
     printWindow.focus();
   }
 
-  formatDate(val: any): string {
-  if (!val) return '—';
-  try { 
-    const d = new Date(val); 
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; 
-  }
-  catch { return String(val); }
+formatDate(val: any): string {
+    if (!val) return '—';
+    try {
+        // ✅ If it's already in YYYY-MM-DD format (MySQL DATE type), return directly
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            return val;
+        }
+        
+        // ✅ If it contains ISO timestamp, extract just the date portion
+        if (typeof val === 'string' && val.includes('T')) {
+            return val.split('T')[0];
+        }
+        
+        // ✅ For datetime strings like "2025-07-27 00:00:00", extract date
+        if (typeof val === 'string' && val.includes(' ')) {
+            return val.split(' ')[0];
+        }
+        
+        // Fallback: parse with UTC methods to avoid timezone shift
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return String(val);
+        
+        // ✅ Use UTC methods to avoid browser timezone offset
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch {
+        return String(val);
+    }
 }
 
 showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {

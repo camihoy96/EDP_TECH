@@ -6,6 +6,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { ActivatedRoute } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
+import { ClientNotificationService } from '../../services/client-notification.service';
 import { environment } from '../../../environments/environment';
 
 @Component({
@@ -678,7 +679,8 @@ sigModalDragStart = { x: 0, y: 0 };
     private http: HttpClient,
     private authService: AuthService,
     private route: ActivatedRoute,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private clientNotificationService: ClientNotificationService  // ✅ ADD THIS
   ) {}
 ngOnInit() {
     // Load admin users for the ATTN dropdown (always)
@@ -946,22 +948,22 @@ if (currentUser && data.submitted_by !== currentUser.id) {
         const savedDeptId = data.department_id || null;
         
         // ✅ Update reqData with ALL loaded values
-        this.reqData = {
-          request_from: data.request_from || '',
-          attn: data.attn || '',
-          department_id: savedDeptId,
-          date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
-          remarks: data.remarks || '',
-          prepared_name: data.prepared_name || '',
-          prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
-          approved_name: data.approved_name || '',
-          approved_date: this.parseDate(data.approved_date) || '',
-          items_prepared_name: data.items_prepared_name || '',
-          items_prepared_date: this.parseDate(data.items_prepared_date) || '',
-          returned_name: data.returned_name || '',
-          returned_date: this.parseDate(data.returned_date) || ''
-        };
-        
+       this.reqData = {
+    request_from: data.request_from || '',
+    attn: data.attn || '',
+    department_id: savedDeptId,
+    // ✅ Don't fall back to new Date() - preserve original or leave empty
+    date: this.parseDate(data.date) || data.date || '',
+    remarks: data.remarks || '',
+    prepared_name: data.prepared_name || '',
+    prepared_date: this.parseDate(data.prepared_date) || data.prepared_date || '',
+    approved_name: data.approved_name || '',
+    approved_date: this.parseDate(data.approved_date) || data.approved_date || '',
+    items_prepared_name: data.items_prepared_name || '',
+    items_prepared_date: this.parseDate(data.items_prepared_date) || data.items_prepared_date || '',
+    returned_name: data.returned_name || '',
+    returned_date: this.parseDate(data.returned_date) || data.returned_date || ''
+};
         // Load items
         this.items = data.items || [];
         
@@ -1116,17 +1118,43 @@ if (currentUser && data.submitted_by !== currentUser.id) {
       }
     });
   }
-  private parseDate(val: any): string {
+private parseDate(val: any): string {
     if (!val) return '';
     try {
-      const d = new Date(val);
-      if (isNaN(d.getTime())) return '';
-      return d.toISOString().split('T')[0];
+        // ✅ If already in YYYY-MM-DD format (MySQL DATE), return directly
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            return val;
+        }
+        
+        // ✅ If it's an ISO string with time, extract date portion
+        if (typeof val === 'string' && val.includes('T')) {
+            const datePart = val.split('T')[0];
+            if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+                return datePart;
+            }
+        }
+        
+        // ✅ If it's a datetime string like "2025-07-27 00:00:00"
+        if (typeof val === 'string' && val.includes(' ')) {
+            const datePart = val.split(' ')[0];
+            if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+                return datePart;
+            }
+        }
+        
+        // Fallback: parse with UTC to avoid timezone shift
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return '';
+        
+        // ✅ Use UTC methods to avoid browser timezone issues
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     } catch {
-      return '';
+        return '';
     }
-  }
-
+}
  generateReqNumber(): string {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
@@ -1375,185 +1403,180 @@ stopSigModalDrag() {
   this.isDraggingSigModal = false;
 }
 submitRequisition() {
-    // Approval mode - only validate items prepared by
+    // ✅ APPROVAL MODE - FIX THE PAYLOAD
     if (this.approvalMode) {
-  if (!this.reqData.items_prepared_name) {
-    this.showToastMsg('Please fill in Items Requested By name.', 'warning');
-    return;
-  }
-  if (!this.itemsPreparedSignature) {
-    alert('Please provide Items Requested By signature.');
-    return;
-  }
-  
-  this.submitting = true;
-  const payload: any = {
-    status: 'approved',
-    items: this.items,
-    items_prepared_name: this.reqData.items_prepared_name,
-    items_prepared_date: this.reqData.items_prepared_date,
-    items_prepared_signature: this.itemsPreparedSignature
-  };
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  // ✅ Use the status update endpoint instead of the admin approve endpoint
-  // This works for both admin and non-admin users who are recipients
-  const url = `${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/status`;
-  
-  console.log('📥 Accepting requisition:', this.editReqId, payload);
-  
-  this.http.put(url, payload, { headers }).subscribe({
-    next: (response: any) => {
-      console.log('✅ Accept response:', response);
-      this.submitting = false;
-      this.notificationService.addBellNotification({
-        type: 'success',
-        title: '📥 Requisition Accepted',
-        message: `Requisition #${this.reqNumber} items requested by ${this.reqData.items_prepared_name}`,
-        ticketNumber: this.reqNumber,
-        targetUserId: null,
-        countInBadge: true,
-      });
-      this.showToastMsg('✅ Requisition accepted!', 'success');
-      // ✅ Navigate back to client request list (not admin)
-      this.router.navigate(['/client/request']);
-    },
-    error: (err) => {
-      console.error('❌ Accept error:', err);
-      this.submitting = false;
-      
-      // Check if it's a permission error
-      if (err.status === 403) {
-        // Try the approve endpoint as fallback
-        this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/approve`, payload, { headers }).subscribe({
-          next: () => {
-            this.submitting = false;
-            this.showToastMsg('✅ Requisition accepted!', 'success');
-            this.router.navigate(['/client/request']);
-          },
-          error: () => {
-            this.showToastMsg('⚠️ Failed to accept requisition', 'error');
-          }
+        if (!this.reqData.items_prepared_name) {
+            this.showToastMsg('Please fill in Items Requested By name.', 'warning');
+            return;
+        }
+        if (!this.itemsPreparedSignature) {
+            alert('Please provide Items Requested By signature.');
+            return;
+        }
+        
+        this.submitting = true;
+        const payload: any = {
+            status: 'approved',
+            items: this.items,
+            // ✅ ADD THESE - Include approved fields
+            approved_name: this.reqData.approved_name || this.reqData.items_prepared_name,
+            approved_date: this.reqData.approved_date || this.reqData.items_prepared_date || new Date().toISOString().split('T')[0],
+            approved_signature: this.approvedSignature || null,
+            // Existing fields
+            items_prepared_name: this.reqData.items_prepared_name,
+            items_prepared_date: this.reqData.items_prepared_date,
+            items_prepared_signature: this.itemsPreparedSignature
+        };
+        
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const url = `${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/status`;
+        
+        console.log('📥 Accepting requisition:', this.editReqId, payload);
+        
+        this.http.put(url, payload, { headers }).subscribe({
+            next: (response: any) => {
+                console.log('✅ Accept response:', response);
+                this.submitting = false;
+                
+                // ✅ Send notification
+                const currentUser = this.authService.getCurrentUser();
+                const userName = currentUser?.fullname || currentUser?.username || 'User';
+                
+                // Notify admin notification service
+                this.notificationService.handleRequisitionReceived(
+                    { id: this.editReqId, requisition_number: this.reqNumber, submitted_by: this.reqData.submitted_by },
+                    payload.approved_name,
+                    this.reqData.submitted_by
+                );
+                
+                this.showToastMsg('✅ Requisition accepted!', 'success');
+                this.router.navigate(['/client/request']);
+            },
+            error: (err) => {
+                console.error('❌ Accept error:', err);
+                this.submitting = false;
+                
+                if (err.status === 403) {
+                    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.editReqId}/approve`, payload, { headers }).subscribe({
+                        next: () => {
+                            this.submitting = false;
+                            this.showToastMsg('✅ Requisition accepted!', 'success');
+                            this.router.navigate(['/client/request']);
+                        },
+                        error: () => {
+                            this.showToastMsg('⚠️ Failed to accept requisition', 'error');
+                        }
+                    });
+                } else {
+                    this.showToastMsg('⚠️ Failed to accept requisition', 'error');
+                }
+            }
         });
-      } else {
-        this.showToastMsg('⚠️ Failed to accept requisition', 'error');
-      }
+        return;
     }
-  });
-  return;
-}
 
-    // Client mode - validate prepared by and approved by
+    // ✅ CLIENT CREATE/EDIT MODE - Also make sure approved fields are sent
     if (!this.reqData.request_from) {
-     this.showToastMsg('Please select Request From.', 'warning');
-      return;
+        this.showToastMsg('Please select Request From.', 'warning');
+        return;
     }
     if (this.items.length === 0) {
-      this.showToastMsg('Please add at least one item.', 'warning');
-      return;
+        this.showToastMsg('Please add at least one item.', 'warning');
+        return;
     }
-   if (!this.reqData.prepared_name || !this.preparedSignature) {
-  this.showToastMsg('Please fill in Prepared By name and signature.', 'warning');
-  return;
-}
+    if (!this.reqData.prepared_name || !this.preparedSignature) {
+        this.showToastMsg('Please fill in Prepared By name and signature.', 'warning');
+        return;
+    }
 
-// ✅ Only require Approved By for Supervisor/Head/Manager/Branch Manager
-// Staff can submit without it (it will be filled by their supervisor later)
-const currentUser = this.authService.getCurrentUser();
-const role = (currentUser?.role || '').toLowerCase();
-const isHeadOrManager = role === 'head/manager' || role === 'branch manager';
+    // ✅ Only require Approved By for Head/Manager/Supervisor
+    const currentUser = this.authService.getCurrentUser();
+    const role = (currentUser?.role || '').toLowerCase();
+    const isHeadOrManager = role === 'head/manager' || role === 'branch manager' || role === 'supervisor';
 
-if (isHeadOrManager && (!this.reqData.approved_name || !this.approvedSignature)) {
-  this.showToastMsg('Please fill in Approved By name and signature.', 'warning');
-  return;
-}
+    if (isHeadOrManager && (!this.reqData.approved_name || !this.approvedSignature)) {
+        this.showToastMsg('Please fill in Approved By name and signature.', 'warning');
+        return;
+    }
 
     this.submitting = true;
 
     const payload: any = {
-      ...this.reqData,
-      requisition_number: this.reqNumber,
-      items: this.items,
-      branch_id: this.selectedBranchId,
-      department_id: this.reqData.department_id, // ✅ Explicitly include department_id
-      prepared_signature: this.preparedSignature,
-      approved_signature: this.approvedSignature,
-      items_prepared_signature: this.itemsPreparedSignature,
-      submitted_by: this.authService.getCurrentUser()?.id || null, // ✅ ALWAYS include submitted_by
+        ...this.reqData,
+        requisition_number: this.reqNumber,
+        items: this.items,
+        branch_id: this.selectedBranchId,
+        department_id: this.reqData.department_id,
+        prepared_signature: this.preparedSignature,
+        // ✅ Always send approved signature if it exists
+        approved_signature: this.approvedSignature || null,
+        items_prepared_signature: this.itemsPreparedSignature || null,
+        submitted_by: currentUser?.id || null,
     };
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
     const url = this.editMode && this.editReqId 
-      ? `${environment.apiUrl}/api/requisitions/${this.editReqId}`
-      : `${environment.apiUrl}/api/requisitions`;
+        ? `${environment.apiUrl}/api/requisitions/${this.editReqId}`
+        : `${environment.apiUrl}/api/requisitions`;
     
-    // ✅ ADD DEBUG LOGGING
     console.log('📤 SUBMITTING REQUISITION:', {
-      editMode: this.editMode,
-      editReqId: this.editReqId,
-      url: url,
-      branch_id: payload.branch_id,
-      department_id: payload.department_id,
-      submitted_by: payload.submitted_by,
-      itemsCount: payload.items.length,
-      fullPayload: JSON.stringify(payload, null, 2)
+        editMode: this.editMode,
+        url: url,
+        hasApprovedName: !!payload.approved_name,
+        hasApprovedSig: !!payload.approved_signature,
+        hasApprovedDate: !!payload.approved_date,
+        fullPayload: JSON.stringify(payload, null, 2)
     });
     
     const request = this.editMode 
-      ? this.http.put(url, payload, { headers })
-      : this.http.post(url, payload, { headers });
+        ? this.http.put(url, payload, { headers })
+        : this.http.post(url, payload, { headers });
 
     request.subscribe({
-      next: (response: any) => {
+    next: (response: any) => {
         console.log('✅ Success response:', response);
         this.submitting = false;
-        this.notificationService.addBellNotification({
-          type: 'info',
-          title: this.editMode ? '✏️ Requisition Updated' : '📩 New Requisition',
-          message: `Requisition #${this.reqNumber} ${this.editMode ? 'updated' : 'submitted'} by ${this.reqData.prepared_name}`,
-          ticketNumber: this.reqNumber,
-          targetUserId: null,
-          countInBadge: true,
-        });
-        this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
-        this.router.navigate(['/client/request']);
-      },
-      error: (err) => {
-        this.submitting = false;
-        console.error('❌ Submit error details:', {
-          status: err.status,
-          statusText: err.statusText,
-          error: err.error,
-          message: err.message,
-          url: url
-        });
         
-        // Show the actual error message from the server
-        const errorMsg = err.error?.error || err.message || 'Unknown error';
-        this.showToastMsg(`⚠️ Failed: ${errorMsg}`, 'error');
+        const currentUser = this.authService.getCurrentUser();
+        const userName = currentUser?.fullname || currentUser?.username || 'User';
         
-        // Only save locally if it's a network error (status 0 or 500)
-        if (err.status === 0 || err.status >= 500) {
-          const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
-          const existingIndex = saved.findIndex((r: any) => r.requisition_number === this.reqNumber);
-          if (existingIndex !== -1) {
-            saved[existingIndex] = payload;
-          } else {
-            saved.push(payload);
-          }
-          localStorage.setItem('requisitions', JSON.stringify(saved));
-          this.showToastMsg('📋 Saved locally due to server error', 'warning');
+        // ❌ REMOVE THIS - Do NOT broadcast to admin users
+        // this.notificationService.addBellNotification({ ... targetUserId: null ... });
+        
+        // ✅ CLIENT SIDE ONLY: Notify the RECIPIENT department only
+        if (!this.editMode) {
+            const reqData = {
+                id: response.id,
+                requisition_number: this.reqNumber,
+                submitted_by: currentUser?.id
+            };
+            this.clientNotificationService.handleNewRequisition(
+                reqData,
+                userName,
+                this.selectedBranchId!,      // Recipient branch
+                this.reqData.department_id   // Recipient department
+            );
         }
         
-        // ✅ Don't navigate away on error - let user retry
-        // this.router.navigate(['/client/request']);  // REMOVED
-      }
+        this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
+        this.router.navigate(['/client/request']);
+    },
+        error: (err) => {
+            this.submitting = false;
+            console.error('❌ Submit error details:', {
+                status: err.status,
+                error: err.error,
+                message: err.message,
+            });
+            
+            const errorMsg = err.error?.error || err.message || 'Unknown error';
+            this.showToastMsg(`⚠️ Failed: ${errorMsg}`, 'error');
+        }
     });
-  }
+}
 
  printForm() {
     const printWindow = window.open('', '_blank', 'width=700,height=800');

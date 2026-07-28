@@ -5,6 +5,8 @@ import { filter } from 'rxjs/operators';
 import { Router, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
+import { ClientNotificationService } from '../../services/client-notification.service'; 
+import { NotificationService } from '../../services/notification.service';
 import { environment } from '../../../environments/environment';
 import { Subscription } from 'rxjs';
 
@@ -1080,33 +1082,199 @@ forwardTargetReq: any = null;
 forwardBranchId: number | null = null;
 forwardDepartmentId: number | null = null;
 forwardFilteredDepartments: any[] = [];
+// ✅ CACHING PROPERTIES
+  private requisitionsCache: {
+    data: any[];
+    timestamp: number;
+    currentUserId: number;
+    currentUserBranchId: number;
+    currentUserDeptId: number;
+  } | null = null;
+  
+  private readonly CACHE_DURATION_MS = 30000; // 30 seconds cache
+  private readonly STALE_DURATION_MS = 60000; // 1 minute before forcing refresh
+  private readonly POLLING_INTERVAL = 30000; // Poll every 30 seconds
+  private isFetching = false;
+  private fetchQueue: Promise<any> | null = null;
+  private lastRequestSignature: string = '';
   constructor(
     private http: HttpClient, 
     private router: Router, 
-    private authService: AuthService
+    private authService: AuthService,
+    private clientNotificationService: ClientNotificationService,  // ✅ Client notifications
+    private notificationService: NotificationService 
   ) {}
 
-  ngOnInit() { 
-     this.authService.currentUser$.subscribe((user: any) => {
+   ngOnInit() { 
+    this.authService.currentUser$.subscribe((user: any) => {
+      // ✅ DETECT USER CHANGE - Clear ALL data when user changes
+      if (user?.id !== this.currentUser?.id) {
+        console.log('🔄 User changed! Clearing all caches...');
+        this.clearAllUserData();
+      }
+      
       this.currentUser = user;
+      
+      // Clear cache when user changes
+      if (user?.id !== this.requisitionsCache?.currentUserId) {
+        this.clearCache();
+      }
     });
     
     this.loadBranchesAndDepartments();
     this.loadUserRoles();
+    
+    // ✅ Load with cache first
     this.loadRequisitions();
+    
     this.routerSub = this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
     ).subscribe(() => {
       if (this.router.url.includes('/request') || this.router.url.includes('/requisitions')) {
-        this.loadRequisitions();
+        // ✅ Use cache when navigating back if still fresh
+        this.loadRequisitions(true);
       }
     });
-document.addEventListener('mousemove', this.onDragMove.bind(this));
-  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    
+    document.addEventListener('mousemove', this.onDragMove.bind(this));
+    document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    
+    // ✅ Polling only when cache is stale
     this.pollingInterval = setInterval(() => {
-      this.loadRequisitions();
-    }, 30000);
+      if (this.isCacheStale() && !this.isFetching) {
+        this.loadRequisitions(false);
+      }
+    }, this.POLLING_INTERVAL);
   }
+  /**
+ * ✅ Clear ALL user-specific data when user changes
+ */
+private clearAllUserData(): void {
+    // Clear component state
+    this.requisitions = [];
+    this.filteredRequisitions = [];
+    this.selectedReqIds = [];
+    this.requisitionsCache = null;
+    
+    // Clear all user-specific localStorage
+    try {
+        localStorage.removeItem('client_reqMgmt_seenIds');
+        localStorage.removeItem('requisitions');
+        sessionStorage.removeItem('req_cache');
+    } catch (e) {
+        // Ignore storage errors
+    }
+}
+    /**
+   * Generate a signature for the current request to detect changes
+   */
+  private getRequestSignature(): string {
+    return `${this.currentUser?.id}_${this.currentUser?.branch_id}_${this.currentUser?.department_id}_${this.viewMode}_${this.activeTab}`;
+  }
+  /**
+   * Check if cache is still valid (within CACHE_DURATION)
+   */
+  private isCacheValid(): boolean {
+    if (!this.requisitionsCache) return false;
+    if (!this.requisitionsCache.data || this.requisitionsCache.data.length === 0) return false;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    // Check if cache is still fresh
+    if (cacheAge < this.CACHE_DURATION_MS) {
+      // Also verify the cache belongs to current user/view
+      if (this.requisitionsCache.currentUserId === this.currentUser?.id) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  /**
+   * Check if cache is stale (beyond CACHE_DURATION but within STALE_DURATION)
+   */
+  private isCacheStale(): boolean {
+    if (!this.requisitionsCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    return cacheAge >= this.CACHE_DURATION_MS || 
+           this.requisitionsCache.currentUserId !== this.currentUser?.id;
+  }
+
+  /**
+   * Check if cache is expired (beyond STALE_DURATION)
+   */
+  private isCacheExpired(): boolean {
+    if (!this.requisitionsCache) return true;
+    
+    const now = Date.now();
+    const cacheAge = now - this.requisitionsCache.timestamp;
+    
+    return cacheAge >= this.STALE_DURATION_MS || 
+           this.requisitionsCache.currentUserId !== this.currentUser?.id;
+  }
+
+  /**
+   * Update cache with fresh data
+   */
+  private updateCache(data: any[]): void {
+    this.requisitionsCache = {
+      data: data,
+      timestamp: Date.now(),
+      currentUserId: this.currentUser?.id,
+      currentUserBranchId: this.currentUser?.branch_id,
+      currentUserDeptId: this.currentUser?.department_id
+    };
+    
+    // ✅ Also save to sessionStorage for persistence across component refreshes
+    try {
+      sessionStorage.setItem('req_cache', JSON.stringify({
+        data: data.slice(0, 100), // Limit to 100 items in storage
+        timestamp: Date.now(),
+        userId: this.currentUser?.id
+      }));
+    } catch (e) {
+      // Ignore storage errors
+    }
+  }
+    /**
+   * Try to load from sessionStorage as fallback
+   */
+  private loadFromSessionStorage(): any[] | null {
+    try {
+      const cached = sessionStorage.getItem('req_cache');
+      if (!cached) return null;
+      
+      const parsed = JSON.parse(cached);
+      const cacheAge = Date.now() - parsed.timestamp;
+      
+      // Use session storage only if less than 5 minutes old and same user
+      if (cacheAge < 300000 && parsed.userId === this.currentUser?.id) {
+        console.log('📦 Using sessionStorage cache, age:', Math.round(cacheAge / 1000), 's');
+        return parsed.data;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return null;
+  }
+
+  /**
+   * Clear all caches
+   */
+ private clearCache(): void {
+    this.requisitionsCache = null;
+    this.requisitions = [];
+    this.filteredRequisitions = [];
+    try {
+        sessionStorage.removeItem('req_cache');
+    } catch (e) {
+        // Ignore
+    }
+}
   startDrag(event: MouseEvent, modalId: string) {
   const target = event.target as HTMLElement;
   if (!target.closest('.modal-titlebar')) return;
@@ -1146,12 +1314,13 @@ onDragEnd() {
   this.isDragging = false;
   this.currentDragModal = null;
 }
-  ngOnDestroy() {
-     if (this.toastTimer) clearTimeout(this.toastTimer);
+ ngOnDestroy() {
+    if (this.toastTimer) clearTimeout(this.toastTimer);
     if (this.pollingInterval) clearInterval(this.pollingInterval);
     if (this.routerSub) this.routerSub.unsubscribe();
+    document.removeEventListener('mousemove', this.onDragMove.bind(this));
+    document.removeEventListener('mouseup', this.onDragEnd.bind(this));
   }
-
   trackByReqId(index: number, req: any): number {
     return req.id;
   }
@@ -1253,12 +1422,38 @@ setViewMode(mode: string) {
 }
 // Accept requisition
 acceptRequisition(req: any) {
-  if (!req.id) return;
-  // Navigate to the approval form (same form, approval mode)
-  // This works for both client and admin users
-  this.router.navigate(['/client/request/edit'], { 
-    queryParams: { id: req.id, mode: 'approve' } 
-  });
+    if (!req.id) return;
+    
+    // Navigate to approval form
+    this.router.navigate(['/client/request/edit'], { 
+      queryParams: { 
+        id: req.id, 
+        mode: 'approve',
+        notifyCreator: 'true'
+      } 
+    });
+    
+    // ✅ The actual "received" notification is sent from the edit form after approval
+    // But we can also notify admin users immediately about the pending action
+}
+
+ notifyRequisitionReceived(req: any): void {
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    
+    // ✅ CLIENT SIDE: Notify the creator
+    this.clientNotificationService.handleRequisitionReceived(
+        req,
+        userName,
+        req.branch_id,
+        req.department_id
+    );
+    
+    // ✅ ADMIN SIDE: Broadcast to admin users
+    this.notificationService.handleRequisitionReceived(
+        req,
+        userName,
+        req.submitted_by  // Creator's ID for targeted notification
+    );
 }
 
 // Reject requisition - opens modal
@@ -1277,37 +1472,44 @@ cancelReject() {
 
 // Confirm reject
 confirmReject() {
-  if (!this.rejectTargetReq) return;
-  
-  const req = this.rejectTargetReq;
-  const reason = this.rejectReason.trim() || 'No reason provided';
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  const payload = {
-    status: 'rejected',
-    remarks: req.remarks ? `${req.remarks}\n\nRejected: ${reason}` : `Rejected: ${reason}`,
-    approved_name: this.currentUser.fullname || this.currentUser.username,
-    approved_date: new Date().toISOString().split('T')[0]
-  };
-  
-  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
-    next: () => {
-      this.showToastMsg('❌ Requisition rejected!', 'warning');
-      this.cancelReject();
-      this.loadRequisitions();
-    },
-    error: (err) => {
-      console.error('Failed to reject requisition:', err);
-      req.status = 'rejected';
-      req.remarks = payload.remarks;
-      this.applyFilters();
-      this.cancelReject();
-      this.showToastMsg('⚠️ Failed to reject, updated locally', 'warning');
-    }
-  });
+    if (!this.rejectTargetReq) return;
+    const req = this.rejectTargetReq;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const reason = this.rejectReason.trim() || 'No reason provided';
+    
+    const payload = {
+      status: 'rejected',
+      remarks: req.remarks ? `${req.remarks}\n\nRejected: ${reason}` : `Rejected: ${reason}`,
+      approved_name: userName,
+      approved_date: new Date().toISOString().split('T')[0]
+    };
+    
+    this.updateLocalRequisition(req.id, payload);
+    this.showToastMsg('❌ Rejecting...', 'warning');
+    this.cancelReject();
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
+      next: () => {
+        // ✅ CLIENT SIDE: Notify creator (2 args)
+        this.clientNotificationService.handleRequisitionRejected(req, userName);
+        
+        // ✅ ADMIN SIDE: Broadcast + notify creator (2-3 args)
+        this.notificationService.handleRequisitionRejected(req, userName, req.submitted_by);
+        
+        this.showToastMsg('❌ Requisition rejected!', 'warning');
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+      },
+      error: (err) => {
+        console.error('Failed to reject:', err);
+        this.updateLocalRequisition(req.id, { status: 'pending' });
+        this.showToastMsg('⚠️ Failed, reverting...', 'warning');
+      }
+    });
 }
+
 showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
   this.toastMessage = msg;
   this.toastType = type;
@@ -1408,39 +1610,75 @@ bulkProcess() {
   this.showBulkProcessConfirm = true;
 }
 
-confirmBulkProcess() {
-  this.showBulkProcessConfirm = false;
-  if (this.bulkProcessCount === 0) return;
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  let completed = 0;
-  const total = this.bulkProcessCount;
-  const ids = [...this.selectedReqIds];
-  
-  ids.forEach(id => {
-    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, { status: 'processing' }, { headers }).subscribe({
-      next: () => {
-        completed++;
-        if (completed === total) {
-          this.showToastMsg(`⚙️ ${total} requisition(s) now processing!`, 'success');
-          this.selectedReqIds = [];
-          this.loadRequisitions();
+   confirmBulkProcess() {
+    this.showBulkProcessConfirm = false;
+    if (this.bulkProcessCount === 0) return;
+    
+    const ids = [...this.selectedReqIds];
+    
+    ids.forEach(id => this.updateLocalRequisition(id, { status: 'processing' }));
+    this.showToastMsg(`⚙️ Processing ${ids.length} items...`, 'success');
+    this.selectedReqIds = [];
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    let completed = 0;
+    const total = ids.length;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const processedReqs: any[] = [];
+    
+    ids.forEach(id => {
+      const req = this.requisitions.find(r => r.id === id);
+      
+      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, 
+        { status: 'processing' }, { headers }
+      ).subscribe({
+        next: () => {
+          completed++;
+          if (req) processedReqs.push(req);
+          
+          if (completed === total) {
+            this.showToastMsg(`⚙️ ${total} requisition(s) now processing!`, 'success');
+            
+            processedReqs.forEach(procReq => {
+              // ✅ CLIENT SIDE notifications (4 args)
+              if (procReq.submitted_by && procReq.submitted_by !== this.currentUser.id) {
+                this.clientNotificationService.handleRequisitionProcessed(
+                  procReq, userName, 
+                  this.currentUser.branch_id, this.currentUser.department_id
+                );
+              }
+              if (procReq.is_forwarded && procReq.branch_id && procReq.department_id) {
+                this.clientNotificationService.handleRequisitionForwardedProcessed(
+                  procReq, userName, 
+                  procReq.branch_id, procReq.department_id
+                );
+              }
+              
+              // ✅ ADMIN SIDE notifications (2-3 args only!)
+              this.notificationService.handleRequisitionProcessed(
+                procReq, userName, procReq.submitted_by
+              );
+              if (procReq.is_forwarded) {
+                this.notificationService.handleRequisitionForwardedProcessed(
+                  procReq, userName, procReq.submitted_by
+                );
+              }
+            });
+            
+            setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+          }
+        },
+        error: () => {
+          completed++;
+          this.updateLocalRequisition(id, { status: 'approved' });
+          if (completed === total) {
+            this.showToastMsg('⚠️ Some updates may have failed', 'warning');
+          }
         }
-      },
-      error: () => {
-        completed++;
-        const req = this.requisitions.find(r => r.id === id);
-        if (req) req.status = 'processing';
-        if (completed === total) {
-          this.applyFilters();
-          this.selectedReqIds = [];
-          this.showToastMsg('⚠️ Some updates may have failed', 'warning');
-        }
-      }
+      });
     });
-  });
 }
 // ✅ Persist seen IDs to localStorage so they survive page reloads
 private get seenReqIds(): Set<number> {
@@ -1538,75 +1776,157 @@ bulkRelease() {
 }
 
 confirmBulkRelease() {
-  this.showBulkReleaseConfirm = false;
-  if (this.bulkProcessCount === 0) return;
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  const payload = {
-    status: 'released',
-    released_name: this.currentUser.fullname || this.currentUser.username,
-    released_date: new Date().toISOString().split('T')[0]
-  };
-  
-  let completed = 0;
-  const total = this.bulkProcessCount;
-  const ids = [...this.selectedReqIds];
-  
-  ids.forEach(id => {
-    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, payload, { headers }).subscribe({
-      next: () => {
-        completed++;
-        if (completed === total) {
-          this.showToastMsg(`📦 ${total} requisition(s) released!`, 'success');
-          this.selectedReqIds = [];
-          this.loadRequisitions();
+    this.showBulkReleaseConfirm = false;
+    if (this.bulkProcessCount === 0) return;
+    
+    const ids = [...this.selectedReqIds];
+    
+    ids.forEach(id => this.updateLocalRequisition(id, { 
+      status: 'released',
+      released_name: this.currentUser.fullname || this.currentUser.username,
+      released_date: new Date().toISOString().split('T')[0]
+    }));
+    this.showToastMsg(`📦 Releasing ${ids.length} items...`, 'success');
+    this.selectedReqIds = [];
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    const payload = {
+      status: 'released',
+      released_name: this.currentUser.fullname || this.currentUser.username,
+      released_date: new Date().toISOString().split('T')[0]
+    };
+    
+    let completed = 0;
+    const total = ids.length;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const releasedReqs: any[] = [];
+    
+    ids.forEach(id => {
+      const req = this.requisitions.find(r => r.id === id);
+      
+      this.http.put(`${environment.apiUrl}/api/admin/requisitions/${id}/status`, payload, { headers }).subscribe({
+        next: () => {
+          completed++;
+          if (req) releasedReqs.push(req);
+          
+          if (completed === total) {
+            this.showToastMsg(`📦 ${total} requisition(s) released!`, 'success');
+            
+            releasedReqs.forEach(relReq => {
+              const isForwardedRelease = relReq.is_forwarded && relReq.status === 'forwarded';
+              
+              if (isForwardedRelease) {
+                // ✅ CLIENT SIDE (2 args for final, 4 args for forwarded-released)
+                this.clientNotificationService.handleRequisitionFinalReleased(relReq, userName);
+                if (relReq.branch_id && relReq.department_id) {
+                  this.clientNotificationService.handleRequisitionForwardedReleased(
+                    relReq, userName, relReq.branch_id, relReq.department_id
+                  );
+                }
+                // ✅ ADMIN SIDE (2-3 args only!)
+                this.notificationService.handleRequisitionFinalReleased(relReq, userName, relReq.submitted_by);
+                this.notificationService.handleRequisitionForwardedReleased(relReq, userName, relReq.submitted_by);
+              } else {
+                // ✅ CLIENT SIDE (2 args)
+                this.clientNotificationService.handleRequisitionReleased(relReq, userName);
+                // ✅ ADMIN SIDE (2-3 args only!)
+                this.notificationService.handleRequisitionReleased(relReq, userName, relReq.submitted_by);
+              }
+            });
+            
+            setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+          }
+        },
+        error: () => {
+          completed++;
+          this.updateLocalRequisition(id, { status: 'processing' });
+          if (completed === total) {
+            this.showToastMsg('⚠️ Some updates may have failed', 'warning');
+          }
         }
-      },
-      error: () => {
-        completed++;
-        const req = this.requisitions.find(r => r.id === id);
-        if (req) {
-          req.status = 'released';
-          req.released_name = payload.released_name;
-          req.released_date = payload.released_date;
-        }
-        if (completed === total) {
-          this.applyFilters();
-          this.selectedReqIds = [];
-          this.showToastMsg('⚠️ Some updates may have failed', 'warning');
-        }
-      }
+      });
     });
-  });
 }
 
 cancelBulkRelease() {
   this.showBulkReleaseConfirm = false;
   this.bulkProcessCount = 0;
 }
-//loadRequisitions method:
-loadRequisitions() {
+  /**
+   * Updated loadRequisitions with caching
+   * @param useCacheIfAvailable - If true, use cache when valid (for navigation back)
+   */
+  loadRequisitions(useCacheIfAvailable: boolean = false): void {
+    // ✅ Check if we can use cache
+    if (useCacheIfAvailable && this.isCacheValid()) {
+      console.log('📦 Using valid cache, age:', 
+        Math.round((Date.now() - this.requisitionsCache!.timestamp) / 1000), 's');
+      this.requisitions = this.requisitionsCache!.data;
+      this.applyFilters();
+      return;
+    }
+    
+    // ✅ Stale cache: return cached data immediately, refresh in background
+    if (!useCacheIfAvailable && this.requisitionsCache && this.requisitionsCache.data.length > 0 && !this.isCacheExpired()) {
+      console.log('📦 Using stale cache (background refresh)');
+      this.requisitions = this.requisitionsCache.data;
+      this.applyFilters();
+      
+      // Background refresh
+      this.fetchRequisitionsInBackground();
+      return;
+    }
+    
+    // ✅ Try sessionStorage as last resort
+    if (!useCacheIfAvailable && !this.isFetching) {
+      const sessionData = this.loadFromSessionStorage();
+      if (sessionData && sessionData.length > 0) {
+        console.log('📦 Using sessionStorage cache while fetching');
+        this.requisitions = sessionData;
+        this.applyFilters();
+      }
+    }
+    
+    // ✅ Fetch fresh data
+    this.fetchRequisitionsFromServer();
+  }
+  /**
+   * Fetch requisitions from server (deduplicated)
+   */
+  private fetchRequisitionsFromServer(): void {
+    // ✅ Deduplication: skip if already fetching or same request
+    const currentSignature = this.getRequestSignature();
+    if (this.isFetching) {
+      console.log('⏭️ Already fetching, request queued');
+      return;
+    }
+    
+    // ✅ Skip if requesting the same thing within last 2 seconds
+    if (currentSignature === this.lastRequestSignature && 
+        this.requisitionsCache && 
+        (Date.now() - this.requisitionsCache.timestamp) < 2000) {
+      console.log('⏭️ Duplicate request skipped (within 2s)');
+      return;
+    }
+    
+    this.lastRequestSignature = currentSignature;
+    this.isFetching = true;
     this.loading = true;
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) { this.loading = false; return; }
+    if (!token) { 
+      this.isFetching = false; 
+      this.loading = false; 
+      return; 
+    }
     
     const headers = { 'Authorization': `Bearer ${token}` };
     const user: any = this.authService.getCurrentUser();
-    
-    // ✅ Use the MY endpoint which now returns:
-    // 1. User's own requisitions (submitted_by = user.id)
-    // 2. Requisitions sent to user's branch AND department (incoming)
     const url = `${environment.apiUrl}/api/requisitions/my`;
     
-    console.log('📋 Loading requisitions from /api/requisitions/my');
-    console.log('📋 Current user:', {
-      id: user?.id,
-      branch_id: user?.branch_id,
-      department_id: user?.department_id,
-      deptName: user?.department
-    });
+    console.log('🌐 Fetching requisitions from server...');
     
     this.http.get<any[]>(url, { headers }).subscribe({
       next: (data) => { 
@@ -1614,26 +1934,90 @@ loadRequisitions() {
         
         let allReqs = Array.isArray(data) ? data : [];
         
-        // Log each requisition for debugging
-        allReqs.forEach(r => {
-          console.log(`  REQ: ${r.requisition_number} | branch_id:${r.branch_id} dept_id:${r.department_id} | submitted_by:${r.submitted_by} | status:${r.status} | isMine:${r.submitted_by === user.id}`);
-        });
+        // ✅ Update cache
+        this.updateCache(allReqs);
         
         this.requisitions = allReqs;
         this.applyFilters();
         this.loading = false;
+        this.isFetching = false;
       },
       error: (err) => {
         console.error('Failed to load requisitions:', err);
-        // Fallback to localStorage
-        const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
-        this.requisitions = saved;
-        this.applyFilters();
+        
+        // ✅ Use cache on error
+        if (this.requisitionsCache && this.requisitionsCache.data.length > 0) {
+          console.log('⚠️ Using cached data after error');
+          this.requisitions = this.requisitionsCache.data;
+          this.applyFilters();
+        } else {
+          // Fallback to localStorage
+          const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
+          this.requisitions = saved;
+          this.applyFilters();
+        }
+        
         this.loading = false;
+        this.isFetching = false;
       }
     });
   }
-
+/**
+   * Fetch in background without showing loading state
+   */
+  private fetchRequisitionsInBackground(): void {
+    if (this.isFetching) return;
+    
+    this.isFetching = true;
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) { this.isFetching = false; return; }
+    
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const url = `${environment.apiUrl}/api/requisitions/my`;
+    
+    this.http.get<any[]>(url, { headers }).subscribe({
+      next: (data) => { 
+        let allReqs = Array.isArray(data) ? data : [];
+        this.updateCache(allReqs);
+        this.requisitions = allReqs;
+        this.applyFilters();
+        this.isFetching = false;
+      },
+      error: () => {
+        this.isFetching = false;
+      }
+    });
+  }
+ /**
+   * Force refresh (skip cache entirely)
+   */
+  forceRefresh(): void {
+    this.clearCache();
+    this.fetchRequisitionsFromServer();
+  }
+  // ✅ Override status-changing methods to update cache
+  private updateLocalRequisition(reqId: number, updates: Partial<any>): void {
+    // Update in current array
+    const index = this.requisitions.findIndex(r => r.id === reqId);
+    if (index !== -1) {
+      this.requisitions[index] = { ...this.requisitions[index], ...updates };
+    }
+    
+    // Update cache
+    if (this.requisitionsCache) {
+      const cacheIndex = this.requisitionsCache.data.findIndex(r => r.id === reqId);
+      if (cacheIndex !== -1) {
+        this.requisitionsCache.data[cacheIndex] = { 
+          ...this.requisitionsCache.data[cacheIndex], 
+          ...updates 
+        };
+      }
+    }
+    
+    this.applyFilters();
+  }
+  
   // Fallback method if admin endpoint fails (e.g., for non-admin users)
   loadMyRequisitionsFallback() {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -1786,13 +2170,13 @@ applyFilters() {
     console.log('🔍 FINAL filtered:', filtered.length, filtered.map(r => `#${r.requisition_number}`));
     this.filteredRequisitions = filtered;
 }
-  clearFilters() { 
+clearFilters() { 
     this.activeTab = 'all'; 
-    this.filters = { requestFrom: '',  requestFromDept: '', departmentId: '', branchId: '' }; 
+    this.filters = { requestFrom: '', requestFromDept: '', departmentId: '', branchId: '' }; 
     this.searchTerm = ''; 
-    this.filteredFilterDepartments = [];  // ✅ Reset to empty
+    this.filteredFilterDepartments = []; 
     this.applyFilters(); 
-  }
+}
 getStatusCount(status: string): number { 
     if (!this.requisitions) return 0;
     
@@ -1975,31 +2359,58 @@ processRequisition(req: any) {
 }
 
 confirmProcess() {
-  if (!this.processTargetReq) return;
-  const req = this.processTargetReq;
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  const payload = {
-    status: 'processing'
-  };
-  
-  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
-    next: () => {
-      this.showToastMsg('⚙️ Requisition is now processing!', 'success');
-      this.cancelProcess();
-      this.loadRequisitions();
-    },
-    error: (err) => {
-      console.error('Failed to process:', err);
-      req.status = 'processing';
-      this.applyFilters();
-      this.cancelProcess();
-      this.showToastMsg('⚠️ Failed, updated locally', 'warning');
-    }
-  });
+    if (!this.processTargetReq) return;
+    const req = this.processTargetReq;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    
+    this.updateLocalRequisition(req.id, { status: 'processing' });
+    this.showToastMsg('⚙️ Processing...', 'success');
+    this.cancelProcess();
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, 
+      { status: 'processing' }, { headers }
+    ).subscribe({
+      next: () => {
+        // ✅ CLIENT SIDE: Notify creator (4 args: req, name, branchId, deptId)
+        if (req.submitted_by && req.submitted_by !== this.currentUser.id) {
+            this.clientNotificationService.handleRequisitionProcessed(
+                req, userName, this.currentUser.branch_id, this.currentUser.department_id
+            );
+        }
+        
+        // ✅ ADMIN SIDE: Broadcast + notify creator (2-3 args: req, name, submittedById?)
+        this.notificationService.handleRequisitionProcessed(
+            req, userName, req.submitted_by
+        );
+        
+        // ✅ CLIENT SIDE: Notify forwarding dept if forwarded (4 args)
+        if (req.is_forwarded && req.branch_id && req.department_id) {
+            this.clientNotificationService.handleRequisitionForwardedProcessed(
+                req, userName, req.branch_id, req.department_id
+            );
+        }
+        
+        // ✅ ADMIN SIDE: Notify forwarding dept (2-3 args)
+        if (req.is_forwarded) {
+            this.notificationService.handleRequisitionForwardedProcessed(
+                req, userName, req.submitted_by
+            );
+        }
+        
+        this.showToastMsg('⚙️ Requisition is now processing!', 'success');
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+      },
+      error: (err) => {
+        console.error('Failed to process:', err);
+        this.updateLocalRequisition(req.id, { status: 'approved' });
+        this.showToastMsg('⚠️ Failed, reverting...', 'warning');
+      }
+    });
 }
+
 // Release requisition (move from processing to released)
 releaseRequisition(req: any) {
   this.releaseTargetReq = req;
@@ -2074,40 +2485,63 @@ onForwardBranchChange() {
 }
 
 // Confirm forward
-confirmForward() {
-  if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
-  
-  const originalBranchId = this.forwardTargetReq.branch_id;
-  const originalDeptId = this.forwardTargetReq.department_id;
-  
-  // 🔑 Prevent forwarding to the original department
-  if (this.forwardBranchId == originalBranchId && this.forwardDepartmentId == originalDeptId) {
-    this.showToastMsg('⚠️ Cannot forward to the original department!', 'warning');
-    return;
-  }
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  const payload = {
-    forwarded_to_branch_id: this.forwardBranchId,
-    forwarded_to_department_id: this.forwardDepartmentId,
-    forwarded_by_name: this.currentUser.fullname || this.currentUser.username
-  };
-  
-  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${this.forwardTargetReq.id}/forward`, payload, { headers }).subscribe({
-    next: () => {
-      this.showToastMsg('📤 Requisition forwarded!', 'success');
-      this.cancelForward();
-      this.loadRequisitions();
-    },
-    error: (err) => {
-      console.error('Forward failed:', err);
-      this.cancelForward();
-      this.showToastMsg('⚠️ Failed to forward', 'warning');
+ confirmForward() {
+    if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
+    
+    const originalBranchId = this.forwardTargetReq.branch_id;
+    const originalDeptId = this.forwardTargetReq.department_id;
+    
+    if (this.forwardBranchId == originalBranchId && this.forwardDepartmentId == originalDeptId) {
+      this.showToastMsg('⚠️ Cannot forward to the original department!', 'warning');
+      return;
     }
-  });
+    
+    const req = this.forwardTargetReq;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const toBranchName = this.getBranchName(this.forwardBranchId!);
+    const toDeptName = this.getDepartmentName(this.forwardDepartmentId!);
+    
+    const payload = {
+      forwarded_to_branch_id: this.forwardBranchId,
+      forwarded_to_department_id: this.forwardDepartmentId,
+      forwarded_by_name: userName
+    };
+    
+    this.updateLocalRequisition(req.id, {
+      is_forwarded: true,
+      status: 'forwarded',
+      ...payload
+    });
+    this.showToastMsg('📤 Forwarding...', 'success');
+    this.cancelForward();
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/forward`, payload, { headers }).subscribe({
+      next: () => {
+        // ✅ CLIENT SIDE: Forward notification (6 args)
+        this.clientNotificationService.handleRequisitionForwarded(
+            req, userName, this.forwardBranchId!, this.forwardDepartmentId!,
+            toBranchName, toDeptName
+        );
+        
+        // ✅ ADMIN SIDE: Forward notification (5 args: req, name, branchName, deptName, submittedById?)
+        this.notificationService.handleRequisitionForwarded(
+            req, userName, toBranchName, toDeptName, req.submitted_by
+        );
+        
+        this.showToastMsg('📤 Requisition forwarded!', 'success');
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+      },
+      error: (err) => {
+        console.error('Forward failed:', err);
+        this.updateLocalRequisition(req.id, { status: 'approved', is_forwarded: false });
+        this.showToastMsg('⚠️ Failed, reverting...', 'warning');
+      }
+    });
 }
+
 // Bulk delete forwarded requisitions - opens modal
 bulkDeleteForwarded() {
   if (this.selectedReqIds.length === 0) return;
@@ -2205,45 +2639,69 @@ releaseForwardedRequisition(req: any) {
   this.showReleaseConfirm = true;
 }
 confirmRelease() {
-  if (!this.releaseTargetReq) return;
-  const req = this.releaseTargetReq;
-  
-  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-  const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
-  // Check if this is a forwarded request being released by the forwarding dept
-  const isForwardedRelease = req.is_forwarded && req.status === 'forwarded';
-  
-  const payload: any = {
-    released_name: this.currentUser.fullname || this.currentUser.username,
-    released_date: new Date().toISOString().split('T')[0]
-  };
-  
-  if (isForwardedRelease) {
-    // For forwarded requests, change status to released directly
-    payload.status = 'released';
-  } else {
-    // Normal release from processing
-    payload.status = 'released';
-  }
-  
-  this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
-    next: () => {
-      this.showToastMsg('📦 Requisition released!', 'success');
-      this.cancelRelease();
-      this.loadRequisitions();
-    },
-    error: (err) => {
-      console.error('Failed to release:', err);
-      req.status = 'released';
-      req.released_name = payload.released_name;
-      req.released_date = payload.released_date;
-      this.applyFilters();
-      this.cancelRelease();
-      this.showToastMsg('⚠️ Failed, updated locally', 'warning');
-    }
-  });
+    if (!this.releaseTargetReq) return;
+    const req = this.releaseTargetReq;
+    const userName = this.currentUser.fullname || this.currentUser.username;
+    const isForwardedRelease = req.is_forwarded && req.status === 'forwarded';
+    
+    this.updateLocalRequisition(req.id, { 
+      status: 'released',
+      released_name: userName,
+      released_date: new Date().toISOString().split('T')[0]
+    });
+    this.showToastMsg('📦 Releasing...', 'success');
+    this.cancelRelease();
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    
+    const payload: any = {
+      released_name: userName,
+      released_date: new Date().toISOString().split('T')[0],
+      status: 'released'
+    };
+    
+    this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, { headers }).subscribe({
+      next: () => {
+        if (isForwardedRelease) {
+            // ✅ CLIENT SIDE: Final release (2 args)
+            this.clientNotificationService.handleRequisitionFinalReleased(req, userName);
+            
+            // ✅ ADMIN SIDE: Final release (2-3 args)
+            this.notificationService.handleRequisitionFinalReleased(req, userName, req.submitted_by);
+            
+            // ✅ CLIENT SIDE: Notify forwarding dept (4 args)
+            if (req.branch_id && req.department_id) {
+                this.clientNotificationService.handleRequisitionForwardedReleased(
+                    req, userName, req.branch_id, req.department_id
+                );
+            }
+            
+            // ✅ ADMIN SIDE: Forwarded released (2-3 args)
+            this.notificationService.handleRequisitionForwardedReleased(
+                req, userName, req.submitted_by
+            );
+        } else {
+            // ✅ CLIENT SIDE: Normal release (2 args)
+            this.clientNotificationService.handleRequisitionReleased(req, userName);
+            
+            // ✅ ADMIN SIDE: Normal release (2-3 args)
+            this.notificationService.handleRequisitionReleased(req, userName, req.submitted_by);
+        }
+        
+        this.showToastMsg('📦 Requisition released!', 'success');
+        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
+      },
+      error: (err) => {
+        console.error('Failed to release:', err);
+        this.updateLocalRequisition(req.id, { 
+          status: req.is_forwarded ? 'forwarded' : 'processing'
+        });
+        this.showToastMsg('⚠️ Failed, reverting...', 'warning');
+      }
+    });
 }
+
 // Show Request From column (shows creator's department) - visible when there are incoming requisitions
 showRequestFromColumn(): boolean {
   // Show if any requisition in the filtered list is sent to current user's department
@@ -2436,30 +2894,36 @@ editFromModal() {
   this.closeViewModal();
   this.editRequisition(req);
 }
-  confirmDelete() {
+ confirmDelete() {
     if (!this.reqToDelete) return;
     const req = this.reqToDelete;
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) { this.cancelDelete(); return; }
+    const reqId = req.id;
     
+    // ✅ Optimistic delete
+    this.requisitions = this.requisitions.filter(r => r.id !== reqId);
+    if (this.requisitionsCache) {
+      this.requisitionsCache.data = this.requisitionsCache.data.filter(r => r.id !== reqId);
+    }
+    this.applyFilters();
+    this.cancelDelete();
+    this.showToastMsg('🗑️ Deleting...', 'success');
+    
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
     const deleteId = req.id || req.requisition_number;
     
     this.http.delete(`${environment.apiUrl}/api/requisitions/${deleteId}`, { headers }).subscribe({
       next: () => { 
-        this.requisitions = this.requisitions.filter(r => r.id !== req.id);
-        this.applyFilters();
-        this.cancelDelete();
+        this.showToastMsg('✅ Deleted!', 'success');
       },
       error: (err) => { 
         console.error('Delete failed:', err);
-        this.requisitions = this.requisitions.filter(r => r.id !== req.id);
-        this.applyFilters();
-        this.cancelDelete();
+        // ✅ Restore on error
+        this.loadRequisitions(true);
+        this.showToastMsg('⚠️ Delete failed, restored', 'warning');
       }
     });
   }
-
   cancelDelete() {
     this.showDeleteConfirm = false;
     this.reqToDelete = null;
@@ -2467,11 +2931,28 @@ editFromModal() {
 
   formatDate(val: any): string {
     if (!val) return '—';
-    try { 
-      const d = new Date(val); 
-      if (isNaN(d.getTime())) return String(val);
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; 
+    try {
+        // If it's already in YYYY-MM-DD format (from MySQL DATE type)
+        if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
+            return val; // Return as-is, no timezone conversion needed
+        }
+        
+        // If it contains time component, extract just the date part
+        if (typeof val === 'string' && val.includes('T')) {
+            return val.split('T')[0]; // Return YYYY-MM-DD portion
+        }
+        
+        // For full datetime strings, use UTC methods to avoid timezone shift
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return String(val);
+        
+        // ✅ Use getUTC* methods to avoid timezone offset issues
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    } catch {
+        return String(val);
     }
-    catch { return String(val); }
-  }
+}
 }
