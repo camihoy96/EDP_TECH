@@ -9935,6 +9935,119 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.listen(PORT, () => {
     console.log(`✅ Server is ready on port ${PORT}!`);
 });
+
+// PUT - Update New User Profile
+app.put('/api/admin/profile/new_user/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const { username, fullname, email, department, role, avatar_color } = req.body;
+        
+        console.log('📝 Updating new_user profile:', id, req.body);
+        
+        const updates = [];
+        const values = [];
+        
+        if (username !== undefined) { updates.push('username = ?'); values.push(username); }
+        if (fullname !== undefined) { updates.push('fullname = ?'); values.push(fullname); }
+        if (email !== undefined) { updates.push('email = ?'); values.push(email); }
+        if (department !== undefined) { updates.push('department = ?'); values.push(department); }
+        if (role !== undefined) { updates.push('role = ?'); values.push(role); }
+        if (avatar_color !== undefined) { updates.push('avatar_color = ?'); values.push(avatar_color); }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+        
+        values.push(id);
+        
+        await pool.query(
+            `UPDATE new_user SET ${updates.join(', ')} WHERE id = ?`,
+            values
+        );
+        
+        console.log('✅ New user profile updated:', id);
+        res.json({ success: true, message: 'Profile updated successfully' });
+        
+    } catch (error) {
+        console.error('PUT /api/admin/profile/new_user/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - Get New User Profile
+app.get('/api/admin/profile/new_user/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        
+        const [users] = await pool.query(
+            'SELECT id, username, fullname, email, department, role, avatar_color, photo_url, branch_id, department_id FROM new_user WHERE id = ?',
+            [id]
+        );
+        
+        if (users.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        res.json(users[0]);
+        
+    } catch (error) {
+        console.error('GET /api/admin/profile/new_user/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT - Update Users Profile
+app.put('/api/admin/profile/users/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const { username, fullname, email, department, role, avatar_color } = req.body;
+        
+        console.log('📝 Updating users profile:', id, req.body);
+        
+        const updates = [];
+        const values = [];
+        
+        if (username !== undefined) { updates.push('username = ?'); values.push(username); }
+        if (fullname !== undefined) { updates.push('fullname = ?'); values.push(fullname); }
+        if (email !== undefined) { updates.push('email = ?'); values.push(email); }
+        if (department !== undefined) { updates.push('department = ?'); values.push(department); }
+        if (role !== undefined) { updates.push('role = ?'); values.push(role); }
+        if (avatar_color !== undefined) { updates.push('avatar_color = ?'); values.push(avatar_color); }
+        
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+        
+        values.push(id);
+        
+        await pool.query(
+            `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+            values
+        );
+        
+        console.log('✅ Users profile updated:', id);
+        res.json({ success: true, message: 'Profile updated successfully' });
+        
+    } catch (error) {
+        console.error('PUT /api/admin/profile/users/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // Start server
 async function startServer() {
     await testConnection();

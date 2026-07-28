@@ -2432,30 +2432,37 @@ getBranchName(branchId: number): string {
 formatDate(val: any): string {
     if (!val) return '—';
     try {
-        // ✅ If it's already in YYYY-MM-DD format (MySQL DATE type), return directly
+        let dateStr: string;
+        
+        // ✅ If it's already in YYYY-MM-DD format (MySQL DATE type)
         if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) {
-            return val;
+            dateStr = val;
         }
-        
         // ✅ If it contains ISO timestamp, extract just the date portion
-        if (typeof val === 'string' && val.includes('T')) {
-            return val.split('T')[0];
+        else if (typeof val === 'string' && val.includes('T')) {
+            dateStr = val.split('T')[0];
         }
-        
-        // ✅ For datetime strings like "2025-07-27 00:00:00", extract date
-        if (typeof val === 'string' && val.includes(' ')) {
-            return val.split(' ')[0];
+        // ✅ For datetime strings like "2025-07-27 00:00:00"
+        else if (typeof val === 'string' && val.includes(' ')) {
+            dateStr = val.split(' ')[0];
         }
-        
         // Fallback: parse with UTC methods to avoid timezone shift
-        const d = new Date(val);
-        if (isNaN(d.getTime())) return String(val);
+        else {
+            const d = new Date(val);
+            if (isNaN(d.getTime())) return String(val);
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${day}`;
+        }
         
-        // ✅ Use UTC methods to avoid browser timezone offset
-        const year = d.getUTCFullYear();
-        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(d.getUTCDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        // ✅ Convert YYYY-MM-DD to readable format: "July 27, 2026"
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const monthNames = [
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+        return `${monthNames[month - 1]} ${day}, ${year}`;
     } catch {
         return String(val);
     }

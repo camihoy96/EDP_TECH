@@ -1467,38 +1467,36 @@ loadAllUsers() {
     this.showLockModal = true;
   }
 
-  confirmLockAction() {
+ confirmLockAction() {
     if (!this.lockUserData) return;
     const table = this.lockTable;
     const user = this.lockUserData;
+    const action = user.locked_until ? 'unlock' : 'lock';
     
-    if (user.locked_until) {
-      // ✅ User IS locked → UNLOCK them
-      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/unlock`, {}, { headers: this.getHeaders() }).subscribe({
+    this.http.post(
+        `${environment.apiUrl}/api/admin/users/${table}/${user.id}/${action}`, 
+        {}, 
+        { headers: this.getHeaders() }
+    ).subscribe({
         next: () => {
-          this.closeLockModal();
-          this.loadAllUsers();  // ✅ Reload from server to get fresh data
+            this.closeLockModal();
+            this.showNotification(
+                'success',
+                user.locked_until ? 'User Unlocked' : 'User Locked',
+                `${user.fullname || user.username} has been ${user.locked_until ? 'unlocked' : 'locked'} successfully.`
+            );
+            this.loadAllUsers();
         },
-        error: (err) => {
-          this.closeLockModal();
-          this.showNotification('error', 'Error', err.error?.message || 'Failed to unlock user');
+        error: (err: HttpErrorResponse) => {
+            this.closeLockModal();
+            this.showNotification(
+                'error',
+                'Action Failed',
+                err.error?.message || `Failed to ${action} user.`
+            );
         }
-      });
-    } else {
-      // ✅ User is NOT locked → LOCK them
-      this.http.post(`${environment.apiUrl}/api/admin/users/${table}/${user.id}/lock`, {}, { headers: this.getHeaders() }).subscribe({
-        next: () => {
-          this.closeLockModal();
-          this.loadAllUsers();  // ✅ Reload from server to get fresh data
-        },
-        error: (err) => {
-          this.closeLockModal();
-          this.showNotification('error', 'Error', err.error?.message || 'Failed to lock user');
-        }
-      });
-    }
+    });
 }
-
   closeLockModal() {
     this.showLockModal = false;
     this.lockUserData = null;
@@ -1512,17 +1510,41 @@ loadAllUsers() {
 
   confirmDeleteUser() {
     if (!this.deleteUserData) return;
-   this.http.delete(`${environment.apiUrl}/api/admin/users/${this.deleteTable}/${this.deleteUserData.id}`, { headers: this.getHeaders() }).subscribe({
-      next: () => {
-        this.closeDeleteUserModal();
-        this.loadAllUsers();
-      },
-      error: (err) => {
-        this.closeDeleteUserModal();
-        alert('Error: ' + (err.error?.message || err.message));
-      }
+    
+    this.http.delete(
+        `${environment.apiUrl}/api/admin/users/${this.deleteTable}/${this.deleteUserData.id}`, 
+        { headers: this.getHeaders() }
+    ).subscribe({
+        next: () => {
+            this.closeDeleteUserModal();
+            this.showNotification(
+                'success',
+                'User Deleted',
+                `${this.deleteUserData.fullname || this.deleteUserData.username} has been deleted successfully.`
+            );
+            this.loadAllUsers();
+        },
+        error: (err: HttpErrorResponse) => {
+            this.closeDeleteUserModal();
+            
+            let errorMessage = '';
+            let errorDetails: any = null;
+            
+            if (err.status === 0) {
+                errorMessage = 'Unable to connect to the server.';
+            } else if (err.status === 403) {
+                errorMessage = 'You do not have permission to delete this user.';
+            } else if (err.status === 404) {
+                errorMessage = 'User not found. They may have already been deleted.';
+            } else {
+                errorMessage = err.error?.message || 'An unexpected error occurred.';
+                errorDetails = err.error;
+            }
+            
+            this.showNotification('error', 'Delete Failed', errorMessage, errorDetails);
+        }
     });
-  }
+}
 
   closeDeleteUserModal() {
     this.showDeleteUserModal = false;
@@ -1545,18 +1567,79 @@ loadAllUsers() {
   saveUser() {
     if (!this.editUserData) return;
     this.saving = true;
-    this.http.put(`${environment.apiUrl}/api/admin/profile/${this.editTable}/${this.editUserData.id}`, this.editForm, { headers: this.getHeaders() }).subscribe({
-      next: () => {
-        this.saving = false;
-        this.closeEditModal();
-        this.loadAllUsers();
-      },
-      error: (err) => {
-        this.saving = false;
-        alert('Error saving: ' + (err.error?.message || err.message));
-      }
+    
+    this.http.put(
+        `${environment.apiUrl}/api/admin/profile/${this.editTable}/${this.editUserData.id}`, 
+        this.editForm, 
+        { headers: this.getHeaders() }
+    ).subscribe({
+        next: () => {
+            this.saving = false;
+            this.closeEditModal();
+            this.showNotification(
+                'success',
+                'User Updated',
+                `${this.editForm.fullname || this.editForm.username}'s profile has been updated successfully.`
+            );
+            this.loadAllUsers();
+        },
+        error: (err: HttpErrorResponse) => {
+            this.saving = false;
+            
+            let errorTitle = 'Update Failed';
+            let errorMessage = '';
+            let errorDetails: any = null;
+            
+            if (err.status === 0) {
+                errorMessage = 'Unable to connect to the server. Please check your connection and try again.';
+                errorDetails = {
+                    status: err.status,
+                    message: err.message,
+                    url: err.url,
+                    timestamp: new Date().toISOString()
+                };
+            } else if (err.status === 401) {
+                errorMessage = 'Your session has expired. Please log in again.';
+                errorDetails = {
+                    status: err.status,
+                    message: err.message,
+                    timestamp: new Date().toISOString()
+                };
+                setTimeout(() => {
+                    this.router.navigate(['/login']);
+                }, 2000);
+            } else if (err.status === 403) {
+                errorMessage = 'You do not have permission to edit this user.';
+            } else if (err.status === 404) {
+                errorMessage = 'The endpoint was not found. This user may be in a different database table.';
+                errorDetails = {
+                    status: err.status,
+                    url: err.url,
+                    table: this.editTable,
+                    userId: this.editUserData?.id,
+                    message: 'The API route may not exist on the backend.',
+                    timestamp: new Date().toISOString()
+                };
+            } else if (err.status === 409) {
+                errorMessage = err.error?.message || 'A user with this username or email already exists.';
+            } else if (err.error?.message) {
+                errorMessage = err.error.message;
+                errorDetails = err.error;
+            } else {
+                errorMessage = 'An unexpected error occurred. Please try again or contact support.';
+                errorDetails = {
+                    status: err.status,
+                    statusText: err.statusText,
+                    message: err.message,
+                    error: err.error,
+                    timestamp: new Date().toISOString()
+                };
+            }
+            
+            this.showNotification('error', errorTitle, errorMessage, errorDetails);
+        }
     });
-  }
+}
 
   closeEditModal() {
     this.showEditModal = false;
