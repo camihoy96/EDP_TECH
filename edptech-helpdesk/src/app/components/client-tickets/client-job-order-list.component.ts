@@ -549,10 +549,10 @@ import { NotificationService } from '../../services/notification.service';
     .classic-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
     .classic-btn.danger { background: #cc0000; color: white; border-color: #cc0000; }
     .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 6px; flex-wrap: wrap; }
-    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 10px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
+    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
-    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; }
+    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 12px; font-weight: bold; }
     .status-tab.active .tab-count { background: #0a3a8c; }
     .tab-count.pending-count { background: #cc6600; }
     .tab-count.approved-count { background: #008800; }
@@ -561,35 +561,35 @@ import { NotificationService } from '../../services/notification.service';
     .tab-count.done-count { background: #0066cc; }
     .tab-count.rejected-count { background: #cc0000; }
     .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
-    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 10px; background: white; }
-    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 10px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 12px; background: white; }
+    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .status-sep { color: #b0b0b0; }
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
-    .classic-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-    .classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 10px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+    .classic-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 12px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
     .classic-table th:last-child { border-right: none; }
     .classic-table td { padding: 7px 8px; text-align: center; border-bottom: 1px solid #e0e0e0; color: #000; }
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0fe; }
-    code { font-family: 'Courier New', monospace; font-size: 10px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+    code { font-family: 'Courier New', monospace; font-size: 12px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
     .jo-num { text-align: center; }
-    .creator-info { font-size: 9px; color: #666; margin-top: 3px; border-top: 1px dotted #c0c0c0; padding-top: 3px; display: flex; align-items: center; justify-content: center; gap: 3px; }
-    .creator-label { color: #0a3a8c; font-weight: 600; font-size: 9px; background: #f0f4ff; padding: 1px 6px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
-    .date-cell { font-family: monospace; font-size: 10px; white-space: nowrap; color: #555; }
+    .creator-info { font-size: 12px; color: #666; margin-top: 3px; border-top: 1px dotted #c0c0c0; padding-top: 3px; display: flex; align-items: center; justify-content: center; gap: 3px; }
+    .creator-label { color: #0a3a8c; font-weight: 600; font-size: 12px; background: #f0f4ff; padding: 1px 6px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
+    .date-cell { font-family: monospace; font-size: 12px; white-space: nowrap; color: #555; }
     .desc-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; display: block; }
-    .branch-tag-tiny { font-size: 8px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
-    .forward-label { font-weight: 600; color: #0a3a8c; font-size: 9px; display: block; }
-    .forward-dept { color: #666; font-size: 8px; display: block; }
-    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 9px; font-weight: 600; text-transform: capitalize; }
+    .dept-name-small { font-weight: 600; font-size: 12px; color: #0a3a8c; display: block; }
+    .branch-tag-tiny { font-size: 12px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
+    .forward-label { font-weight: 600; color: #0a3a8c; font-size: 12px; display: block; }
+    .forward-dept { color: #666; font-size: 1px; display: block; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 600; text-transform: capitalize; }
     .status-pending { background: #fffae8; color: #886600; }
     .status-approved { background: #eeffee; color: #008800; }
     .status-assigned { background: #f0f4ff; color: #0a3a8c; }
     .status-forwarded { background: #e8f0ff; color: #0a3a8c; }
     .status-done { background: #e8f0ff; color: #0066cc; }
     .status-rejected { background: #ffecec; color: #cc0000; }
-    .status-forwarded-sub { font-size: 8px; font-style: italic; color: #666; margin-top: 2px; border-top: 1px dotted #ccc; padding-top: 2px; }
-    .assigned-under-status { margin-top: 3px; font-size: 9px; color: #0a3a8c; font-style: italic; border-top: 1px dotted #c0c0c0; padding-top: 3px; }
+    .status-forwarded-sub { font-size: 1px; font-style: italic; color: #666; margin-top: 2px; border-top: 1px dotted #ccc; padding-top: 2px; }
+    .assigned-under-status { margin-top: 3px; font-size: 12px; color: #0a3a8c; font-style: italic; border-top: 1px dotted #c0c0c0; padding-top: 3px; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 2px; }
     .action-btn:hover { background: #e8f0fe; border-color: #a0a0a0; }
     .view-btn:hover { color: #0a3a8c; }
@@ -622,18 +622,18 @@ import { NotificationService } from '../../services/notification.service';
     .view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; }
     .view-field { display: flex; flex-direction: column; gap: 3px; }
     .view-field.full-width { grid-column: 1 / -1; }
-    .view-field label { font-size: 9px; font-weight: bold; color: #555; text-transform: uppercase; }
+    .view-field label { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; }
     .view-field span { font-size: 12px; color: #000; }
     .view-section { margin-bottom: 14px; padding: 12px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; }
     .view-section h4 { margin: 0 0 10px 0; font-size: 12px; color: #0a246a; border-bottom: 1px solid #e0e0e0; padding-bottom: 6px; font-weight: bold; }
     .view-remarks { font-size: 11px; color: #333; white-space: pre-wrap; line-height: 1.5; }
     .view-signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
     .view-sig-block { text-align: center; padding: 10px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; }
-    .view-sig-block h5 { margin: 0 0 8px 0; font-size: 9px; text-transform: uppercase; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+    .view-sig-block h5 { margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
     .view-sig-image { min-height: 45px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; background: white; border: 1px solid #eee; padding: 4px; }
     .view-sig-image img { max-width: 120px; max-height: 45px; object-fit: contain; }
     .view-sig-name { font-size: 11px; font-weight: bold; color: #000; margin-bottom: 2px; }
-    .view-sig-date { font-size: 9px; color: #888; }
+    .view-sig-date { font-size: 12px; color: #888; }
     .assigned-info { padding: 8px 12px; background: #f0f4ff; border: 1px solid #b8c8e8; border-radius: 4px; }
     .assigned-names { font-size: 12px; font-weight: 600; color: #0a3a8c; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid #ccc; background: #e0e0e0; }
@@ -641,27 +641,27 @@ import { NotificationService } from '../../services/notification.service';
     .warning-icon { font-size: 36px; flex-shrink: 0; }
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
     .warning-message p { margin: 0 0 4px 0; font-size: 11px; color: #333; }
-    .warning-hint.danger-text { color: #cc0000; background: #fff0f0; border: 1px solid #ffb0b0; font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; }
+    .warning-hint.danger-text { color: #cc0000; background: #fff0f0; border: 1px solid #ffb0b0; font-size: 12px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 10px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s; z-index: 3000; font-size: 12px; }
     .toast-notification.show { transform: translateY(0); opacity: 1; }
     .toast-notification.success { background: #008800; }
     .toast-notification.error { background: #cc6600; }
     .forward-company {
-  font-size: 7px;
+  font-size: 1px;
   color: #888;
   display: block;
   font-style: italic;
 }
   .time-under-date {
-  font-size: 8px;
+  font-size: 1px;
   color: #888;
   margin-top: 1px;
 }
   .forward-modal { max-width: 500px !important; }
 .forward-by {
   margin-top: 2px;
-  font-size: 7px;
+  font-size: 1px;
   color: #0a3a8c;
   border-top: 1px dotted #c0c0c0;
   padding-top: 2px;
@@ -670,7 +670,7 @@ import { NotificationService } from '../../services/notification.service';
   font-weight: 500;
 }
 .company-tag {
-  font-size: 8px;
+  font-size: 1px;
   background: #f5f5f5;
   color: #555;
   padding: 1px 5px;
@@ -680,7 +680,7 @@ import { NotificationService } from '../../services/notification.service';
   display: inline-block;
 }
 .received-by {
-  font-size: 9px;
+  font-size: 12px;
   color: #666;
   margin-top: 2px;
   font-style: italic;
@@ -691,7 +691,7 @@ import { NotificationService } from '../../services/notification.service';
   gap: 6px;
 }
 .filter-group label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: bold;
   white-space: nowrap;
   color: #333;
@@ -699,12 +699,12 @@ import { NotificationService } from '../../services/notification.service';
 .classic-select {
   padding: 3px 6px;
   border: 1px solid #a0a0a0;
-  font-size: 10px;
+  font-size: 12px;
   background: white;
   min-width: 150px;
 }
 .filter-group small {
-  font-size: 8px;
+  font-size: 1px;
   color: #888;
 }
   .notification-badge {
@@ -714,7 +714,7 @@ import { NotificationService } from '../../services/notification.service';
   background: #ff4444;
   color: white;
   border-radius: 50%;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: bold;
   min-width: 18px;
   height: 18px;
@@ -747,7 +747,7 @@ import { NotificationService } from '../../services/notification.service';
 .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #0a3a8c; }
 .user-label { margin-right: 10px; }
 .assign-user-name { flex: 1; font-size: 12px; font-weight: 500; color: #333; }
-.assign-user-role { font-size: 10px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
+.assign-user-role { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
 .assign-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
   `]
 })

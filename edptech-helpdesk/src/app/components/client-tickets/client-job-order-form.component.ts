@@ -230,7 +230,7 @@ import { environment } from '../../../environments/environment';
     </ng-container>
     
     <!-- Placeholder when not in approval mode and no signature -->
-    <div *ngIf="!approvalMode && !receivedSignature" style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 9px;">
+    <div *ngIf="!approvalMode && !receivedSignature" style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 12px;">
       To be completed upon receipt
     </div>
   </div>
@@ -288,35 +288,35 @@ import { environment } from '../../../environments/environment';
     .req-container { padding: 16px; max-width: 1500px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; font-size: 12px; background: #d4d0c8; min-height: 100vh; }
     .req-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 8px 14px; background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; border: 2px solid; border-color: #fff #808080 #808080 #fff; }
     .header-left h1 { margin: 0; font-size: 16px; }
-    .header-sub { font-size: 10px; opacity: 0.8; }
-    .print-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 4px 12px; cursor: pointer; font-size: 10px; }
+    .header-sub { font-size: 12px; opacity: 0.8; }
+    .print-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 4px 12px; cursor: pointer; font-size: 12px; }
     .req-form { background: white; border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 20px; font-family: 'Courier New', monospace; }
     .req-form-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 16px; }
     .req-form-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; color: #0a246a; }
     .req-form-header h3 { margin: 4px 0; font-size: 14px; color: #04060c; }
-    .ctrl-no { font-size: 9px; color: #cc0000; font-weight: bold; }
+    .ctrl-no { font-size: 12px; color: #cc0000; font-weight: bold; }
     .req-top-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .field-row { display: flex; align-items: center; gap: 4px; }
-    .field-row label { font-weight: bold; font-size: 10px; white-space: nowrap; color: #0f0e0e; }
-    .req-input { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 10px; color: #0f0e0e; font-family: 'Courier New', monospace; }
+    .field-row label { font-weight: bold; font-size: 12px; white-space: nowrap; color: #0f0e0e; }
+    .req-input { flex: 1; padding: 4px 6px; border: 1px solid #888; font-size: 12px; color: #0f0e0e; font-family: 'Courier New', monospace; }
     .req-input:disabled { background: #e8e8e8; color: #666; cursor: not-allowed; }
-    .req-textarea { width: 100%; padding: 6px; border: 1px solid #888; font-size: 10px; font-family: 'Courier New', monospace; resize: vertical; box-sizing: border-box; }
+    .req-textarea { width: 100%; padding: 6px; border: 1px solid #888; font-size: 12px; font-family: 'Courier New', monospace; resize: vertical; box-sizing: border-box; }
     .req-section { margin-bottom: 12px; color: #0f0e0e; font-weight: bold; }
     .req-section h4 { font-size: 12px; margin: 0 0 6px 0; color: #000000; }
     .items-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .add-item-btn { background: #0a3a8c; color: white; border: 1px solid #042070; padding: 3px 10px; cursor: pointer; font-size: 9px; border-radius: 3px; }
+    .add-item-btn { background: #0a3a8c; color: white; border: 1px solid #042070; padding: 3px 10px; cursor: pointer; font-size: 12px; border-radius: 3px; }
     .items-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
-    .items-table th { background: #f0f4f8; padding: 6px 8px; font-size: 9px; border: 1px solid #ccc; text-align: left; }
+    .items-table th { background: #f0f4f8; padding: 6px 8px; font-size: 12px; border: 1px solid #ccc; text-align: left; }
     .items-table td { padding: 4px 6px; border: 1px solid #eee; }
-    .item-input { padding: 3px 5px; border: 1px solid #ccc; font-size: 10px; font-family: 'Courier New', monospace; width: 100%; box-sizing: border-box; }
+    .item-input { padding: 3px 5px; border: 1px solid #ccc; font-size: 12px; font-family: 'Courier New', monospace; width: 100%; box-sizing: border-box; }
     .remove-item-btn { background: none; border: none; color: #cc0000; cursor: pointer; font-size: 12px; }
     .empty-items { text-align: center; color: #888; padding: 12px; font-style: italic; }
     .req-signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .sig-block { border: 1px solid #ccc; padding: 8px; background: #fafafa; }
-    .sig-block h5 { margin: 0 0 6px 0; font-size: 9px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+    .sig-block h5 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
     .sig-field { display: flex; align-items: center; margin-bottom: 3px; }
-    .sig-field label { width: 30px; font-size: 9px; font-weight: bold; color: #0f0e0e; }
-    .req-input-sm { flex: 1; padding: 3px 5px; border: 1px solid #ccc; font-size: 10px; font-family: 'Courier New', monospace; }
+    .sig-field label { width: 30px; font-size: 12px; font-weight: bold; color: #0f0e0e; }
+    .req-input-sm { flex: 1; padding: 3px 5px; border: 1px solid #ccc; font-size: 12px; font-family: 'Courier New', monospace; }
     .req-footer { align-items: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .req-footer p { margin: 2px 0; }
     .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
@@ -332,22 +332,22 @@ import { environment } from '../../../environments/environment';
     .toast-notification.error { background: #cc0000; }
     .toast-notification.warning { background: #cc6600; }
     .sig-options { display: flex; gap: 4px; margin: 4px 0; }
-.sig-option-btn { flex: 1; padding: 2px 6px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 8px; border-radius: 2px; }
+.sig-option-btn { flex: 1; padding: 2px 6px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 12px; border-radius: 2px; }
 .sig-option-btn.active { background: #0a3a8c; color: white; border-color: #0a3a8c; }
-.sig-draw-trigger { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 2px dashed #ccc; background: #fafafa; cursor: pointer; width: 100%; border-radius: 4px; font-size: 9px; color: #666; transition: all 0.2s; }
+.sig-draw-trigger { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 2px dashed #ccc; background: #fafafa; cursor: pointer; width: 100%; border-radius: 4px; font-size: 12px; color: #666; transition: all 0.2s; }
 .sig-draw-trigger:hover { border-color: #0a3a8c; background: #e8f0ff; color: #0a3a8c; }
 .sig-draw-icon { font-size: 24px; }
 .sig-upload { border: 1px dashed #ccc; padding: 8px; text-align: center; margin-top: 4px; }
 .sig-upload.has-file { border-style: solid; border-color: #008800; }
 .sig-upload.drag-over { border-color: #0a3a8c; border-style: solid; background: #e8f0ff; box-shadow: 0 0 0 3px rgba(10,36,106,0.15); }
-.sig-placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; font-size: 9px; color: #888; cursor: pointer; }
+.sig-placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; font-size: 12px; color: #888; cursor: pointer; }
 .sig-icon { font-size: 20px; }
 .sig-preview { position: relative; width: 100%; padding: 8px; }
 .sig-image { max-width: 100%; max-height: 80px; object-fit: contain; display: block; margin: 0 auto; }
 .sig-saved-preview { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 8px; background: #f0fff0; border: 1px solid #88cc88; border-radius: 3px; }
 .sig-image-small { max-width: 100px; max-height: 40px; object-fit: contain; }
-.sig-saved-label { font-size: 9px; color: #008800; font-weight: bold; }
-.sig-clear { background: rgba(204,0,0,0.8); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 8px; padding: 1px 4px; margin-left: 6px; }
+.sig-saved-label { font-size: 12px; color: #008800; font-weight: bold; }
+.sig-clear { background: rgba(204,0,0,0.8); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; padding: 1px 4px; margin-left: 6px; }
 .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 2000; }
 .sig-modal { background: white; border: 2px solid #808080; box-shadow: 3px 4px 14px rgba(0,0,0,0.3); width: 800px; max-width: 95vw; position: relative; user-select: none; }
 .sig-modal-header { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: white; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: bold; }

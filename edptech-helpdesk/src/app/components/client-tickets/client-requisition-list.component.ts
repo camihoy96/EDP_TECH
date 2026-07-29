@@ -162,7 +162,7 @@ import { Subscription } from 'rxjs';
     </td>
     <td class="date-cell">
   {{ formatDate(req.date) }}<br>
-  <small style="font-size: 11px; color: #888;">{{ formatTime(req.time) }}</small>
+  <small style="font-size: 12px; color: #888;">{{ formatTime(req.time) }}</small>
 </td>
    <td class="forward-cell">
   <!-- If forwarded: show details -->

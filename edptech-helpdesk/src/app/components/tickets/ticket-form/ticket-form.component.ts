@@ -332,8 +332,8 @@ import { NotificationService } from '../../../services/notification.service';
     .header-left { display: flex; align-items: flex-start; gap: 12px; }
     .header-icon { font-size: 28px; line-height: 1; }
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
-    .header-sub { margin: 4px 0 0 0; font-size: 11px; color: #555; }
-    .ticket-ref { font-size: 10px; color: #888; text-align: right; }
+    .header-sub { margin: 4px 0 0 0; font-size: 12px; color: #555; }
+    .ticket-ref { font-size: 12px; color: #888; text-align: right; }
     .ref-label {
       background: #f0f0f0; border: 1px solid #c0c0c0;
       padding: 4px 8px; border-radius: 3px; display: block;
@@ -350,7 +350,7 @@ import { NotificationService } from '../../../services/notification.service';
     }
     .step {
       display: flex; align-items: center; gap: 6px;
-      font-size: 11px; color: #888;
+      font-size: 12px; color: #888;
     }
     .step.active { color: #0a246a; font-weight: bold; }
     .step.done   { color: #008800; }
@@ -358,7 +358,7 @@ import { NotificationService } from '../../../services/notification.service';
       width: 20px; height: 20px;
       border-radius: 50%; background: #d0d0d0;
       display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: bold; flex-shrink: 0;
+      font-size: 12px; font-weight: bold; flex-shrink: 0;
     }
     .step.active .step-num { background: #0a246a; color: white; }
     .step.done   .step-num { background: #008800; color: white; }
@@ -378,20 +378,20 @@ import { NotificationService } from '../../../services/notification.service';
     }
     legend {
       padding: 0 10px;
-      font-weight: bold; font-size: 11px;
+      font-weight: bold; font-size: 12px;
       color: #0a246a; background: white;
       text-transform: uppercase; letter-spacing: 0.5px;
     }
 
     .form-field { margin-bottom: 14px; display: flex; flex-direction: column; }
     .form-field label {
-      font-size: 11px; font-weight: bold;
+      font-size: 12px; font-weight: bold;
       margin-bottom: 4px; color: #222;
     }
     .req { color: #cc0000; }
-    .field-hint { font-size: 10px; color: #666; margin: 0 0 6px 0; }
-    .char-count { font-size: 10px; color: #888; text-align: right; margin-top: 3px; }
-    .field-error { font-size: 10px; color: #cc0000; margin-top: 3px; }
+    .field-hint { font-size: 12px; color: #666; margin: 0 0 6px 0; }
+    .char-count { font-size: 12px; color: #888; text-align: right; margin-top: 3px; }
+    .field-error { font-size: 12px; color: #cc0000; margin-top: 3px; }
 
     .form-row-2col {
       display: grid;
@@ -425,7 +425,7 @@ import { NotificationService } from '../../../services/notification.service';
     .fmt-btn {
       background: white; border: 1px solid #b0b0b0;
       padding: 3px 8px; cursor: pointer;
-      font-size: 11px; font-family: inherit;
+      font-size: 12px; font-family: inherit;
       border-radius: 2px;
     }
     .fmt-btn:hover { background: #dde8f5; border-color: #7a9fbf; }
@@ -452,17 +452,17 @@ import { NotificationService } from '../../../services/notification.service';
       padding: 8px 10px; background: #f9f9f9;
     }
     .attachment-header {
-      font-size: 10px; font-weight: bold; color: #555; margin-bottom: 6px;
+      font-size: 12px; font-weight: bold; color: #555; margin-bottom: 6px;
     }
     .file-list { max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
     .file-item {
       display: flex; align-items: center; gap: 8px;
       padding: 4px 6px; background: white;
-      border: 1px solid #e0e0e0; font-size: 11px;
+      border: 1px solid #e0e0e0; font-size: 12px;
     }
     .file-type-icon { font-size: 13px; flex-shrink: 0; }
     .file-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgb(10, 12, 12);}
-    .file-size { color: #0f0f0f; font-size: 10px; flex-shrink: 0; }
+    .file-size { color: #0f0f0f; font-size: 12px; flex-shrink: 0; }
     .remove-btn {
       background: none; border: none; cursor: pointer;
       color: #cc0000; padding: 2px 6px; font-weight: bold; flex-shrink: 0;
@@ -491,8 +491,8 @@ import { NotificationService } from '../../../services/notification.service';
     .priority-card.medium.selected   { border-color: #886600; background: #fffcf0; }
     .priority-card.low.selected      { border-color: #006600; background: #f0fff0; }
     .p-icon { font-size: 20px; }
-    .p-label { font-size: 11px; font-weight: bold; }
-    .p-desc  { font-size: 9px; color: #666; line-height: 1.3; }
+    .p-label { font-size: 12px; font-weight: bold; }
+    .p-desc  { font-size: 12px; color: #666; line-height: 1.3; }
     .priority-card.critical .p-label { color: #cc0000; }
     .priority-card.high     .p-label { color: #cc5500; }
     .priority-card.medium   .p-label { color: #886600; }
@@ -502,7 +502,7 @@ import { NotificationService } from '../../../services/notification.service';
     .radio-group { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 4px; }
     .radio-label {
       display: flex; align-items: center; gap: 5px;
-      font-size: 11px; cursor: pointer; font-weight: normal;
+      font-size: 12px; cursor: pointer; font-weight: normal;
     }
     .radio-label input { cursor: pointer; }
 
@@ -519,10 +519,10 @@ import { NotificationService } from '../../../services/notification.service';
       border-left: 3px solid #0a246a;
     }
     .review-section.full-width { grid-column: 1 / -1; }
-    .review-label { font-size: 10px; font-weight: bold; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+    .review-label { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; margin-bottom: 4px; }
     .review-value { font-size: 12px; color: #111; }
     .review-desc {
-      font-size: 11px; color: #111; line-height: 1.6;
+      font-size: 12px; color: #111; line-height: 1.6;
       max-height: 120px; overflow-y: auto;
       padding: 4px 0;
     }
@@ -530,7 +530,7 @@ import { NotificationService } from '../../../services/notification.service';
     .priority-pill {
       display: inline-block;
       padding: 2px 8px; border-radius: 3px;
-      font-size: 10px; font-weight: bold; text-transform: capitalize;
+      font-size: 12px; font-weight: bold; text-transform: capitalize;
     }
     .priority-pill.critical { background: #ffecec; color: #cc0000; }
     .priority-pill.high     { background: #fff0e8; color: #cc5500; }
@@ -540,7 +540,7 @@ import { NotificationService } from '../../../services/notification.service';
     .sla-notice {
       display: flex; align-items: center; gap: 8px;
       margin-top: 14px; padding: 10px 14px;
-      border-radius: 3px; font-size: 11px;
+      border-radius: 3px; font-size: 12px;
     }
     .sla-notice.critical { background: #fff0f0; border: 1px solid #ffb0b0; color: #aa0000; }
     .sla-notice.high     { background: #fff8f0; border: 1px solid #ffcc99; color: #884400; }
@@ -557,7 +557,7 @@ import { NotificationService } from '../../../services/notification.service';
     .classic-btn {
       background: #f0f0f0; border: 1px solid #a0a0a0;
       border-radius: 3px; padding: 7px 18px;
-      cursor: pointer; font-size: 11px; color: #000;
+      cursor: pointer; font-size: 12px; color: #000;
     }
     .classic-btn:hover { background: #dde8f0; }
     .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
@@ -610,7 +610,7 @@ import { NotificationService } from '../../../services/notification.service';
     .action-row { display: flex; gap: 10px; justify-content: flex-end; }
     .drawing-btn {
       background: #f0f0f0; border: 1px solid #a0a0a0;
-      padding: 6px 14px; cursor: pointer; font-size: 11px; border-radius: 2px;
+      padding: 6px 14px; cursor: pointer; font-size: 12px; border-radius: 2px;
     }
     .drawing-btn:hover { background: #e0e0e0; }
     .drawing-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
@@ -642,11 +642,11 @@ import { NotificationService } from '../../../services/notification.service';
 }
 
 .warning-message p {
-  margin: 0 0 4px 0; font-size: 11px; color: #333;
+  margin: 0 0 4px 0; font-size: 12px; color: #333;
 }
 
 .warning-hint {
-  font-size: 10px; color: #886600;
+  font-size: 12px; color: #886600;
   background: #fffae8; border: 1px solid #e0c060;
   padding: 6px 10px; border-radius: 3px; margin-top: 8px;
 }

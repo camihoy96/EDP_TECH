@@ -218,7 +218,7 @@ import { environment } from '../../../../environments/environment';
   </div>
   
   <!-- Show placeholder only when NOT in approval mode AND no signature -->
-  <div *ngIf="!approvalMode && !receivedSignature" style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 9px;">
+  <div *ngIf="!approvalMode && !receivedSignature" style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 12px;">
     To be completed upon receipt
   </div>
 </div>
@@ -284,7 +284,7 @@ import { environment } from '../../../../environments/environment';
     .req-form-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px; }
     .req-form-header h2 { margin: 0; font-size: 16px; text-transform: uppercase; color: #0a246a; }
     .req-form-header h3 { margin: 4px 0; font-size: 14px; color: #04060c; }
-    .ctrl-no { font-size: 9px; color: #cc0000; font-weight: bold; }
+    .ctrl-no { font-size: 12px; color: #cc0000; font-weight: bold; }
     .req-top-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px; }
     .field-row { display: flex; align-items: center; gap: 4px; }
     .field-row label { font-weight: bold; font-size: 12px; white-space: nowrap; color: #0f0e0e; }
@@ -295,9 +295,9 @@ import { environment } from '../../../../environments/environment';
     .req-signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .sig-block { border: 1px solid #ccc; padding: 8px; background: #fafafa; }
     .sig-block.approval-block { border: 2px solid #008800; background: #f0fff0; }
-    .sig-block h5 { margin: 0 0 6px 0; font-size: 9px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+    .sig-block h5 { margin: 0 0 6px 0; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
     .sig-field { display: flex; align-items: center; margin-bottom: 3px; }
-    .sig-field label { width: 30px; font-size: 9px; font-weight: bold; color: #0f0e0e; }
+    .sig-field label { width: 30px; font-size: 12px; font-weight: bold; color: #0f0e0e; }
     .req-input-sm { flex: 1; padding: 3px 5px; border: 1px solid #ccc; font-size: 12px; font-family: 'Courier New', monospace; }
     .req-footer { align-items: center; margin-top: 16px; padding-top: 12px; border-top: 2px solid #000; color: #0f0e0e; }
     .req-footer p { margin: 2px 0; }
@@ -307,20 +307,20 @@ import { environment } from '../../../../environments/environment';
     .action-btn.submit { background: #0a3a8c; color: white; border-color: #1c5fb5 #042070 #042070 #1c5fb5; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .sig-options { display: flex; gap: 4px; margin: 4px 0; }
-    .sig-option-btn { flex: 1; padding: 2px 6px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 8px; border-radius: 2px; }
+    .sig-option-btn { flex: 1; padding: 2px 6px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer; font-size: 12px; border-radius: 2px; }
     .sig-option-btn.active { background: #0a3a8c; color: white; border-color: #0a3a8c; }
-    .sig-draw-trigger { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 2px dashed #ccc; background: #fafafa; cursor: pointer; width: 100%; border-radius: 4px; font-size: 9px; color: #666; }
+    .sig-draw-trigger { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; border: 2px dashed #ccc; background: #fafafa; cursor: pointer; width: 100%; border-radius: 4px; font-size: 12px; color: #666; }
     .sig-draw-trigger:hover { border-color: #0a3a8c; background: #e8f0ff; color: #0a3a8c; }
     .sig-draw-icon { font-size: 24px; }
     .sig-upload { border: 1px dashed #ccc; padding: 8px; text-align: center; margin-top: 4px; }
     .sig-upload.has-file { border-style: solid; border-color: #008800; }
     .sig-upload.drag-over { border-color: #0a3a8c; border-style: solid; background: #e8f0ff; }
-    .sig-placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; font-size: 9px; color: #888; cursor: pointer; }
+    .sig-placeholder { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px; font-size: 12px; color: #888; cursor: pointer; }
     .sig-icon { font-size: 20px; }
     .sig-saved-preview { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 4px 8px; background: #f0fff0; border: 1px solid #88cc88; border-radius: 3px; }
     .sig-image-small { max-width: 100px; max-height: 40px; object-fit: contain; }
-    .sig-saved-label { font-size: 9px; color: #008800; font-weight: bold; }
-    .sig-clear { background: rgba(204,0,0,0.8); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 8px; padding: 1px 4px; margin-left: 6px; }
+    .sig-saved-label { font-size: 12px; color: #008800; font-weight: bold; }
+    .sig-clear { background: rgba(204,0,0,0.8); color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px; padding: 1px 4px; margin-left: 6px; }
     .toast-notification { position: fixed; bottom: 24px; right: 24px; background: #333; color: white; padding: 12px 18px; border-radius: 6px; transform: translateY(100px); opacity: 0; transition: all 0.3s ease; z-index: 3000; font-size: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
     .toast-notification.show { transform: translateY(0); opacity: 1; }
     .toast-notification.success { background: #008800; }
