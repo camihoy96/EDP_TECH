@@ -106,20 +106,20 @@ import { Subscription } from 'rxjs';
       <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
     </label>
     <button class="classic-btn primary" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" 
-            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 10px; padding: 3px 10px;">
+            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
       ⚙️ Process ({{ selectedReqIds.length }})
     </button>
     <button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
-            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 10px; padding: 3px 10px;">
+            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
       ⚙️ Process ({{ selectedReqIds.length }})
     </button>
     <!-- Delete for forwarded, released, rejected -->
     <button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
-            (click)="bulkDeleteForwarded()" style="font-size: 10px; padding: 3px 10px;">
+            (click)="bulkDeleteForwarded()" style="font-size: 12px; padding: 3px 10px;">
       🗑️ Delete ({{ selectedReqIds.length }})
     </button>
     <button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
-            (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 10px; padding: 3px 10px;">
+            (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 12px; padding: 3px 10px;">
       📦 Release ({{ selectedReqIds.length }})
     </button>
 </ng-container>
@@ -160,7 +160,10 @@ import { Subscription } from 'rxjs';
         <span class="creator-label">by: {{ req.prepared_name }}</span>
       </div>
     </td>
-    <td class="date-cell">{{ formatDate(req.date) }}</td>
+    <td class="date-cell">
+  {{ formatDate(req.date) }}<br>
+  <small style="font-size: 11px; color: #888;">{{ formatTime(req.time) }}</small>
+</td>
    <td class="forward-cell">
   <!-- If forwarded: show details -->
   <div class="forward-info" *ngIf="req.is_forwarded">
@@ -217,8 +220,8 @@ import { Subscription } from 'rxjs';
     <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
     <td class="status-cell">
   <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-    {{ getStatusLabel(req.status) }}
-  </span>
+    {{ getStatusLabel(req) }}
+</span>
   <!-- Show sub-status for forwarded requests that are processing/released at recipient -->
   <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
     ↳ {{ getStatusLabel(req.forwarded_status) }}
@@ -310,7 +313,7 @@ import { Subscription } from 'rxjs';
                 <code>{{ viewReq.requisition_number }}</code>
               </div>
               <span class="status-badge" [class]="'status-' + (viewReq.status || 'pending')">
-                {{ getStatusLabel(viewReq.status) }}
+                  {{ getStatusLabel(viewReq) }}
               </span>
             </div>
 
@@ -323,9 +326,9 @@ import { Subscription } from 'rxjs';
                 </span>
               </div>
               <div class="view-field">
-                <label>Date:</label>
-                <span>{{ formatDate(viewReq.date) }}</span>
-              </div>
+            <label>Date & Time:</label>
+            <span>{{ formatDate(viewReq.date) }} at {{ formatTime(viewReq.time) }}</span>
+          </div>
               <div class="view-field">
                 <label>Department:</label>
                 <span>{{ getDepartmentName(viewReq.department_id) }}</span>
@@ -625,7 +628,7 @@ import { Subscription } from 'rxjs';
         </div>
       </div>
       <div style="margin-top: 16px;">
-        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 6px;">Reason for rejection:</label>
+        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 6px;">Reason for rejection:</label>
         <textarea [(ngModel)]="rejectReason" 
                   class="classic-input" 
                   rows="3" 
@@ -650,21 +653,21 @@ import { Subscription } from 'rxjs';
       <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size: 11px; margin-bottom: 12px;">
+      <p style="font-size: 12px; margin-bottom: 12px;">
         Forwarding: <strong>#{{ forwardTargetReq?.requisition_number }}</strong>
       </p>
-      <p style="font-size: 10px; color: #666; margin-bottom: 4px;">
+      <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
         <strong>From:</strong> {{ forwardTargetReq?.request_from || '—' }} — 
         {{ getBranchName(forwardTargetReq?.branch_id) }} / {{ getDepartmentName(forwardTargetReq?.department_id) }}
       </p>
       
       <!-- 🔑 Warning about original department -->
-      <div style="font-size: 9px; color: #cc6600; background: #fff8e8; padding: 6px 8px; border: 1px solid #e6d88a; border-radius: 3px; margin-bottom: 10px;">
+      <div style="font-size: 12px; color: #cc6600; background: #fff8e8; padding: 6px 8px; border: 1px solid #e6d88a; border-radius: 3px; margin-bottom: 10px;">
         ⚠️ Note: The original department ({{ getDepartmentName(forwardTargetReq?.department_id) }}) is excluded from forwarding options.
       </div>
       
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
+        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
         <select [(ngModel)]="forwardBranchId" class="classic-select" style="width: 100%;" (change)="onForwardBranchChange()">
           <option value="">— Select Branch —</option>
           <option *ngFor="let branch of filteredBranches" [value]="branch.id">
@@ -674,7 +677,7 @@ import { Subscription } from 'rxjs';
       </div>
       
       <div style="margin-bottom: 12px;">
-        <label style="font-size: 11px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
+        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
         <select [(ngModel)]="forwardDepartmentId" class="classic-select" style="width: 100%;" [disabled]="!forwardBranchId">
           <option value="">— Select Department —</option>
           <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
@@ -683,7 +686,7 @@ import { Subscription } from 'rxjs';
         </select>
         <!-- Show message if no departments available -->
         <div *ngIf="forwardBranchId && forwardFilteredDepartments.length === 0" 
-             style="font-size: 9px; color: #cc0000; margin-top: 4px;">
+             style="font-size: 12px; color: #cc0000; margin-top: 4px;">
           ⚠️ No other departments available in this branch.
         </div>
       </div>
@@ -725,20 +728,20 @@ import { Subscription } from 'rxjs';
 </div>
   `,
  styles: [`
-    .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
+    .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; }
     .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
-    .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
+    .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
     .classic-btn:hover { background: #dde8f0; }
     .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
     .classic-btn.primary:hover { background: #1a3a8a; }
     .classic-btn.danger { background: #cc0000; color: white; border-color: #cc0000; }
     .classic-btn.danger:hover { background: #aa0000; }
     .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 6px; flex-wrap: wrap; }
-    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 10px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
+    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
-    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; }
+    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 12px; font-weight: bold; }
     .status-tab.active .tab-count { background: #0a3a8c; }
     .tab-count.pending-count { background: #cc6600; }
     .tab-count.approved-count { background: #008800; }
@@ -746,40 +749,40 @@ import { Subscription } from 'rxjs';
     .tab-count.rejected-count { background: #cc0000; }
     .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 4px; flex-wrap: wrap; }
     .filter-group { display: flex; align-items: center; gap: 4px; }
-    .filter-group label { font-size: 10px; font-weight: bold; color: #000; }
-    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 10px; background: white; }
+    .filter-group label { font-size: 12px; font-weight: bold; color: #000; }
+    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 12px; background: white; }
     .search-group .classic-input { width: 160px; }
-    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 10px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
     .status-sep { color: #b0b0b0; }
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
-    .classic-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-    .classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 10px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+    .classic-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 12px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
     .classic-table th:last-child { border-right: none; }
     .classic-table td { padding: 7px 8px; text-align: center; border-bottom: 1px solid #e0e0e0; color: #000; }
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0fe; }
-    .req-num { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 11px; }
-    .date-cell { font-family: monospace; font-size: 10px; white-space: nowrap; color: #555; }
+    .req-num { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
+    .date-cell { font-family: monospace; font-size: 12px; white-space: nowrap; color: #555; }
     .items-cell { font-weight: 500; }
     .total-cell { font-weight: bold; color: #0a3a8c; font-family: monospace; }
-    .request-type-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+    .request-type-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
     .type-purchase { background: #cde8f5; color: #0066cc; }
     .type-borrow { background: #fff0cc; color: #cc6600; }
     .type-repair { background: #f0ccf0; color: #880088; }
     .dept-cell { max-width: 130px; }
     .dept-info-small { display: flex; flex-direction: column; gap: 2px; align-items: center; }
-    .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; }
-    .branch-tag-tiny { font-size: 8px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
-    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 9px; text-transform: uppercase; }
-    .status-pending { background: #fffae8; color: #886600; }
+    .dept-name-small { font-weight: 600; font-size: 12px; color: #0a3a8c; }
+    .branch-tag-tiny { font-size: 12px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
+    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 12px; text-transform: uppercase; }
+    .status-pending { background: #fff0e8; color: #cc6600; border: 1px solid #e6b88a; } /* For Approval */
     .status-approved { background: #eeffee; color: #008800; }
     .status-released { background: #e8f0ff; color: #0066cc; }
     .status-rejected { background: #ffecec; color: #cc0000; }
     .status-worker { margin-top: 2px; }
-    .worker-label { font-size: 9px; color: #666; display: block; font-style: italic; }
-    .creator-info { font-size: 9px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
+    .worker-label { font-size: 12px; color: #666; display: block; font-style: italic; }
+    .creator-info { font-size: 12px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
    .creator-info { 
-  font-size: 9px; 
+  font-size: 12px; 
   color: #666; 
   margin-top: 3px; 
   border-top: 1px dotted #c0c0c0; 
@@ -792,7 +795,7 @@ import { Subscription } from 'rxjs';
 .creator-label { 
   color: #0a3a8c; 
   font-weight: 600;
-  font-size: 9px;
+  font-size: 12px;
   background: #f0f4ff;
   padding: 1px 6px;
   border-radius: 3px;
@@ -800,10 +803,10 @@ import { Subscription } from 'rxjs';
   white-space: nowrap;
 }
 .creator-label::before {
-  font-size: 8px;
+  font-size: 12px;
 }
   .company-tag-tiny {
-  font-size: 8px;
+  font-size: 12px;
   background: #fff8e8;
   color: #886600;
   padding: 1px 4px;
@@ -813,7 +816,7 @@ import { Subscription } from 'rxjs';
   display: block;
   margin-top: 1px;
 }
-    .action-cell { white-space: nowrap; display: flex; gap: 2px; justify-content: center; }
+    .action-cell { white-space: nowrap; display: flex; gap: 2px; justify-content: center; margin-top: 30px; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 2px; }
     .action-btn:hover { background: #e8f0fe; border-color: #a0a0a0; }
     .edit-btn:hover { color: #0066cc; }
@@ -823,7 +826,7 @@ import { Subscription } from 'rxjs';
     .empty-row td { text-align: center; padding: 30px; }
     .empty-state { text-align: center; }
     .empty-icon { font-size: 40px; display: block; margin-bottom: 8px; }
-    .empty-state p { margin-bottom: 12px; color: #666; font-size: 11px; }
+    .empty-state p { margin-bottom: 12px; color: #666; font-size: 12px; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
     .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 450px; max-height: 80vh; overflow-y: auto; border-radius: 2px; }
     .view-modal { max-width: 750px !important; max-height: 95vh; width: 95%; }
@@ -836,44 +839,44 @@ import { Subscription } from 'rxjs';
     .warning-content { display: flex; gap: 14px; align-items: flex-start; }
     .warning-icon { font-size: 36px; flex-shrink: 0; }
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
-    .warning-message p { margin: 0 0 4px 0; font-size: 11px; color: #333; }
+    .warning-message p { margin: 0 0 4px 0; font-size: 12px; color: #333; }
     .warning-message strong { color: #0a3a8c; font-family: monospace; }
-    .resolve-title { font-style: italic; color: #555; margin: 4px 0; font-size: 11px; padding: 4px 8px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #ccc; word-break: break-word; }
-    .warning-hint { font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
+    .resolve-title { font-style: italic; color: #555; margin: 4px 0; font-size: 12px; padding: 4px 8px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #ccc; word-break: break-word; }
+    .warning-hint { font-size: 12px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
     .warning-hint.danger-text { color: #cc0000; background: #fff0f0; border: 1px solid #ffb0b0; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid #ccc; background: #e0e0e0; position: sticky; bottom: 0; }
-    .view-details { font-size: 11px; }
+    .view-details { font-size: 12px; }
     .view-header-info { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #0a246a; }
     .view-req-number { display: flex; align-items: center; gap: 10px; }
-    .view-label { font-weight: bold; font-size: 11px; color: #555; text-transform: uppercase; }
+    .view-label { font-weight: bold; font-size: 12px; color: #555; text-transform: uppercase; }
     .view-req-number code { font-size: 14px; background: #f0f4ff; padding: 4px 10px; border-radius: 3px; color: #0a3a8c; border: 1px solid #b8c8e8; font-weight: bold; }
     .view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; margin-bottom: 16px; }
     .view-field { display: flex; flex-direction: column; gap: 3px; }
     .view-field.full-width { grid-column: 1 / -1; }
-    .view-field label { font-size: 9px; font-weight: bold; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+    .view-field label { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
     .view-field span { font-size: 12px; color: #000; padding: 2px 0; }
     .view-section { margin-bottom: 14px; padding: 12px; background: white; border: 1px solid #d0d0d0; border-radius: 4px; }
     .view-section h4 { margin: 0 0 10px 0; font-size: 12px; color: #0a246a; border-bottom: 1px solid #e0e0e0; padding-bottom: 6px; font-weight: bold; }
-    .view-remarks { font-size: 11px; color: #333; white-space: pre-wrap; min-height: 30px; line-height: 1.5; padding: 4px 0; }
-    .view-items-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-    .view-items-table th { background: #0a246a; color: white; padding: 6px 10px; font-weight: bold; border: 1px solid #0a246a; text-align: left; font-size: 9px; text-transform: uppercase; }
+    .view-remarks { font-size: 12px; color: #333; white-space: pre-wrap; min-height: 30px; line-height: 1.5; padding: 4px 0; }
+    .view-items-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .view-items-table th { background: #0a246a; color: white; padding: 6px 10px; font-weight: bold; border: 1px solid #0a246a; text-align: left; font-size: 12px; text-transform: uppercase; }
     .view-items-table td { padding: 5px 10px; border: 1px solid #ddd; }
     .view-items-table tbody tr:hover { background: #f8faff; }
     .view-items-table .center { text-align: center; }
     .view-items-table .right { text-align: right; font-family: monospace; }
     .view-total-row { background: #f0f4f8; font-weight: bold; }
     .view-total-row td { border: 2px solid #0a246a; padding: 8px 10px; }
-    .no-items-text { color: #888; font-style: italic; text-align: center; padding: 15px; font-size: 11px; }
+    .no-items-text { color: #888; font-style: italic; text-align: center; padding: 15px; font-size: 12px; }
     .view-signatures { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
     .view-sig-block { text-align: center; padding: 10px; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 4px; }
-    .view-sig-block h5 { margin: 0 0 8px 0; font-size: 9px; text-transform: uppercase; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; letter-spacing: 0.5px; }
+    .view-sig-block h5 { margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; color: #555; border-bottom: 1px solid #ddd; padding-bottom: 5px; letter-spacing: 0.5px; }
     .view-sig-image { min-height: 45px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; background: white; border: 1px solid #eee; border-radius: 2px; padding: 4px; }
     .view-sig-image img { max-width: 120px; max-height: 45px; object-fit: contain; }
-    .view-sig-name { font-size: 11px; font-weight: bold; color: #000; margin-bottom: 2px; }
-    .view-sig-date { font-size: 9px; color: #888; }
+    .view-sig-name { font-size: 12px; font-weight: bold; color: #000; margin-bottom: 2px; }
+    .view-sig-date { font-size: 12px; color: #888; }
     .direction-tag {
-  font-size: 7px;
+  font-size: 12px;
   padding: 1px 4px;
   border-radius: 2px;
   margin-top: 1px;
@@ -886,7 +889,7 @@ import { Subscription } from 'rxjs';
   min-width: 18px;
   height: 18px;
   border-radius: 9px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   padding: 0 5px;
   margin-left: 4px;
@@ -909,19 +912,19 @@ import { Subscription } from 'rxjs';
 }
   .forward-company { 
   color: #888; 
-  font-size: 10px; 
+  font-size: 12px; 
   white-space: nowrap; 
   font-style: italic; 
 }
 .forward-by { 
-  font-size: 8px; 
+  font-size: 12px; 
   color: #0a3a8c; 
   font-style: italic; 
   font-weight: 600;
   margin-top: 1px;
 }
   .select-all-label {
-  font-size: 10px;
+  font-size: 12px;
   color: #333;
   display: flex;
   align-items: center;
@@ -934,7 +937,7 @@ import { Subscription } from 'rxjs';
   .classic-input {
   padding: 3px 6px;
   border: 1px solid #a0a0a0;
-  font-size: 10px;
+  font-size: 12px;
   background: white;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
@@ -957,10 +960,10 @@ import { Subscription } from 'rxjs';
 }
   .forward-btn { color: #0a3a8c; }
 .forward-btn:hover { background: #e8f0ff; border-color: #0a3a8c; color: #0a3a8c; }
-.forward-cell { max-width: 120px; font-size: 9px; }
+.forward-cell { max-width: 120px; font-size: 12px; }
 .forward-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
-.forward-label { font-weight: 600; color: #0a3a8c; font-size: 9px; }
-.forward-dept { color: #666; font-size: 8px; }
+.forward-label { font-weight: 600; color: #0a3a8c; font-size: 12px; }
+.forward-dept { color: #666; font-size: 12px; }
 .tab-count.forwarded-count { background: #0a3a8c; }
 .status-forwarded { background: #e8f0ff; color: #0a3a8c; }
 .attn-info { 
@@ -970,7 +973,7 @@ import { Subscription } from 'rxjs';
   align-items: center; 
 }
 .role-tag-tiny {
-  font-size: 7px;
+  font-size: 12px;
   background: #f5f0ff;
   color: #6600cc;
   padding: 1px 4px;
@@ -999,7 +1002,7 @@ import { Subscription } from 'rxjs';
   opacity: 1;
 }
   .classic-select option small {
-  font-size: 8px;
+  font-size: 12px;
   color: #888;
 }
   .header-actions {
@@ -1013,7 +1016,7 @@ import { Subscription } from 'rxjs';
   border-color: #0a246a;
 }
   .status-forwarded-sub { 
-  font-size: 8px; 
+  font-size: 12px; 
   font-style: italic; 
   color: #666; 
   margin-top: 2px;
@@ -2106,48 +2109,53 @@ applyFilters() {
             return false;
         });
     } else if (this.viewMode === 'incoming') {
-        // "Request Management" = Requests RECEIVED by our department
-        // that we HAVEN'T forwarded yet
-        filtered = filtered.filter(r => {
-            // Check if from our own department
-            const creatorBranch = r.creator_branch_id;
-            const creatorDept = r.creator_dept_id;
-            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) 
-                                  || r.submitted_by == userId;
-            
-            // If forwarded TO us from another department
-            if (r.is_forwarded && 
-                r.forwarded_to_branch_id == userBranchId && 
-                r.forwarded_to_department_id == userDeptId &&
-                !isFromOurDept) {
-                console.log(`✅ INCOMING: #${r.requisition_number} - forwarded TO us`);
-                return true;
-            }
-            
-            // 🔑 KEY: If forwarded FROM our department, exclude from incoming
-            // (it's already been handled, so it should be in "Our Requests")
-            if (r.is_forwarded && 
-                r.branch_id == userBranchId && 
-                r.department_id == userDeptId) {
-                console.log(`❌ INCOMING: #${r.requisition_number} - we already forwarded this`);
-                return false;
-            }
-            
-            // Original destination is our department AND not from us
-            if (!r.is_forwarded && 
-                r.branch_id == userBranchId && 
-                r.department_id == userDeptId && 
-                r.submitted_by != userId &&
-                !isFromOurDept) {
-                console.log(`✅ INCOMING: #${r.requisition_number} - sent to us`);
-                return true;
-            }
-            
-            console.log(`❌ INCOMING: #${r.requisition_number} - excluded`);
+    // "Request Management" = Requests RECEIVED by our department
+    // that we HAVEN'T forwarded yet AND have been approved
+    filtered = filtered.filter(r => {
+        // Check if from our own department
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) 
+                              || r.submitted_by == userId;
+        
+        // ✅ EXCLUDE only requests that have NO approval yet
+        // (pending AND no approved_name/signature = "For Approval")
+        if (r.status === 'pending' && !r.approved_name && !r.approved_signature) {
+            console.log(`❌ INCOMING: #${r.requisition_number} - no approval yet, hidden from recipient`);
             return false;
-        });
-    }
-    
+        }
+        
+        // If forwarded TO us from another department
+        if (r.is_forwarded && 
+            r.forwarded_to_branch_id == userBranchId && 
+            r.forwarded_to_department_id == userDeptId &&
+            !isFromOurDept) {
+            console.log(`✅ INCOMING: #${r.requisition_number} - forwarded TO us`);
+            return true;
+        }
+        
+        // 🔑 KEY: If forwarded FROM our department, exclude from incoming
+        if (r.is_forwarded && 
+            r.branch_id == userBranchId && 
+            r.department_id == userDeptId) {
+            console.log(`❌ INCOMING: #${r.requisition_number} - we already forwarded this`);
+            return false;
+        }
+        
+        // Original destination is our department AND not from us
+        if (!r.is_forwarded && 
+            r.branch_id == userBranchId && 
+            r.department_id == userDeptId && 
+            r.submitted_by != userId &&
+            !isFromOurDept) {
+            console.log(`✅ INCOMING: #${r.requisition_number} - sent to us`);
+            return true;
+        }
+        
+        console.log(`❌ INCOMING: #${r.requisition_number} - excluded`);
+        return false;
+    });
+}
     // Status tab filter
     if (this.activeTab !== 'all') {
         filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
@@ -2205,6 +2213,9 @@ getStatusCount(status: string): number {
         });
     } else if (this.viewMode === 'incoming') {
         filtered = filtered.filter(r => {
+            // ✅ Exclude pending/for-approval from incoming view
+            if (r.status === 'pending') return false;
+            
             const creatorBranch = r.creator_branch_id;
             const creatorDept = r.creator_dept_id;
             const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) 
@@ -2228,16 +2239,34 @@ getStatusCount(status: string): number {
     if (status === 'all') return filtered.length;
     return filtered.filter(r => (r.status || 'pending') === status).length; 
 }
-getStatusLabel(status: string): string {
+getStatusLabel(reqOrStatus: any): string {
+    let status: string;
+    let req: any = null;
+    
+    // Determine if we received a requisition object or a status string
+    if (typeof reqOrStatus === 'object' && reqOrStatus !== null) {
+        req = reqOrStatus;
+        status = req.status || 'pending';
+    } else {
+        status = reqOrStatus || 'pending';
+    }
+    
+    // For pending status, check if it has approval
+    if (status === 'pending') {
+        if (req && (req.approved_name || req.approved_signature)) {
+            return 'Pending';      // ✅ Has approval, waiting for recipient
+        }
+        return 'For Approval';     // ✅ No approval yet, waiting for Head/Supervisor
+    }
+    
     const labels: Record<string, string> = {
-        'pending': 'Pending', 
         'approved': 'Accepted',
         'forwarded': 'Forwarded',
         'processing': 'On Process',
         'released': 'Released', 
         'rejected': 'Rejected'
     };
-    return labels[status] || status || 'Pending';
+    return labels[status] || status || 'For Approval';
 }
 // Check if recipient can Process (status is accepted/approved OR forwarded)
 canProcess(req: any): boolean {
@@ -2752,8 +2781,22 @@ canModify(req: any): boolean {
     const isMyRequisition = req.submitted_by === this.currentUser?.id;
     const isHeadOrSup = this.isHeadOrSupervisor();
     
+    // My own pending request
     if (isMyRequisition && isPending) return true;
-    if (isHeadOrSup && isPending) return true;
+    
+    // Head/Supervisor can edit pending requests from their SAME department only
+    // (not recipient department requests)
+    if (isHeadOrSup && isPending) {
+        const userBranchId = this.currentUser?.branch_id;
+        const userDeptId = this.currentUser?.department_id;
+        const creatorBranch = req.creator_branch_id;
+        const creatorDept = req.creator_dept_id;
+        
+        // Only if the creator is from the same department (not a recipient editing someone else's request)
+        if (creatorBranch == userBranchId && creatorDept == userDeptId) {
+            return true;
+        }
+    }
     
     return false;
 }
@@ -2822,7 +2865,7 @@ canDelete(req: any): boolean {
     };
     
     const companyName = this.userBranch?.company_name || this.userBranch?.name || 'Lee Super Plaza';
-    const statusLabel = this.getStatusLabel(req.status);
+    const statusLabel = this.getStatusLabel(req);
 
     const printContent = `<!DOCTYPE html><html><head><title>Requisition - ${req.requisition_number}</title>
       <style>
@@ -2831,7 +2874,7 @@ canDelete(req: any): boolean {
         .req-print{background:white;border:2px solid #000;padding:16px 20px;max-width:750px;margin:0 auto}
         .req-header{text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:12px}
         .req-header .company{font-size:14px;font-weight:bold;text-transform:uppercase;letter-spacing:2px;color:#0a246a}
-        .req-header .title{font-size:11px;font-weight:bold;letter-spacing:3px;margin-top:4px}
+        .req-header .title{font-size:12px;font-weight:bold;letter-spacing:3px;margin-top:4px}
         .req-header .ctrl-no{font-size:8px;color:#c00;font-weight:bold;margin-top:2px}
         .req-header .ref{font-size:8px;margin-top:4px;color:#555}
         .status-badge{display:inline-block;padding:1px 8px;border-radius:3px;font-size:8px;font-weight:bold;text-transform:uppercase}
@@ -2866,7 +2909,7 @@ canDelete(req: any): boolean {
         @media print{body{padding:0;margin:0}.req-print{border:1px solid #000}}
       </style></head><body><div class="req-print">
       <div class="req-header"><div class="company">${companyName}</div><div class="title">REQUISITION FORM</div><div class="ctrl-no">CTRL NO.: EDR-30</div><div class="ref">REQ #: ${req.requisition_number||'N/A'} | Status: <span class="status-badge status-${req.status||'pending'}">${statusLabel}</span></div></div>
-      <div class="info-grid"><div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${req.request_from||'—'}</span></div><div class="info-row"><span class="info-label">ATTN:</span><span class="info-value">${req.attn||'—'}</span></div><div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(req.date)}</span></div><div class="info-row"><span class="info-label">Department:</span><span class="info-value">${this.getDepartmentName(req.department_id)}</span></div></div>
+      <div class="info-grid"><div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${req.request_from||'—'}</span></div><div class="info-row"><span class="info-label">ATTN:</span><span class="info-value">${req.attn||'—'}</span></div><div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(req.date)} ${req.time ? 'at ' + this.formatTime(req.time) : ''}</span></div><div class="info-row"><span class="info-label">Department:</span><span class="info-value">${this.getDepartmentName(req.department_id)}</span></div></div>
       <div class="remarks-section"><div class="remarks-label">Remarks / Reason:</div>${req.remarks||'No remarks provided.'}</div>
       <table class="items-table"><thead><tr><th>Qty</th><th>Item Description</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>${(req.items&&req.items.length>0)?req.items.map((i:any)=>`<tr><td>${i.qty||0}</td><td>${i.item||'—'}</td><td class="right">${Number(i.unit_price||0).toFixed(2)}</td><td class="right">${(Number(i.qty||0)*Number(i.unit_price||0)).toFixed(2)}</td></tr>`).join(''):'<tr><td colspan="4" class="empty-row">No items listed</td></tr>'}</tbody>${(req.items&&req.items.length>0)?`<tfoot><tr class="total-row"><td colspan="3" style="text-align:right;">Grand Total:</td><td class="right">${getTotal(req.items).toFixed(2)}</td></tr></tfoot>`:''}</table>
       <div class="signatures"><div class="sig-row"><div class="sig-block"><div class="sig-label">Form Prepared By</div><div class="sig-image-area">${req.prepared_signature?`<img src="${req.prepared_signature}" alt="Signature">`:'<span class="no-sig">No signature</span>'}</div><div class="sig-name">${req.prepared_name||'_______________'}</div><div class="sig-date">${fmtDate(req.prepared_date)}</div></div><div class="sig-block"><div class="sig-label">Form Approved By</div><div class="sig-image-area">${req.approved_signature?`<img src="${req.approved_signature}" alt="Signature">`:'<span class="no-sig">No signature</span>'}</div><div class="sig-name">${req.approved_name||'_______________'}</div><div class="sig-date">${fmtDate(req.approved_date)}</div></div><div class="sig-block"><div class="sig-label">Items Prepared By</div><div class="sig-image-area">${req.items_prepared_signature?`<img src="${req.items_prepared_signature}" alt="Signature">`:'<span class="no-sig">No signature</span>'}</div><div class="sig-name">${req.items_prepared_name||'_______________'}</div><div class="sig-date">${fmtDate(req.items_prepared_date)}</div></div></div></div>
@@ -2928,7 +2971,17 @@ editFromModal() {
     this.showDeleteConfirm = false;
     this.reqToDelete = null;
   }
-
+formatTime(time: string): string {
+    if (!time) return '—';
+    try {
+        const [hours, minutes] = time.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
+        return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch {
+        return time;
+    }
+}
   formatDate(val: any): string {
     if (!val) return '—';
     try {

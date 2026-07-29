@@ -4899,7 +4899,7 @@ app.post('/api/admin/requisitions', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const {
-            requisition_number, request_from, attn, date, remarks, items,
+            requisition_number, request_from, attn, date, remarks, time, items,
             prepared_name, prepared_signature, prepared_date,
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -4914,14 +4914,14 @@ app.post('/api/admin/requisitions', async (req, res) => {
         
         const [result] = await pool.query(`
             INSERT INTO requisitions (
-                requisition_number, request_from, attn, department_id, branch_id, date, remarks,
+                requisition_number, request_from, attn, department_id, branch_id, date, time, remarks,
                 prepared_name, prepared_signature, prepared_date,
                 approved_name, approved_signature, approved_date,
                 items_prepared_name, items_prepared_signature, items_prepared_date,
                 returned_name, returned_date,
                 submitted_by, status
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [requisition_number, request_from, attn, department_id || null, branch_id || null, date, remarks,
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [requisition_number, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
              prepared_name, prepared_signature, prepared_date,
              approved_name || null, approved_signature || null, approved_date || null,
              items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
@@ -4953,7 +4953,7 @@ app.put('/api/admin/requisitions/:id', async (req, res) => {
         
         const { id } = req.params;
         const {
-            request_from, attn, date, remarks, items,
+            request_from, attn, date, time, remarks, items,
             prepared_name, prepared_signature, prepared_date,
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -4965,13 +4965,13 @@ app.put('/api/admin/requisitions/:id', async (req, res) => {
         
         await pool.query(`
             UPDATE requisitions SET
-                request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, remarks = ?,
+                request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, time = ?, remarks = ?,
                 prepared_name = ?, prepared_signature = ?, prepared_date = ?,
                 approved_name = ?, approved_signature = ?, approved_date = ?,
                 items_prepared_name = ?, items_prepared_signature = ?, items_prepared_date = ?,
                 returned_name = ?, returned_date = ?
             WHERE id = ?`,
-            [request_from, attn, department_id || null, branch_id || null, date, remarks,
+            [request_from, attn, department_id || null, branch_id || null, date, time, remarks,
              prepared_name, prepared_signature, prepared_date,
              approved_name || null, approved_signature || null, approved_date || null,
              items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
@@ -5005,7 +5005,7 @@ app.post('/api/requisitions', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const {
-            requisition_number, request_from, attn, date, remarks, items,
+            requisition_number, request_from, attn, date, time, remarks, items,
             prepared_name, prepared_signature, prepared_date,
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -5020,14 +5020,14 @@ app.post('/api/requisitions', async (req, res) => {
         
         const [result] = await pool.query(`
     INSERT INTO requisitions (
-        requisition_number, request_from, attn, department_id, branch_id, date, remarks,
+        requisition_number, request_from, attn, department_id, branch_id, date, time, remarks,
         prepared_name, prepared_signature, prepared_date,
         approved_name, approved_signature, approved_date,
         items_prepared_name, items_prepared_signature, items_prepared_date,
         returned_name, returned_signature, returned_date,
         submitted_by, status
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [requisition_number, request_from, attn, department_id || null, branch_id || null, date, remarks,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [requisition_number, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
      prepared_name, prepared_signature, prepared_date,
      approved_name || null, approved_signature || null, approved_date || null,
      items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
@@ -5544,7 +5544,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
         
         console.log('✅ ACCESS GRANTED');
         
-        const { request_from, attn, date, remarks, items,
+        const { request_from, attn, date, time, remarks, items,
                 prepared_name, prepared_signature, prepared_date,
                 approved_name, approved_signature, approved_date,
                 items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -5561,13 +5561,13 @@ app.put('/api/requisitions/:id', async (req, res) => {
         });
         
         await pool.query(`UPDATE requisitions SET 
-            request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, remarks = ?,
+            request_from = ?, attn = ?, department_id = ?, branch_id = ?, date = ?, time = ?, remarks = ?,
             prepared_name = ?, prepared_signature = ?, prepared_date = ?,
             approved_name = ?, approved_signature = ?, approved_date = ?,
             items_prepared_name = ?, items_prepared_signature = ?, items_prepared_date = ?,
             returned_name = ?, returned_signature = ?, returned_date = ?
             WHERE id = ?`,
-            [request_from, attn, department_id || null, branch_id || null, date, remarks,
+            [request_from, attn, department_id || null, branch_id || null, date, time, remarks,
              prepared_name, prepared_signature, prepared_date,
              approved_name || null, approved_signature || null, approved_date || null,
              items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,

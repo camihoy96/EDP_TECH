@@ -21,7 +21,6 @@ import { environment } from '../../../environments/environment';
       <span class="header-sub">{{ approvalMode ? 'Fill in items Requested by details and signature' : editMode ? 'Update your requisition request' : 'Submit a requisition for items/equipment' }}</span>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
-      <button class="print-btn" (click)="printForm()">🖨️ Print</button>
       <button class="close-btn" (click)="cancel()" title="Close">✕</button>
     </div>
 </div>
@@ -78,10 +77,11 @@ import { environment } from '../../../environments/environment';
       </option>
     </select>
   </div>
-  <div class="field-row">
+ <div class="field-row">
     <label>Date:</label>
-    <input type="date" [(ngModel)]="reqData.date" class="req-input">
-  </div>
+    <input type="date" [(ngModel)]="reqData.date" class="req-input" readonly>
+    <input type="time" [(ngModel)]="reqData.time" class="req-input" style="max-width: 120px;" readonly>
+</div>
 </div>
         <div class="req-section">
           <label>Remarks / Reason:</label>
@@ -172,7 +172,7 @@ import { environment } from '../../../environments/environment';
   </div>
 
   <!-- Form Approved By - Client: fillable, Admin: readonly -->
-  <div class="sig-block" [class.readonly]="approvalMode">
+  <div class="sig-block" [class.readonly]="approvalMode || !canApprove()">
     <h5>Form Approved By:</h5>
     <div class="sig-field">
       <label>Name:</label>
@@ -642,6 +642,7 @@ mainBranchIds = [1, 5];
     attn: '',
     department_id: null,
     date: new Date().toISOString().split('T')[0],
+    time: new Date().toTimeString().split(':').slice(0, 2).join(':'),
     remarks: '',
     prepared_name: '',
     prepared_date: new Date().toISOString().split('T')[0],
@@ -923,11 +924,11 @@ loadAdminUsers() {
           return;
         }
         const currentUser = this.authService.getCurrentUser();
-if (currentUser && data.submitted_by !== currentUser.id) {
-  this.isRecipientEdit = true;
-} else {
-  this.isRecipientEdit = false;
-}
+        if (currentUser && data.submitted_by !== currentUser.id) {
+          this.isRecipientEdit = true;
+        } else {
+          this.isRecipientEdit = false;
+        }
         console.log('📋 Requisition loaded:', {
           id: data.id,
           number: data.requisition_number,
@@ -949,32 +950,30 @@ if (currentUser && data.submitted_by !== currentUser.id) {
         
         // ✅ Update reqData with ALL loaded values
        this.reqData = {
-    request_from: data.request_from || '',
-    attn: data.attn || '',
-    department_id: savedDeptId,
-    // ✅ Don't fall back to new Date() - preserve original or leave empty
-    date: this.parseDate(data.date) || data.date || '',
-    remarks: data.remarks || '',
-    prepared_name: data.prepared_name || '',
-    prepared_date: this.parseDate(data.prepared_date) || data.prepared_date || '',
-    approved_name: data.approved_name || '',
-    approved_date: this.parseDate(data.approved_date) || data.approved_date || '',
-    items_prepared_name: data.items_prepared_name || '',
-    items_prepared_date: this.parseDate(data.items_prepared_date) || data.items_prepared_date || '',
-    returned_name: data.returned_name || '',
-    returned_date: this.parseDate(data.returned_date) || data.returned_date || ''
-};
+        request_from: data.request_from || '',
+        attn: data.attn || '',
+        department_id: savedDeptId,
+        // ✅ Don't fall back to new Date() - preserve original or leave empty
+        date: this.parseDate(data.date) || data.date || '',
+        time: data.time || '', 
+        remarks: data.remarks || '',
+        prepared_name: data.prepared_name || '',
+        prepared_date: this.parseDate(data.prepared_date) || data.prepared_date || '',
+        approved_name: data.approved_name || '',
+        approved_date: this.parseDate(data.approved_date) || data.approved_date || '',
+        items_prepared_name: data.items_prepared_name || '',
+        items_prepared_date: this.parseDate(data.items_prepared_date) || data.items_prepared_date || '',
+        returned_name: data.returned_name || '',
+        returned_date: this.parseDate(data.returned_date) || data.returned_date || ''
+    };
         // Load items
         this.items = data.items || [];
-        
         // Load signatures
         this.preparedSignature = data.prepared_signature || null;
         this.approvedSignature = data.approved_signature || null;
         this.itemsPreparedSignature = data.items_prepared_signature || null;
-        
         // ✅ Set branch AFTER loading departments are ready
         this.loadBranchesAndDepartmentsForEdit(savedBranchId, savedDeptId);
-        
         // Set sigSaved and switch to upload mode for existing signatures
         if (this.preparedSignature) {
           this.sigSaved['prepared'] = true;
@@ -988,7 +987,6 @@ if (currentUser && data.submitted_by !== currentUser.id) {
           this.sigSaved['items_prepared'] = true;
           this.sigMode['items_prepared'] = 'upload';
         }
-        
         // ✅ NEW: Auto-fill Approved By when Supervisor/Head/Manager edits pending request
         if (!this.approvalMode && this.editMode) {
           const currentUser = this.authService.getCurrentUser();
@@ -1003,7 +1001,6 @@ if (currentUser && data.submitted_by !== currentUser.id) {
             }
           }
         }
-        
         // In approval mode, pre-fill admin info
         if (this.approvalMode) {
   const currentUser = this.authService.getCurrentUser();
@@ -1011,7 +1008,6 @@ if (currentUser && data.submitted_by !== currentUser.id) {
     // Auto-fill "Items Received By" (already exists)
     this.reqData.items_prepared_name = this.reqData.items_prepared_name || currentUser.fullname || '';
     this.reqData.items_prepared_date = this.reqData.items_prepared_date || new Date().toISOString().split('T')[0];
-    
     // ✅ NEW: Auto-fill "Form Approved By" for Supervisor/Head/Manager
     const role = (currentUser.role || '').toLowerCase();
     if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
@@ -1402,6 +1398,22 @@ onSigModalDrag(event: MouseEvent) {
 stopSigModalDrag() {
   this.isDraggingSigModal = false;
 }
+/**
+ * ✅ Check if current user can fill in the Approved By section
+ * Only Head/Manager, Supervisor, and Branch Manager can approve
+ * Staff users see it as readonly
+ */
+canApprove(): boolean {
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser) return false;
+    
+    // In approval mode, the form is being used by a recipient to accept
+    // They should be able to fill in "Received By" not "Approved By"
+    if (this.approvalMode) return false;
+    
+    const role = (currentUser.role || '').toLowerCase();
+    return role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+}
 submitRequisition() {
     // ✅ APPROVAL MODE - FIX THE PAYLOAD
     if (this.approvalMode) {
@@ -1577,299 +1589,6 @@ submitRequisition() {
         }
     });
 }
-
- printForm() {
-    const printWindow = window.open('', '_blank', 'width=700,height=800');
-    if (!printWindow) {
-      alert('Please allow popups for printing');
-      return;
-    }
-
-    // Helper to format date for printing
-    const fmtDate = (val: any) => {
-      if (!val) return '—';
-      try { 
-        const d = new Date(val); 
-        if (isNaN(d.getTime())) return String(val);
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; 
-      }
-      catch { return String(val); }
-    };
-
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Requisition - ${this.reqNumber}</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          @page { size: A4 portrait; margin: 8mm; }
-          body { 
-            font-family: 'Courier New', monospace; 
-            font-size: 9px;
-            color: #000;
-            padding: 10px;
-          }
-          .req-print {
-            background: white;
-            border: 2px solid #000;
-            padding: 16px 20px;
-            max-width: 750px;
-            margin: 0 auto;
-          }
-          .req-header {
-            text-align: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
-          }
-          .req-header .company {
-            font-size: 14px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            color: #0a246a;
-          }
-          .req-header .title {
-            font-size: 12px;
-            font-weight: bold;
-            letter-spacing: 3px;
-            margin-top: 4px;
-          }
-          .req-header .ctrl-no {
-            font-size: 8px;
-            color: #cc0000;
-            font-weight: bold;
-            margin-top: 2px;
-          }
-          
-          .info-row {
-            display: flex;
-            margin-bottom: 4px;
-            font-size: 9px;
-          }
-          .info-label { 
-            font-weight: bold; 
-            white-space: nowrap; 
-            color: #333;
-            width: 85px;
-            flex-shrink: 0;
-          }
-          .info-value { flex: 1; color: #000; }
-          
-          .remarks-section {
-            margin: 8px 0;
-            padding: 6px 8px;
-            border: 1px solid #ccc;
-            background: #fafafa;
-            font-size: 9px;
-            min-height: 30px;
-          }
-          .remarks-label { font-weight: bold; font-size: 9px; margin-bottom: 4px; }
-          
-          .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 10px 0;
-          }
-          .items-table th {
-            background: #f0f4f8;
-            padding: 5px 8px;
-            font-size: 9px;
-            font-weight: bold;
-            border: 1px solid #000;
-            text-align: left;
-          }
-          .items-table td {
-            padding: 4px 8px;
-            font-size: 9px;
-            border: 1px solid #ccc;
-          }
-          .total-row {
-            font-weight: bold;
-            background: #f0f4f8;
-          }
-          .total-row td { border: 1px solid #000; }
-          
-          .signatures {
-            margin-top: 16px;
-            padding-top: 10px;
-            border-top: 2px solid #000;
-          }
-          .sig-row {
-            display: flex;
-            gap: 12px;
-          }
-          .sig-block {
-            flex: 1;
-            text-align: center;
-            padding: 8px;
-            border: 1px solid #ccc;
-          }
-          .sig-label {
-            font-size: 8px;
-            font-weight: bold;
-            text-transform: uppercase;
-            color: #555;
-            margin-bottom: 4px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 3px;
-          }
-          .sig-image-area {
-            border: 1px solid #eee;
-            min-height: 45px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 4px;
-            background: #fafafa;
-          }
-          .sig-image-area img {
-            max-width: 100px;
-            max-height: 40px;
-            object-fit: contain;
-          }
-          .sig-image-area .no-sig {
-            font-size: 7px;
-            color: #ccc;
-            font-style: italic;
-          }
-          .sig-name {
-            font-size: 10px;
-            font-weight: bold;
-            border-bottom: 1px solid #000;
-            padding-bottom: 2px;
-            margin-bottom: 2px;
-          }
-          .sig-date {
-            font-size: 8px;
-            color: #333;
-          }
-          
-          .footer {
-            margin-top: 12px;
-            padding-top: 8px;
-            border-top: 1px solid #ccc;
-            text-align: center;
-            font-size: 7px;
-            color: #555;
-          }
-          .footer p { margin: 2px 0; }
-          
-          @media print {
-            body { padding: 0; margin: 0; }
-            .req-print { border: 1px solid #000; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="req-print">
-          <div class="req-header">
-            <div class="company">${this.companyName}</div>
-            <div class="title">REQUISITION FORM</div>
-            <div class="ctrl-no">CTRL NO.: EDR-30</div>
-            <div style="font-size:8px;margin-top:4px;">REQ #: ${this. reqNumber}</div>
-          </div>
-
-          <div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${this.reqData.request_from || '—'}</span></div>
-          <div class="info-row"><span class="info-label">ATTN:</span><span class="info-value">${this.reqData.attn || '—'}</span></div>
-          <div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(this.reqData.date)}</span></div>
-          
-          <div class="remarks-section">
-            <div class="remarks-label">Remarks / Reason:</div>
-            ${this.reqData.remarks || 'No remarks provided.'}
-          </div>
-
-          <table class="items-table">
-            <thead>
-              <tr><th>Qty</th><th>Item Description</th><th>Unit Price</th><th>Total</th></tr>
-            </thead>
-            <tbody>
-              ${this.items.length > 0 ? this.items.map((item: any) => `
-                <tr>
-                  <td>${item.qty || 0}</td>
-                  <td>${item.item || '—'}</td>
-                  <td>${(item.unit_price || 0).toFixed(2)}</td>
-                  <td>${((item.qty || 0) * (item.unit_price || 0)).toFixed(2)}</td>
-                </tr>
-              `).join('') : `
-                <tr><td colspan="4" style="text-align:center;color:#888;font-style:italic;">No items added</td></tr>
-              `}
-            </tbody>
-            ${this.items.length > 0 ? `
-            <tfoot>
-              <tr class="total-row">
-                <td colspan="3" style="text-align:right;">Grand Total:</td>
-                <td>${this.grandTotal.toFixed(2)}</td>
-              </tr>
-            </tfoot>` : ''}
-          </table>
-
-          <div class="signatures">
-            <div class="sig-row">
-              <div class="sig-block">
-                <div class="sig-label">Form Requested By</div>
-                <div class="sig-image-area">
-                  ${this.preparedSignature ? `<img src="${this.preparedSignature}" alt="Signature">` : '<span class="no-sig">No signature</span>'}
-                </div>
-                <div class="sig-name">${this.reqData.prepared_name || '_______________'}</div>
-                <div class="sig-date">${fmtDate(this.reqData.prepared_date)}</div>
-              </div>
-              <div class="sig-block">
-                <div class="sig-label">Form Approved By</div>
-                <div class="sig-image-area">
-                  ${this.approvedSignature ? `<img src="${this.approvedSignature}" alt="Signature">` : '<span class="no-sig">No signature</span>'}
-                </div>
-                <div class="sig-name">${this.reqData.approved_name || '_______________'}</div>
-                <div class="sig-date">${fmtDate(this.reqData.approved_date)}</div>
-              </div>
-              <div class="sig-block">
-                <div class="sig-label">Items Received By</div>
-                <div class="sig-image-area">
-                  ${this.itemsPreparedSignature ? `<img src="${this.itemsPreparedSignature}" alt="Signature">` : '<span class="no-sig">No signature</span>'}
-                </div>
-                <div class="sig-name">${this.reqData.items_prepared_name || '_______________'}</div>
-                <div class="sig-date">${fmtDate(this.reqData.items_prepared_date)}</div>
-              </div>
-            </div>
-          </div>
-
-          ${this.reqData.request_from === 'BORROW' ? `
-          <div class="signatures" style="margin-top:8px;padding-top:8px;">
-            <div class="sig-row">
-              <div class="sig-block">
-                <div class="sig-label">Returned By (Borrowed Items)</div>
-                <div class="sig-image-area">
-                  <span class="no-sig">No signature</span>
-                </div>
-                <div class="sig-name">${this.reqData.returned_name || '_______________'}</div>
-                <div class="sig-date">${fmtDate(this.reqData.returned_date)}</div>
-              </div>
-              <div class="sig-block" style="visibility:hidden;"></div>
-              <div class="sig-block" style="visibility:hidden;"></div>
-            </div>
-          </div>` : ''}
-
-          <div class="footer">
-            <p>📋 Leave R.F. to floor supervisor when BORROWING items, include expected date of return.</p>
-            <p>For Outside purchase: indicate if P.O. was made or paid by cash.</p>
-            <p>EDPtech Helpdesk v2.0 | Requisition #${this.reqNumber}</p>
-          </div>
-        </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 500);
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-  }
  cancel() {
     // ✅ Always go to client request list for client users
     this.router.navigate(['/client/request']);
