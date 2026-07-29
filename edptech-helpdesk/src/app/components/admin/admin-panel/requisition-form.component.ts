@@ -71,10 +71,11 @@ import { environment } from '../../../../environments/environment';
               </option>
             </select>
           </div>
-          <div class="field-row">
-            <label>Date:</label>
-            <input type="date" [(ngModel)]="reqData.date" class="req-input">
-          </div>
+         <div class="field-row">
+          <label>Date:</label>
+          <input type="date" [(ngModel)]="reqData.date" class="req-input" readonly>
+          <input type="time" [(ngModel)]="reqData.time" class="req-input" style="max-width: 120px;" readonly>
+      </div>
         </div>
         <div class="req-section">
           <label>Remarks / Reason:</label>
@@ -431,6 +432,7 @@ export class AdminRequisitionFormComponent implements OnInit {
     attn: '',
     department_id: null,
     date: new Date().toISOString().split('T')[0],
+    time: new Date().toTimeString().split(':').slice(0, 2).join(':'), 
     remarks: '',
     prepared_name: '',
     prepared_date: new Date().toISOString().split('T')[0],
@@ -755,6 +757,7 @@ export class AdminRequisitionFormComponent implements OnInit {
           attn: data.attn || '',
           department_id: savedDeptId,
           date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
+          time: data.time || '',
           remarks: data.remarks || '',
           prepared_name: data.prepared_name || '',
           prepared_date: this.parseDate(data.prepared_date) || new Date().toISOString().split('T')[0],
@@ -1102,7 +1105,7 @@ export class AdminRequisitionFormComponent implements OnInit {
       <div class="req-header"><div class="company">${this.companyName}</div><div class="title">REQUISITION FORM</div><div class="ctrl-no">CTRL NO.: EDR-30</div><div style="font-size:8px;margin-top:4px;">REQ #: ${this.reqNumber}</div></div>
       <div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${this.reqData.request_from || '—'}</span></div>
       <div class="info-row"><span class="info-label">ATTN:</span><span class="info-value">${this.reqData.attn || '—'}</span></div>
-      <div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(this.reqData.date)}</span></div>
+      <div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(this.reqData.date)} ${this.reqData.time ? 'at ' + this.reqData.time : ''}</span></div>
       <div class="remarks-section"><div class="remarks-label">Remarks / Reason:</div>${this.reqData.remarks || 'No remarks provided.'}</div>
       <table class="items-table"><thead><tr><th>Qty</th><th>Item Description</th><th>Unit Price</th><th>Total</th></tr></thead><tbody>${this.items.length > 0 ? this.items.map((item: any) => `<tr><td>${item.qty || 0}</td><td>${item.item || '—'}</td><td>${(item.unit_price || 0).toFixed(2)}</td><td>${((item.qty || 0) * (item.unit_price || 0)).toFixed(2)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#888;font-style:italic;">No items added</td></tr>'}</tbody>${this.items.length > 0 ? `<tfoot><tr class="total-row"><td colspan="3" style="text-align:right;">Grand Total:</td><td>${this.grandTotal.toFixed(2)}</td></tr></tfoot>` : ''}</table>
       <div class="signatures"><div class="sig-row">

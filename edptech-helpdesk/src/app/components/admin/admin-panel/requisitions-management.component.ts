@@ -141,7 +141,7 @@ import { RouterLink } from '@angular/router';
         <span class="creator-label">by: {{ req.prepared_name }}</span>
       </div>
     </td>
-    <td>{{ formatDate(req.date) }}</td>
+    <td>{{ formatDate(req.date) }}<br><small style="font-size: 9px; color: #888;">{{ formatTime(req.time) }}</small></td>
  <td class="forward-cell">
   <div class="forward-info" *ngIf="req.is_forwarded">
     <!-- "Our Requests" - shows where WE forwarded it TO -->
@@ -183,8 +183,8 @@ import { RouterLink } from '@angular/router';
     <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
 <td>
   <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-    {{ getStatusLabel(req.status) }}
-  </span>
+    {{ getStatusLabel(req) }}
+</span>
   <!-- Show sub-status for forwarded requests -->
   <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
     ↳ {{ getStatusLabel(req.forwarded_status) }}
@@ -254,7 +254,7 @@ import { RouterLink } from '@angular/router';
   </div>
   <div class="detail-row">
     <span class="detail-label">Status:</span>
-    <span class="status-badge" [class]="'status-' + (selectedReq.status || 'pending')">{{ getStatusLabel(selectedReq.status) }}</span>
+   <span class="status-badge" [class]="'status-' + (selectedReq.status || 'pending')">{{ getStatusLabel(selectedReq) }}</span>
   </div>
   <div class="detail-row">
     <span class="detail-label">Date:</span>
@@ -1410,23 +1410,22 @@ applyFilters() {
             return false;
         });
     } else if (this.viewMode === 'incoming') {
-        filtered = filtered.filter(r => {
-            const creatorBranch = r.creator_branch_id;
-            const creatorDept = r.creator_dept_id;
-            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
-            
-            // Forwarded TO us from another department
-            if (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) return true;
-            
-            // If forwarded FROM our department, exclude from incoming
-            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return false;
-            
-            // Original destination is our department AND not from us
-            if (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept) return true;
-            
+    filtered = filtered.filter(r => {
+        const creatorBranch = r.creator_branch_id;
+        const creatorDept = r.creator_dept_id;
+        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+        
+        // ✅ Exclude unapproved requests from incoming view
+        if (r.status === 'pending' && !r.approved_name && !r.approved_signature) {
             return false;
-        });
-    }
+        }
+        
+        if (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) return true;
+        if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return false;
+        if (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept) return true;
+        return false;
+    });
+}
     
     if (this.activeTab !== 'all') {
         filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
@@ -1514,12 +1513,32 @@ releaseForwardedRequisition(req: any) {
   this.confirmModalType = 'release';
   this.showConfirmModal = true;
 }
-getStatusLabel(status: string): string {
+getStatusLabel(reqOrStatus: any): string {
+    let status: string;
+    let req: any = null;
+    
+    if (typeof reqOrStatus === 'object' && reqOrStatus !== null) {
+        req = reqOrStatus;
+        status = req.status || 'pending';
+    } else {
+        status = reqOrStatus || 'pending';
+    }
+    
+    if (status === 'pending') {
+        if (req && (req.approved_name || req.approved_signature)) {
+            return 'Pending';
+        }
+        return 'For Approval';
+    }
+    
     const labels: Record<string, string> = {
-      'pending': 'Pending', 'approved': 'Accepted', 'forwarded': 'Forwarded',
-      'processing': 'On Process', 'released': 'Released', 'rejected': 'Rejected'
+        'approved': 'Accepted',
+        'forwarded': 'Forwarded',
+        'processing': 'On Process',
+        'released': 'Released', 
+        'rejected': 'Rejected'
     };
-    return labels[status] || status || 'Pending';
+    return labels[status] || status || 'For Approval';
 }
 private userRolesMap: Map<string, string> = new Map();
 getBranchCompany(branchId: number): string {
@@ -2331,7 +2350,7 @@ getBranchName(branchId: number): string {
     
     const getTotal = (items: any[]) => items?.reduce((s: number, i: any) => s + ((Number(i.qty)||0)*(Number(i.unit_price)||0)), 0) || 0;
     const companyName = 'Lee Super Plaza';
-    const statusLabel = req.status === 'approved' ? 'Received' : (req.status || 'Pending');
+   const statusLabel = this.getStatusLabel(req);
 
     const printContent = `
       <!DOCTYPE html>
@@ -2390,7 +2409,7 @@ getBranchName(branchId: number): string {
           <div class="info-grid">
             <div class="info-row"><span class="info-label">Request From:</span><span class="info-value">${req.request_from || '—'}</span></div>
             <div class="info-row"><span class="info-label">ATTN:</span><span class="info-value">${req.attn || '—'}</span></div>
-            <div class="info-row"><span class="info-label">Date:</span><span class="info-value">${fmtDate(req.date)}</span></div>
+            <div class="info-row"><span class="info-label">Date & Time:</span><span class="info-value">${fmtDate(req.date)} ${req.time ? 'at ' + this.formatTime(req.time) : ''}</span></div>
             <div class="info-row"><span class="info-label">Submitted By:</span><span class="info-value">${req.prepared_name || '—'}</span></div>
           </div>
           <div class="remarks-section">
@@ -2428,7 +2447,17 @@ getBranchName(branchId: number): string {
     printWindow.document.close();
     printWindow.focus();
   }
-
+formatTime(time: string): string {
+    if (!time) return '—';
+    try {
+        const [hours, minutes] = time.split(':').map(Number);
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${String(minutes).padStart(2, '0')} ${period}`;
+    } catch {
+        return time;
+    }
+}
 formatDate(val: any): string {
     if (!val) return '—';
     try {
