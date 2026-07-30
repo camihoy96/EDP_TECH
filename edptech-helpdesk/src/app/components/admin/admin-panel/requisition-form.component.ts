@@ -62,15 +62,19 @@ import { environment } from '../../../../environments/environment';
           </div>
         </div>
         <div class="req-top-row">
-          <div class="field-row">
-            <label>ATTN.:</label>
-            <select [(ngModel)]="reqData.attn" class="req-input">
-              <option value="">— Auto from department —</option>
-              <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
-                {{ user.fullname || user.username }} ({{ user.role }})
-              </option>
-            </select>
-          </div>
+         <div class="field-row">
+  <label>ATTN.:</label>
+  <select [(ngModel)]="reqData.attn" class="req-input">
+    <option value="">— Auto from department —</option>
+    <!-- ✅ Show the current ATTN value even if not in attnUsers list -->
+    <option *ngIf="reqData.attn && !isAttnInList()" [value]="reqData.attn" selected>
+      {{ reqData.attn }} (Current)
+    </option>
+    <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
+      {{ user.fullname || user.username }} ({{ user.role }})
+    </option>
+  </select>
+</div>
          <div class="field-row">
           <label>Date:</label>
           <input type="date" [(ngModel)]="reqData.date" class="req-input" readonly>
@@ -421,7 +425,7 @@ export class AdminRequisitionFormComponent implements OnInit {
   allDepartments: any[] = [];
   attnUsers: any[] = [];
   mainBranchIds = [1, 5];
-  
+  private isLoadingRequisition = false;
   // Draggable modal properties
   sigModalPosition = { x: 0, y: 0 };
   isDraggingSigModal = false;
@@ -537,22 +541,17 @@ export class AdminRequisitionFormComponent implements OnInit {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
     
-    const branchCode = this.userBranch?.name 
-        ? this.userBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() 
-        : 'BRC';
+    // Generate a 3-digit sequential number (or random if you prefer)
+    // For sequential, you could store the last number in localStorage
+    const lastNumber = parseInt(localStorage.getItem('lastReqNumber') || '0');
+    const nextNumber = lastNumber + 1;
+    const paddedNumber = String(nextNumber).padStart(3, '0');
     
-    let deptCode = 'DEPT';
-    if (this.reqData.department_id) {
-        const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
-        if (selectedDept?.name) {
-            deptCode = selectedDept.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-        }
-    }
+    // Save the new number back to localStorage
+    localStorage.setItem('lastReqNumber', String(nextNumber));
     
-    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-    
-    return `REQ-${branchCode}-${deptCode}-${datePart}-${random}`;
-  }
+    return `REQ-${paddedNumber}-${datePart}`;
+}
 
   showToastMsg(msg: string, type: 'success' | 'error' | 'warning' = 'success') {
     this.toastMessage = msg;
@@ -600,7 +599,7 @@ export class AdminRequisitionFormComponent implements OnInit {
     });
   }
 
-  loadBranchesAndDepartmentsForEdit(branchId: number | null, deptId: number | null) {
+ loadBranchesAndDepartmentsForEdit(branchId: number | null, deptId: number | null) {
     const user: any = JSON.parse(localStorage.getItem('currentUser') || '{}');
     
     this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
@@ -623,14 +622,12 @@ export class AdminRequisitionFormComponent implements OnInit {
             
             if (branchId) {
               this.selectedBranchId = branchId;
-              this.filterDepartmentsByBranch(branchId);
-              setTimeout(() => {
-                if (deptId) {
-                  this.reqData.department_id = deptId;
-                  const deptExists = this.filteredDepartments.some(d => d.id == deptId);
-                  if (deptExists) this.onDepartmentChange();
-                }
-              }, 100);
+              this.filteredDepartments = this.allDepartments.filter(d => d.branch_id == branchId);
+              
+              if (deptId) {
+                this.reqData.department_id = deptId;
+                this.onDepartmentChange(); // Load ATTN users but don't override existing ATTN
+              }
             } else if (this.isMainBranch && user?.branch_id) {
               this.selectedBranchId = user.branch_id;
               this.filterDepartmentsByBranch(user.branch_id);
@@ -648,20 +645,22 @@ export class AdminRequisitionFormComponent implements OnInit {
     if (this.selectedBranchId) {
       this.filterDepartmentsByBranch(this.selectedBranchId);
       this.reqData.department_id = null;
-      this.reqData.attn = '';
+      if (!this.isLoadingRequisition) {
+        this.reqData.attn = '';
+      }
       this.attnUsers = [];
     }
-  }
+}
 
-  filterDepartmentsByBranch(branchId: number) {
+filterDepartmentsByBranch(branchId: number) {
     this.filteredDepartments = this.allDepartments.filter(d => d.branch_id == branchId);
     if (this.filteredDepartments.length > 0 && !this.reqData.department_id) {
       this.reqData.department_id = this.filteredDepartments[0].id;
       this.onDepartmentChange();
     }
-  }
+}
 
-  onDepartmentChange() {
+ onDepartmentChange() {
     if (!this.reqData.department_id) {
         this.attnUsers = [];
         return;
@@ -679,27 +678,28 @@ export class AdminRequisitionFormComponent implements OnInit {
     const deptBranchId = selectedDept?.branch_id;
     const deptId = selectedDept?.id;
     
-    console.log('🔍 Loading ATTN users for admin - dept:', deptId, 'branch:', deptBranchId);
+    // ✅ SAVE current ATTN before it potentially gets cleared
+    const currentAttn = this.reqData.attn;
+    console.log('🔍 onDepartmentChange - current ATTN:', currentAttn, 'isLoading:', this.isLoadingRequisition);
+    
+    // ✅ Clear ATTN when switching departments during new requisition creation
+    if (!this.isLoadingRequisition && !this.editMode) {
+        this.reqData.attn = '';
+    }
     
     this.http.get<any[]>(`${environment.apiUrl}/api/client/users`, { headers }).subscribe({
         next: (users) => {
-            console.log('📥 Received', users?.length, 'users from admin API');
-            
-            // ✅ Filter by branch, department, AND role (Head/Manager & Supervisor only)
             this.attnUsers = (users || []).filter(u => {
                 const userBranchId = Number(u.branch_id);
                 const userDeptId = Number(u.department_id || u.dept_id);
                 const matchBranch = userBranchId === Number(deptBranchId);
                 const matchDept = !deptId || userDeptId === Number(deptId);
                 const role = (u.role || '').toLowerCase().trim();
-                // ✅ Only Head/Manager and Supervisor
                 const matchRole = role === 'head/manager' || role === 'head manager' || role === 'supervisor';
                 return matchBranch && matchDept && matchRole;
             });
             
-            console.log('👥 ATTN users (Head/Manager & Supervisor):', this.attnUsers.length);
-            
-            // ✅ Also add department supervisor if available
+            // Add department supervisor if available
             if (selectedDept?.supervisor) {
                 const hasSupervisor = this.attnUsers.some(u => 
                     (u.fullname || u.username) === selectedDept.supervisor
@@ -713,30 +713,53 @@ export class AdminRequisitionFormComponent implements OnInit {
                 }
             }
             
-            // Auto-select first user if ATTN is empty
-            if (this.attnUsers.length > 0 && !this.reqData.attn) {
+            // ✅ ONLY add "Current ATTN" entry when loading an existing requisition (edit/approval mode)
+            // NOT when creating a new requisition or switching departments
+            if (this.isLoadingRequisition || this.editMode) {
+                const savedAttn = currentAttn;
+                if (savedAttn && !this.attnUsers.some(u => 
+                    (u.fullname || u.username) === savedAttn)) {
+                    console.log('⚠️ ATTN not in list, adding as preserved:', savedAttn);
+                    this.attnUsers.unshift({
+                        fullname: savedAttn,
+                        username: savedAttn,
+                        role: 'Preserved ATTN'
+                    });
+                }
+            }
+            
+            // Preserve ATTN during loading of existing requisition
+            if (this.isLoadingRequisition) {
+                this.reqData.attn = currentAttn || '';
+                console.log('🔒 Preserved ATTN during load:', currentAttn);
+            } else if (!this.reqData.attn && this.attnUsers.length > 0) {
+                // Auto-fill ATTN for new requisitions only if it's empty
                 this.reqData.attn = this.attnUsers[0].fullname || this.attnUsers[0].username;
+                console.log('🆕 Auto-filled ATTN for new req:', this.reqData.attn);
             }
         },
         error: (err) => {
-            console.warn('Could not load ATTN users (status:', err.status, ')');
-            
-            // Fallback: Use department supervisor
+            console.warn('Could not load ATTN users');
             this.attnUsers = [];
             if (selectedDept?.supervisor) {
-                this.attnUsers = [{ 
-                    fullname: selectedDept.supervisor, 
-                    username: selectedDept.supervisor, 
-                    role: 'supervisor' 
-                }];
-                if (!this.reqData.attn) {
-                    this.reqData.attn = selectedDept.supervisor;
-                }
+                this.attnUsers = [{ fullname: selectedDept.supervisor, username: selectedDept.supervisor, role: 'supervisor' }];
+            }
+            
+            if (this.isLoadingRequisition) {
+                this.reqData.attn = currentAttn || '';
+            } else if (!this.reqData.attn && selectedDept?.supervisor) {
+                this.reqData.attn = selectedDept.supervisor;
             }
         }
     });
 }
-  loadRequisition(id: string) {
+isAttnInList(): boolean {
+    if (!this.reqData.attn) return true;
+    return this.attnUsers.some(u => 
+      (u.fullname || u.username) === this.reqData.attn
+    );
+  }
+ loadRequisition(id: string) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
 
@@ -745,16 +768,22 @@ export class AdminRequisitionFormComponent implements OnInit {
         const data = Array.isArray(response) ? response[0] : response;
         if (!data) return;
         
+        // ✅ SET FLAG and save attn
+        this.isLoadingRequisition = true;
+        
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}'); 
         this.isRecipientEdit = !!(currentUser && data.submitted_by !== currentUser.id);
         
         this.reqNumber = data.requisition_number || data.req_number || '';
         const savedBranchId = data.branch_id || null;
         const savedDeptId = data.department_id || null;
+        const savedAttn = data.attn || '';
+        
+        console.log('📋 Loaded requisition - ATTN:', savedAttn, 'Full data:', data);
         
         this.reqData = {
           request_from: data.request_from || '',
-          attn: data.attn || '',
+          attn: savedAttn, // ✅ Set ATTN from saved data
           department_id: savedDeptId,
           date: this.parseDate(data.date) || new Date().toISOString().split('T')[0],
           time: data.time || '',
@@ -774,13 +803,39 @@ export class AdminRequisitionFormComponent implements OnInit {
         this.approvedSignature = data.approved_signature || null;
         this.itemsPreparedSignature = data.items_prepared_signature || null;
         
-        this.loadBranchesAndDepartmentsForEdit(savedBranchId, savedDeptId);
-        
         if (this.preparedSignature) { this.sigSaved['prepared'] = true; this.sigMode['prepared'] = 'upload'; }
         if (this.approvedSignature) { this.sigSaved['approved'] = true; this.sigMode['approved'] = 'upload'; }
         if (this.itemsPreparedSignature) { this.sigSaved['items_prepared'] = true; this.sigMode['items_prepared'] = 'upload'; }
         
-        // ✅ Auto-fill Approved By when Supervisor/Head/Manager edits pending request
+        // ✅ Load branches and departments FIRST, then set ATTN after everything
+        this.loadBranchesAndDepartmentsForEdit(savedBranchId, savedDeptId);
+        
+        // ✅ RESTORE ATTN AFTER ALL ASYNC OPERATIONS COMPLETE
+        // Use a subscription/observer pattern or just multiple timeouts
+        setTimeout(() => {
+            if (savedAttn) {
+                this.reqData.attn = savedAttn;
+                console.log('🔄 [300ms] Restored ATTN:', savedAttn);
+            }
+        }, 300);
+        
+        setTimeout(() => {
+            if (savedAttn && this.reqData.attn !== savedAttn) {
+                this.reqData.attn = savedAttn;
+                console.log('🔄 [800ms] Re-restored ATTN:', savedAttn);
+            }
+        }, 800);
+        
+        setTimeout(() => {
+            if (savedAttn && this.reqData.attn !== savedAttn) {
+                this.reqData.attn = savedAttn;
+                console.log('🔄 [1500ms] Final ATTN restore:', savedAttn);
+            }
+            this.isLoadingRequisition = false;
+            console.log('✅ Loading complete. Final ATTN:', this.reqData.attn);
+        }, 1500);
+        
+        // Auto-fill Approved By when Supervisor/Head/Manager edits pending request
         if (!this.approvalMode && this.editMode) {
           const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
           if (currentUser) {
@@ -800,7 +855,6 @@ export class AdminRequisitionFormComponent implements OnInit {
             this.reqData.items_prepared_name = this.reqData.items_prepared_name || currentUser.fullname || '';
             this.reqData.items_prepared_date = this.reqData.items_prepared_date || new Date().toISOString().split('T')[0];
             
-            // ✅ Auto-fill Approved By for Head/Manager in approval mode
             const role = (currentUser.role || '').toLowerCase();
             if (role === 'supervisor' || role === 'head/manager' || role === 'branch manager') {
               this.reqData.approved_name = this.reqData.approved_name || currentUser.fullname || '';
@@ -810,6 +864,7 @@ export class AdminRequisitionFormComponent implements OnInit {
         }
       },
       error: (err) => {
+        console.error('Failed to load requisition:', err);
         const saved = JSON.parse(localStorage.getItem('requisitions') || '[]');
         const found = saved.find((r: any) => String(r.id) === String(id) || String(r.requisition_number) === String(id));
         if (found) {

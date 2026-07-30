@@ -36,8 +36,8 @@ import { Subscription } from 'rxjs';
 
     <div class="status-tabs-bar">
   <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-    📋 All <span class="tab-count">{{ requisitions.length }}</span>
-  </button>
+    📋 All <span class="tab-count">{{ getStatusCount('all') }}</span>
+</button>
   <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
     ⏳ Pending <span class="tab-count pending-count">{{ getStatusCount('pending') }}</span>
   </button>

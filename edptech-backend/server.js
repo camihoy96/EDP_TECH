@@ -22,9 +22,7 @@ app.use(cors({
     origin: [
         'http://localhost:4000', 
         'http://192.168.10.250:4000', 
-        'http://127.0.0.1:4000',
-        'https://ktg7tr76-4000.asse.devtunnels.ms',
-        'https://ktg7tr76-6001.asse.devtunnels.ms'  
+        'http://127.0.0.1:4000'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -4899,7 +4897,7 @@ app.post('/api/admin/requisitions', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const {
-            requisition_number, request_from, attn, date, remarks, time, items,
+            request_from, attn, date, remarks, time, items,
             prepared_name, prepared_signature, prepared_date,
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -4909,8 +4907,11 @@ app.post('/api/admin/requisitions', async (req, res) => {
         
         const userId = submitted_by || decoded.id;
         
-        console.log('📝 POST /api/admin/requisitions - Admin Creating:', requisition_number);
+        console.log('📝 POST /api/admin/requisitions - Admin Creating');
         console.log('   department_id:', department_id, 'branch_id:', branch_id);
+        
+        // ✅ Insert with a temporary requisition number first
+        const tempReqNumber = 'TEMP-' + Date.now();
         
         const [result] = await pool.query(`
             INSERT INTO requisitions (
@@ -4921,13 +4922,23 @@ app.post('/api/admin/requisitions', async (req, res) => {
                 returned_name, returned_date,
                 submitted_by, status
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [requisition_number, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
+            [tempReqNumber, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
              prepared_name, prepared_signature, prepared_date,
              approved_name || null, approved_signature || null, approved_date || null,
              items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
              returned_name || null, returned_date || null,
              userId, 'pending']
         );
+        
+        // ✅ Generate unique requisition number using the auto-increment ID
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+        const paddedId = String(result.insertId).padStart(3, '0');
+        const requisitionNumber = `REQ-${paddedId}-${datePart}`;
+        
+        // ✅ Update the requisition with the generated number
+        await pool.query('UPDATE requisitions SET requisition_number = ? WHERE id = ?', 
+            [requisitionNumber, result.insertId]);
         
         if (items && items.length > 0) {
             for (const item of items) {
@@ -4936,8 +4947,8 @@ app.post('/api/admin/requisitions', async (req, res) => {
             }
         }
         
-        console.log('✅ Admin Requisition created:', result.insertId);
-        res.json({ success: true, id: result.insertId, requisition_number });
+        console.log('✅ Admin Requisition created:', result.insertId, 'Number:', requisitionNumber);
+        res.json({ success: true, id: result.insertId, requisition_number: requisitionNumber });
     } catch (error) { 
         console.error('POST /api/admin/requisitions error:', error);
         res.status(500).json({ error: error.message }); 
@@ -5005,7 +5016,7 @@ app.post('/api/requisitions', async (req, res) => {
         const decoded = jwt.verify(token, 'secret_key');
         
         const {
-            requisition_number, request_from, attn, date, time, remarks, items,
+            request_from, attn, date, time, remarks, items,
             prepared_name, prepared_signature, prepared_date,
             approved_name, approved_signature, approved_date,
             items_prepared_name, items_prepared_signature, items_prepared_date,
@@ -5015,25 +5026,38 @@ app.post('/api/requisitions', async (req, res) => {
         
         const userId = submitted_by || decoded.id;
         
-        console.log('📝 POST /api/requisitions - Creating:', requisition_number);
+        console.log('📝 POST /api/requisitions - Creating');
         console.log('   department_id:', department_id, 'branch_id:', branch_id);
         
+        // ✅ Insert with a temporary requisition number first
+        const tempReqNumber = 'TEMP-' + Date.now();
+        
         const [result] = await pool.query(`
-    INSERT INTO requisitions (
-        requisition_number, request_from, attn, department_id, branch_id, date, time, remarks,
-        prepared_name, prepared_signature, prepared_date,
-        approved_name, approved_signature, approved_date,
-        items_prepared_name, items_prepared_signature, items_prepared_date,
-        returned_name, returned_signature, returned_date,
-        submitted_by, status
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [requisition_number, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
-     prepared_name, prepared_signature, prepared_date,
-     approved_name || null, approved_signature || null, approved_date || null,
-     items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
-     returned_name || null, returned_signature || null, returned_date || null,
-     userId, 'pending']
-);
+            INSERT INTO requisitions (
+                requisition_number, request_from, attn, department_id, branch_id, date, time, remarks,
+                prepared_name, prepared_signature, prepared_date,
+                approved_name, approved_signature, approved_date,
+                items_prepared_name, items_prepared_signature, items_prepared_date,
+                returned_name, returned_signature, returned_date,
+                submitted_by, status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [tempReqNumber, request_from, attn, department_id || null, branch_id || null, date, time, remarks,
+             prepared_name, prepared_signature, prepared_date,
+             approved_name || null, approved_signature || null, approved_date || null,
+             items_prepared_name || null, items_prepared_signature || null, items_prepared_date || null,
+             returned_name || null, returned_signature || null, returned_date || null,
+             userId, 'pending']
+        );
+        
+        // ✅ Generate unique requisition number using the auto-increment ID
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+        const paddedId = String(result.insertId).padStart(3, '0');
+        const requisitionNumber = `REQ-${paddedId}-${datePart}`;
+        
+        // ✅ Update the requisition with the generated number
+        await pool.query('UPDATE requisitions SET requisition_number = ? WHERE id = ?', 
+            [requisitionNumber, result.insertId]);
         
         if (items && items.length > 0) {
             for (const item of items) {
@@ -5042,15 +5066,13 @@ app.post('/api/requisitions', async (req, res) => {
             }
         }
         
-        console.log('✅ Requisition created:', result.insertId);
-        res.json({ success: true, id: result.insertId, requisition_number });
+        console.log('✅ Requisition created:', result.insertId, 'Number:', requisitionNumber);
+        res.json({ success: true, id: result.insertId, requisition_number: requisitionNumber });
     } catch (error) { 
         console.error('POST /api/requisitions error:', error);
         res.status(500).json({ error: error.message }); 
     }
 });
-
-// Update the PUT /api/admin/requisitions/:id/status endpoint
 // PUT - Forward Requisition (Admin)
 app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
     try {
@@ -5075,7 +5097,8 @@ app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
                 forwarded_to_department_id = ?,
                 forwarded_by_name = ?,
                 forwarded_date = CURDATE(),
-                status = 'forwarded'
+                status = 'forwarded',
+                forwarded_status = 'forwarded'
             WHERE id = ?
         `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, id]);
         
@@ -5255,7 +5278,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
                     connection.release();
                     return res.json({ success: true, message: 'Already processing', skipped: true });
                 }
-                if (status === 'released' && reqData.forwarded_status === 'released') {
+                if (status === 'released' && reqData.status === 'released') {
                     await connection.rollback();
                     connection.release();
                     return res.json({ success: true, message: 'Already released', skipped: true });

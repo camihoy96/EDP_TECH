@@ -103,7 +103,7 @@ import { RouterLink } from '@angular/router';
   <!-- ✅ Message for unauthorized users -->
   <ng-container *ngIf="!canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
     <span class="status-sep">|</span>
-    <span class="permission-hint" style="font-size: 9px; color: #888; font-style: italic;">
+    <span class="permission-hint" style="font-size: 11px; color: #888; font-style: italic;">
       🔒 Bulk actions require Admin, Head/Manager, or Supervisor role
     </span>
   </ng-container>
@@ -141,7 +141,7 @@ import { RouterLink } from '@angular/router';
         <span class="creator-label">by: {{ req.prepared_name }}</span>
       </div>
     </td>
-    <td>{{ formatDate(req.date) }}<br><small style="font-size: 9px; color: #888;">{{ formatTime(req.time) }}</small></td>
+    <td>{{ formatDate(req.date) }}<br><small style="font-size: 11px; color: #888;">{{ formatTime(req.time) }}</small></td>
  <td class="forward-cell">
   <div class="forward-info" *ngIf="req.is_forwarded">
     <!-- "Our Requests" - shows where WE forwarded it TO -->
@@ -341,7 +341,7 @@ import { RouterLink } from '@angular/router';
   </div>
   <!-- ✅ Show placeholder if no signature -->
   <div class="sig-image-container" *ngIf="!selectedReq.approved_signature" style="border: 1px dashed #ccc;">
-    <span style="font-size: 9px; color: #aaa;">No signature</span>
+    <span style="font-size: 11px; color: #aaa;">No signature</span>
   </div>
   <div class="sig-info">
     <!-- ✅ Try multiple possible field names -->
@@ -545,28 +545,28 @@ import { RouterLink } from '@angular/router';
     .stat-item.pending { border-left-color: #cc6600; }
     .stat-item.approved { border-left-color: #008800; }
     .stat-item.rejected { border-left-color: #cc0000; }
-    .stat-label { display: block; font-size: 10px; text-transform: uppercase; color: #888; }
+    .stat-label { display: block; font-size: 11px; text-transform: uppercase; color: #888; }
     .stat-value { font-size: 22px; font-weight: 700; color: #333; }
     .status-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
     .status-tab { flex: 1; padding: 10px 16px; background: white; border: 1px solid #c0c0c0; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .status-tab.active { background: #0a246a; color: white; border-color: #0a246a; }
-    .tab-count { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; background: #e0e0e0; color: #555; }
+    .tab-count { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #e0e0e0; color: #555; }
     .status-tab.active .tab-count { background: rgba(255,255,255,0.3); color: white; }
     .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: white; border: 1px solid #c0c0c0; border-radius: 6px; }
     .filter-input { padding: 5px 10px; border: 1px solid #c0c0c0; border-radius: 4px; font-size: 11px; width: 200px; }
-    .btn { padding: 6px 12px; border: 1px solid #c0c0c0; background: white; cursor: pointer; border-radius: 4px; font-size: 10px; }
+    .btn { padding: 6px 12px; border: 1px solid #c0c0c0; background: white; cursor: pointer; border-radius: 4px; font-size: 11px; }
     .count-badge { margin-left: auto; color: #888; font-size: 11px; }
     .table-container { background: white; border: 1px solid #c0c0c0; border-radius: 6px; overflow-x: auto; }
     .data-table { width: 100%; border-collapse: collapse; }
-    .data-table th { background: #f0f4f8; padding: 10px 12px; font-size: 10px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: center; }
+    .data-table th { background: #f0f4f8; padding: 10px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #555; border-bottom: 2px solid #d0d0d0; text-align: center; }
     .data-table td { padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 11px; color: #131212; cursor: pointer; text-align: center;}
     .clickable-row:hover td { background: #f8faff; }
-    code { font-family: monospace; font-size: 10px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
-    .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 9px; font-weight: 600; }
+    code { font-family: monospace; font-size: 11px; background: #f5f5f5; padding: 2px 6px; border-radius: 3px; }
+    .status-badge { padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
     .status-pending { background: #fffae8; color: #886600; }
     .status-approved { background: #eeffee; color: #008800; }
     .status-rejected { background: #ffecec; color: #cc0000; }
-    .received-by { font-size: 9px; color: #666; margin-top: 2px; font-style: italic; }
+    .received-by { font-size: 11px; color: #666; margin-top: 2px; font-style: italic; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 3px; }
     .action-btn:hover { background: #f0f0f0; border-color: #ccc; }
     .action-btn.approve:hover { background: #eeffee; border-color: #008800; }
@@ -587,9 +587,9 @@ import { RouterLink } from '@angular/router';
     .btn-confirm.btn-release:hover { background: #0044aa; }
     .btn-confirm.btn-bulkdelete { background: #cc0000; }
 .btn-confirm.btn-bulkdelete:hover { background: #aa0000; }
-    .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; }
-.branch-tag-tiny { font-size: 8px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
-.direction-tag { font-size: 7px; padding: 1px 4px; border-radius: 2px; margin-top: 1px; font-style: italic; }
+    .dept-name-small { font-weight: 600; font-size: 11px; color: #0a3a8c; }
+.branch-tag-tiny { font-size: 11px; background: #f0f4ff; color: #0a3a8c; padding: 1px 5px; border-radius: 3px; border: 1px solid #b8c8e8; white-space: nowrap; }
+.direction-tag { font-size: 11px; padding: 1px 4px; border-radius: 2px; margin-top: 1px; font-style: italic; }
 .direction-tag.outgoing { background: #e8f0ff; color: #0066cc; }
 .direction-tag.incoming { background: #fff8e8; color: #886600; }
 .action-btn.release-btn { color: #0066cc; }
@@ -597,9 +597,9 @@ import { RouterLink } from '@angular/router';
 .action-btn.approve { color: #008800; }
 .action-btn.approve:hover { background: #eeffee; border-color: #008800; }
 .total-cell { font-weight: bold; color: #0a3a8c; font-family: monospace; text-align: right; }
-.creator-info { font-size: 9px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
+.creator-info { font-size: 11px; color: #666; margin-top: 2px; border-top: 1px dotted #ddd; padding-top: 2px; }
 .creator-info { 
-  font-size: 9px; 
+  font-size: 11px; 
   color: #666; 
   margin-top: 3px; 
   border-top: 1px dotted #c0c0c0; 
@@ -610,7 +610,7 @@ import { RouterLink } from '@angular/router';
   gap: 3px;
 }
   .status-forwarded-sub { 
-  font-size: 8px; 
+  font-size: 11px; 
   font-style: italic; 
   color: #666; 
   margin-top: 2px;
@@ -620,7 +620,7 @@ import { RouterLink } from '@angular/router';
 .creator-label { 
   color: #0a3a8c; 
   font-weight: 600;
-  font-size: 9px;
+  font-size: 11px;
   background: #f0f4ff;
   padding: 1px 6px;
   border-radius: 3px;
@@ -628,7 +628,7 @@ import { RouterLink } from '@angular/router';
   white-space: nowrap;
 }
 .creator-label::before {
-  font-size: 8px;
+  font-size: 11px;
 }
 .modal-header, .modal-titlebar, .confirm-modal-header {
   cursor: grab;
@@ -693,7 +693,7 @@ import { RouterLink } from '@angular/router';
   min-width: 18px;
   height: 18px;
   border-radius: 9px;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 0 5px;
   margin-left: 4px;
@@ -729,12 +729,12 @@ import { RouterLink } from '@angular/router';
     }
       .forward-company { 
   color: #888; 
-  font-size: 7px; 
+  font-size: 11px; 
   white-space: nowrap; 
   font-style: italic; 
 }
 .forward-by { 
-  font-size: 7px; 
+  font-size: 11px; 
   color: #0a3a8c; 
   font-style: italic; 
   font-weight: 600;
@@ -742,15 +742,15 @@ import { RouterLink } from '@angular/router';
 }
 .forward-btn { color: #0a3a8c; }
 .forward-btn:hover { background: #e8f0ff; border-color: #0a3a8c; }
-.forward-cell { max-width: 120px; font-size: 9px; }
+.forward-cell { max-width: 120px; font-size: 11px; }
 .forward-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
-.forward-label { font-weight: 600; color: #0a3a8c; font-size: 9px; }
-.forward-dept { color: #666; font-size: 8px; }
+.forward-label { font-weight: 600; color: #0a3a8c; font-size: 11px; }
+.forward-dept { color: #666; font-size: 11px; }
 .not-forwarded { color: #ccc; font-size: 11px; }
 .tab-count.forwarded-count { background: #0a3a8c; }
 .status-forwarded { background: #e8f0ff; color: #0a3a8c; }
 .company-tag-tiny {
-  font-size: 7px;
+  font-size: 11px;
   background: #fff8e8;
   color: #886600;
   padding: 1px 4px;
@@ -764,10 +764,10 @@ import { RouterLink } from '@angular/router';
     .remarks-text { font-size: 11px; color: #333; background: #f9f9f9; padding: 10px; border-radius: 4px; white-space: pre-wrap; margin: 0; }
     
     .detail-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-    .detail-table th { background: #f0f4f8; padding: 6px 10px; font-size: 10px; text-align: left; border: 1px solid #ddd; color: #161515; }
-    .detail-table td { padding: 6px 10px; font-size: 10px; border: 1px solid #eee; color: #131212; }
+    .detail-table th { background: #f0f4f8; padding: 6px 10px; font-size: 11px; text-align: left; border: 1px solid #ddd; color: #161515; }
+    .detail-table td { padding: 6px 10px; font-size: 11px; border: 1px solid #eee; color: #131212; }
     .total-row td { background: #f0f4f8; }
-    .empty-text { color: #080808; font-style: italic; font-size: 10px; }
+    .empty-text { color: #080808; font-style: italic; font-size: 11px; }
     
     .signatures-section { border-bottom: none; }
     .sig-cards { display: flex; gap: 12px; }
@@ -779,7 +779,7 @@ import { RouterLink } from '@angular/router';
       text-align: center;
       background: #fafafa;
     }
-    .sig-card h5 { margin: 0 0 8px 0; font-size: 10px; color: #666; text-transform: uppercase; }
+    .sig-card h5 { margin: 0 0 8px 0; font-size: 11px; color: #666; text-transform: uppercase; }
     .sig-image-container {
       width: 100%;
       height: 50px;
@@ -866,7 +866,7 @@ import { RouterLink } from '@angular/router';
   .attn-cell { max-width: 120px; }
 .attn-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
 .role-tag-tiny {
-  font-size: 7px;
+  font-size: 11px;
   background: #f5f0ff;
   color: #6600cc;
   padding: 1px 4px;
@@ -884,14 +884,14 @@ import { RouterLink } from '@angular/router';
 .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
 .classic-btn.primary:hover { background: #1a3a8a; }
 .classic-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
-.classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 10px; background: white; }
-.classic-select option small { font-size: 8px; color: #888; }
-.classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 10px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 11px; background: white; }
+.classic-select option small { font-size: 11px; color: #888; }
+.classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 11px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .filter-group { display: flex; align-items: center; gap: 4px; }
-.filter-group label { font-size: 10px; font-weight: bold; color: #000; }
+.filter-group label { font-size: 11px; font-weight: bold; color: #000; }
 .search-group .classic-input { width: 160px; }
 .status-sep { color: #b0b0b0; }
-.classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 10px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
+.classic-table th { background: #0a246a; color: white; padding: 6px 8px; text-align: center; font-weight: bold; font-size: 11px; border-right: 1px solid rgba(255,255,255,0.2); white-space: nowrap; }
 .classic-table th:last-child { border-right: none; }
 .classic-table td { padding: 7px 8px; text-align: center; border-bottom: 1px solid #e0e0e0; color: #000; }
 .btn-confirm.btn-receive { background: #008800; }
@@ -901,8 +901,8 @@ import { RouterLink } from '@angular/router';
 .btn-confirm.btn-delete { background: #cc4400; }
 .btn-confirm.btn-delete:hover { background: #aa3300; }
     .sig-image-container img { max-width: 100%; max-height: 45px; object-fit: contain; }
-    .sig-info strong { display: block; font-size: 10px; color: #333; }
-    .sig-info span { font-size: 9px; color: #888; }
+    .sig-info strong { display: block; font-size: 11px; color: #333; }
+    .sig-info span { font-size: 11px; color: #888; }
      /* Add these new styles */
     .view-mode-bar { display: flex; gap: 8px; margin-bottom: 16px; }
     .view-mode-btn { flex: 1; padding: 10px 16px; background: white; border: 1px solid #c0c0c0; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -913,7 +913,7 @@ import { RouterLink } from '@angular/router';
     .action-btn.process { color: #cc6600; }
     .action-btn.process:hover { background: #fff8e8; border-color: #cc6600; }
     
-    .select-all-label { font-size: 10px; color: #333; display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+    .select-all-label { font-size: 11px; color: #333; display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
     .status-sep { color: #b0b0b0; }
     .btn-process { background: #cc6600; color: white; border-color: #cc6600; }
     .btn-process:hover { background: #aa4400; }
@@ -951,7 +951,7 @@ import { RouterLink } from '@angular/router';
     .warning-content { display: flex; gap: 14px; align-items: flex-start; }
     .warning-icon { font-size: 36px; flex-shrink: 0; }
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
-    .warning-hint { font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
+    .warning-hint { font-size: 11px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
   `]
 })
@@ -1329,23 +1329,24 @@ onDragEnd() {
   }
   // ✅ Override status-changing methods to update cache
   private updateLocalRequisition(reqId: number, updates: Partial<any>): void {
+    // Update allReqs array
     const index = this.allReqs.findIndex(r => r.id === reqId);
     if (index !== -1) {
-      this.allReqs[index] = { ...this.allReqs[index], ...updates };
+        this.allReqs[index] = { ...this.allReqs[index], ...updates };
     }
-    
+    // Update cache if exists
     if (this.requisitionsCache) {
-      const cacheIndex = this.requisitionsCache.data.findIndex(r => r.id === reqId);
-      if (cacheIndex !== -1) {
-        this.requisitionsCache.data[cacheIndex] = { 
-          ...this.requisitionsCache.data[cacheIndex], 
-          ...updates 
-        };
-      }
+        const cacheIndex = this.requisitionsCache.data.findIndex(r => r.id === reqId);
+        if (cacheIndex !== -1) {
+            this.requisitionsCache.data[cacheIndex] = { 
+                ...this.requisitionsCache.data[cacheIndex], 
+                ...updates 
+            };
+        }
     }
-    
+    // ✅ Force re-apply filters to update the displayed list
     this.applyFilters();
-  }
+}
 // setViewMode method
  setViewMode(mode: string) {
     this.viewMode = mode;
@@ -1404,29 +1405,33 @@ applyFilters() {
                 if (creatorBranch == userBranchId && creatorDept == userDeptId) return true;
             }
             
-            // Forwarded FROM our department
-            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return true;
+            // Forwarded FROM our department (including final released ones)
+            // ✅ Check both active forwarded and final released (status='released', forwarded_status=null)
+            if (r.branch_id == userBranchId && r.department_id == userDeptId) {
+                if (r.is_forwarded || (r.status === 'released' && r.is_forwarded)) return true;
+            }
             
             return false;
         });
     } else if (this.viewMode === 'incoming') {
-    filtered = filtered.filter(r => {
-        const creatorBranch = r.creator_branch_id;
-        const creatorDept = r.creator_dept_id;
-        const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
-        
-        // ✅ Exclude unapproved requests from incoming view
-        if (r.status === 'pending' && !r.approved_name && !r.approved_signature) {
+        filtered = filtered.filter(r => {
+            const creatorBranch = r.creator_branch_id;
+            const creatorDept = r.creator_dept_id;
+            const isFromOurDept = (creatorBranch == userBranchId && creatorDept == userDeptId) || r.submitted_by == userId;
+            
+            // Exclude unapproved requests from incoming view
+            if (r.status === 'pending' && !r.approved_name && !r.approved_signature) {
+                return false;
+            }
+            
+            if (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) return true;
+            if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return false;
+            if (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept) return true;
             return false;
-        }
-        
-        if (r.is_forwarded && r.forwarded_to_branch_id == userBranchId && r.forwarded_to_department_id == userDeptId && !isFromOurDept) return true;
-        if (r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId) return false;
-        if (!r.is_forwarded && r.branch_id == userBranchId && r.department_id == userDeptId && r.submitted_by != userId && !isFromOurDept) return true;
-        return false;
-    });
-}
+        });
+    }
     
+    // ✅ Filter by status - this will now catch 'released' status for final released forwarded reqs
     if (this.activeTab !== 'all') {
         filtered = filtered.filter(r => (r.status || 'pending') === this.activeTab);
     }
@@ -1529,6 +1534,14 @@ getStatusLabel(reqOrStatus: any): string {
             return 'Pending';
         }
         return 'For Approval';
+    }
+    
+    // ✅ Handle final released forwarded requisitions
+    if (status === 'released') {
+        if (req && req.is_forwarded && req.forwarded_status === null) {
+            return 'Released'; // This was a final release of a forwarded req
+        }
+        return 'Released';
     }
     
     const labels: Record<string, string> = {
@@ -2194,57 +2207,92 @@ editReq(req: any) {
  processRelease(req: any) {
     const userName = this.authService.getCurrentUser()?.fullname || 'Admin';
     const payload: any = {
-      status: 'released',
-      released_name: userName,
-      released_date: new Date().toISOString().split('T')[0]
+        status: 'released',
+        released_name: userName,
+        released_date: new Date().toISOString().split('T')[0]
     };
     
     const isForwarded = req.is_forwarded;
     const isFinalRelease = isForwarded && req.forwarded_status === 'released';
     
+    // ✅ Optimistic update - handle all three cases
     if (isForwarded && !isFinalRelease) {
-      this.updateLocalRequisition(req.id, { forwarded_status: 'released' });
+        // Case 1: Recipient releasing forwarded requisition (forwarded_status → 'released')
+        this.updateLocalRequisition(req.id, { 
+            forwarded_status: 'released',
+            released_name: userName,
+            released_date: payload.released_date
+        });
+    } else if (isFinalRelease) {
+        // Case 2: Final release by original sender (status → 'released', forwarded_status → null)
+        this.updateLocalRequisition(req.id, { 
+            status: 'released',
+            forwarded_status: null,
+            is_forwarded: false, // ✅ Reset forwarded flag so it shows as regular released
+            released_name: userName,
+            released_date: payload.released_date
+        });
     } else {
-      this.updateLocalRequisition(req.id, { status: 'released', ...payload });
+        // Case 3: Regular release (status → 'released')
+        this.updateLocalRequisition(req.id, { 
+            status: 'released',
+            released_name: userName,
+            released_date: payload.released_date
+        });
     }
     
     this.http.put(`${environment.apiUrl}/api/admin/requisitions/${req.id}/status`, payload, {
-      headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
+        headers: { ...this.getAuthHeaders(), 'Content-Type': 'application/json' }
     }).subscribe({
-      next: () => {
-        this.showToastMsg('📦 Requisition released!', 'success');
-        
-        if (isForwarded) {
-          if (isFinalRelease) {
-            // ✅ ADMIN SIDE
-            this.notificationService.handleRequisitionFinalReleased(req, userName, req.submitted_by);
-            // ✅ CLIENT SIDE
-            this.clientNotificationService.handleRequisitionFinalReleased(req, userName);
-          } else {
-            // ✅ ADMIN SIDE
-            this.notificationService.handleRequisitionForwardedReleased(req, userName, req.submitted_by);
-            // ✅ CLIENT SIDE
-            this.clientNotificationService.handleRequisitionForwardedReleased(
-              req, userName, req.branch_id, req.department_id
-            );
-          }
-        } else {
-          // ✅ ADMIN SIDE
-          this.notificationService.handleRequisitionReleased(req, userName, req.submitted_by);
-          // ✅ CLIENT SIDE
-          this.clientNotificationService.handleRequisitionReleased(req, userName);
+        next: (response: any) => {
+            this.showToastMsg('📦 Requisition released!', 'success');
+            
+            if (isForwarded) {
+                if (isFinalRelease) {
+                    this.notificationService.handleRequisitionFinalReleased(req, userName, req.submitted_by);
+                    this.clientNotificationService.handleRequisitionFinalReleased(req, userName);
+                } else {
+                    this.notificationService.handleRequisitionForwardedReleased(req, userName, req.submitted_by);
+                    this.clientNotificationService.handleRequisitionForwardedReleased(
+                        req, userName, req.branch_id, req.department_id
+                    );
+                }
+            } else {
+                this.notificationService.handleRequisitionReleased(req, userName, req.submitted_by);
+                this.clientNotificationService.handleRequisitionReleased(req, userName);
+            }
+            
+            // ✅ IMPORTANT: Clear cache and force a fresh reload to get the actual DB state
+            setTimeout(() => {
+                this.clearCache();
+                this.loadAll(false); // Force fresh load without cache
+            }, 500);
+        },
+        error: () => { 
+            // Revert optimistic update on error
+            if (isForwarded && !isFinalRelease) {
+                this.updateLocalRequisition(req.id, { 
+                    forwarded_status: 'processing',
+                    released_name: null,
+                    released_date: null
+                });
+            } else if (isFinalRelease) {
+                this.updateLocalRequisition(req.id, { 
+                    status: 'forwarded', 
+                    forwarded_status: 'released',
+                    is_forwarded: true,
+                    released_name: null,
+                    released_date: null
+                });
+            } else {
+                this.updateLocalRequisition(req.id, { 
+                    status: 'processing',
+                    released_name: null,
+                    released_date: null
+                });
+            }
+            this.showToastMsg('⚠️ Failed to release', 'error');
         }
-        
-        setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
-      },
-      error: () => { 
-        if (isForwarded && !isFinalRelease) {
-          this.updateLocalRequisition(req.id, { forwarded_status: 'processing' });
-        } else {
-          this.updateLocalRequisition(req.id, { status: 'processing' });
-        }
-        this.showToastMsg('⚠️ Failed to release', 'error'); 
-      }
     });
 }
 
@@ -2360,26 +2408,26 @@ getBranchName(branchId: number): string {
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
           @page { size: A4 portrait; margin: 8mm; }
-          body { font-family: 'Courier New', monospace; font-size: 9px; color: #000; padding: 10px; }
+          body { font-family: 'Courier New', monospace; font-size: 11px; color: #000; padding: 10px; }
           .req-print { background: white; border: 2px solid #000; padding: 16px 20px; max-width: 750px; margin: 0 auto; }
           .req-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 12px; }
           .req-header .company { font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px; color: #0a246a; }
           .req-header .title { font-size: 11px; font-weight: bold; letter-spacing: 3px; margin-top: 4px; }
-          .req-header .ctrl-no { font-size: 8px; color: #cc0000; font-weight: bold; margin-top: 2px; }
-          .req-header .ref { font-size: 8px; margin-top: 4px; color: #555; }
-          .status-badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 8px; font-weight: bold; text-transform: uppercase; }
+          .req-header .ctrl-no { font-size: 11px; color: #cc0000; font-weight: bold; margin-top: 2px; }
+          .req-header .ref { font-size: 11px; margin-top: 4px; color: #555; }
+          .status-badge { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
           .status-pending { background: #fffae8; color: #886600; border: 1px solid #e6d88a; }
           .status-approved { background: #eeffee; color: #008800; border: 1px solid #88cc88; }
           .status-rejected { background: #ffecec; color: #cc0000; border: 1px solid #eeaaaa; }
           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; margin-bottom: 10px; }
-          .info-row { display: flex; font-size: 9px; }
+          .info-row { display: flex; font-size: 11px; }
           .info-label { font-weight: bold; white-space: nowrap; color: #333; width: 80px; flex-shrink: 0; }
           .info-value { flex: 1; color: #000; }
-          .remarks-section { margin: 8px 0; padding: 8px; border: 1px solid #ccc; background: #fafafa; font-size: 9px; min-height: 30px; white-space: pre-wrap; }
-          .remarks-label { font-weight: bold; font-size: 9px; margin-bottom: 4px; }
+          .remarks-section { margin: 8px 0; padding: 8px; border: 1px solid #ccc; background: #fafafa; font-size: 11px; min-height: 30px; white-space: pre-wrap; }
+          .remarks-label { font-weight: bold; font-size: 11px; margin-bottom: 4px; }
           .items-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-          .items-table th { background: #f0f4f8; padding: 5px 8px; font-size: 9px; font-weight: bold; border: 1px solid #000; text-align: left; }
-          .items-table td { padding: 4px 8px; font-size: 9px; border: 1px solid #ccc; }
+          .items-table th { background: #f0f4f8; padding: 5px 8px; font-size: 11px; font-weight: bold; border: 1px solid #000; text-align: left; }
+          .items-table td { padding: 4px 8px; font-size: 11px; border: 1px solid #ccc; }
           .items-table td.right { text-align: right; }
           .total-row { font-weight: bold; background: #f0f4f8; }
           .total-row td { border: 1px solid #000; }
@@ -2387,13 +2435,13 @@ getBranchName(branchId: number): string {
           .signatures { margin-top: 16px; padding-top: 10px; border-top: 2px solid #000; }
           .sig-row { display: flex; gap: 12px; }
           .sig-block { flex: 1; text-align: center; padding: 8px; border: 1px solid #ccc; background: #fafafa; }
-          .sig-label { font-size: 8px; font-weight: bold; text-transform: uppercase; color: #555; margin-bottom: 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
+          .sig-label { font-size: 11px; font-weight: bold; text-transform: uppercase; color: #555; margin-bottom: 6px; border-bottom: 1px solid #ccc; padding-bottom: 3px; }
           .sig-image-area { border: 1px solid #eee; min-height: 45px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; background: white; }
           .sig-image-area img { max-width: 100px; max-height: 40px; object-fit: contain; }
-          .sig-image-area .no-sig { font-size: 7px; color: #ccc; font-style: italic; }
-          .sig-name { font-size: 10px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 2px; }
-          .sig-date { font-size: 8px; color: #333; }
-          .footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ccc; text-align: center; font-size: 7px; color: #555; }
+          .sig-image-area .no-sig { font-size: 11px; color: #ccc; font-style: italic; }
+          .sig-name { font-size: 11px; font-weight: bold; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 2px; }
+          .sig-date { font-size: 11px; color: #333; }
+          .footer { margin-top: 12px; padding-top: 8px; border-top: 1px solid #ccc; text-align: center; font-size: 11px; color: #555; }
           .footer p { margin: 2px 0; }
           @media print { body { padding: 0; margin: 0; } .req-print { border: 1px solid #000; } }
         </style>

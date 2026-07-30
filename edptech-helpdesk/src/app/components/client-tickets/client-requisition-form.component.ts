@@ -1151,34 +1151,24 @@ private parseDate(val: any): string {
         return '';
     }
 }
- generateReqNumber(): string {
+generateReqNumber(): string {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
     
-    // Get RECIPIENT branch code (selected branch, not user's branch)
-    let branchCode = 'BRC';
-    if (this.selectedBranchId) {
-        const selectedBranch = this.branches.find(b => b.id == this.selectedBranchId);
-        if (selectedBranch?.name) {
-            branchCode = selectedBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-        }
-    } else if (this.userBranch?.name) {
-        // Fallback to user's branch if no recipient selected yet
-        branchCode = this.userBranch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+    // Check if it's a new day - reset counter
+    const lastDate = localStorage.getItem('lastReqDate');
+    if (lastDate !== datePart) {
+        localStorage.setItem('lastReqDate', datePart);
+        localStorage.setItem('lastReqNumber', '0');
     }
     
-    // Get department code from selected department
-    let deptCode = 'DEPT';
-    if (this.reqData.department_id) {
-        const selectedDept = this.filteredDepartments.find(d => d.id == this.reqData.department_id);
-        if (selectedDept?.name) {
-            deptCode = selectedDept.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-        }
-    }
+    const lastNumber = parseInt(localStorage.getItem('lastReqNumber') || '0');
+    const nextNumber = lastNumber + 1;
+    const paddedNumber = String(nextNumber).padStart(3, '0');
     
-    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+    localStorage.setItem('lastReqNumber', String(nextNumber));
     
-    return `REQ-${branchCode}-${deptCode}-${datePart}-${random}`;
+    return `REQ-${paddedNumber}-${datePart}`;
 }
   get grandTotal(): number {
     return this.items.reduce((sum, item) => sum + ((item.qty || 0) * (item.unit_price || 0)), 0);
