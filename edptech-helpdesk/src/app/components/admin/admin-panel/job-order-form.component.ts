@@ -64,19 +64,28 @@ import { environment } from '../../../../environments/environment';
           </div>
         </div>
 
-        <div class="req-top-row">
-          <div class="field-row">
-  <label>ATTN.:</label>
-  <!-- Show select when NOT in approval mode -->
-  <select *ngIf="!approvalMode" [(ngModel)]="joData.attn" class="req-input">
-    <option value="">— Auto from department —</option>
-    <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
-      {{ user.fullname || user.username }} ({{ user.role }})
-    </option>
-  </select>
-  <!-- Show readonly input in approval mode -->
-  <input *ngIf="approvalMode" type="text" [ngModel]="joData.attn" class="req-input" readonly>
-</div>        </div>
+       <div class="req-top-row">
+  <div class="field-row">
+    <label>ATTN.:</label>
+    <!-- Show select when NOT in approval mode -->
+    <select *ngIf="!approvalMode" [(ngModel)]="joData.attn" class="req-input">
+      <option value="">— Auto from department —</option>
+      <option *ngFor="let user of attnUsers" [value]="user.fullname || user.username">
+        {{ user.fullname || user.username }} ({{ user.role }})
+      </option>
+    </select>
+    <!-- Show readonly input in approval mode -->
+    <input *ngIf="approvalMode" type="text" [ngModel]="joData.attn" class="req-input" readonly>
+  </div>
+  <div class="field-row">
+    <label>Date:</label>
+    <input type="date" [(ngModel)]="joData.date" class="req-input" readonly>
+  </div>
+  <div class="field-row">
+    <label>Time:</label>
+    <input type="time" [(ngModel)]="joData.time" class="req-input" readonly>
+  </div>
+</div>
 
         <div class="req-section">
           <label>Work Description / Remarks:</label>
@@ -724,18 +733,33 @@ onDepartmentChange() {
     
     this.generateCtrlNumber();
 }
-  generateJONumber(): string {
-    const yr = new Date().getFullYear().toString().slice(-2);
-    const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-    return `JO-${yr}-${rand}`;
-  }
+generateJONumber(): string {
+    const now = new Date();
+    const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+    
+    const lastDate = localStorage.getItem('lastAdminJODate');
+    if (lastDate !== datePart) {
+        localStorage.setItem('lastAdminJODate', datePart);
+        localStorage.setItem('lastAdminJONumber', '0');
+    }
+    
+    const lastNumber = parseInt(localStorage.getItem('lastAdminJONumber') || '0');
+    const nextNumber = lastNumber + 1;
+    const paddedNumber = String(nextNumber).padStart(3, '0');
+    
+    localStorage.setItem('lastAdminJONumber', String(nextNumber));
+    
+    return `JO-${paddedNumber}-${datePart}`;
+}
 
-  generateCtrlNumber(): string {
-    const yr = new Date().getFullYear().toString().slice(-2);
-    const rand = Math.floor(Math.random() * 9999).toString().padStart(4, '0');
-    return `CTRL-JO-${yr}-${rand}`;
-  }
-
+generateCtrlNumber(): string {
+    // ✅ CTRL NO should match the JO number format
+    const now = new Date();
+    const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+    const lastNumber = parseInt(localStorage.getItem('lastAdminJONumber') || '0');
+    const paddedNumber = String(lastNumber || 1).padStart(3, '0');
+    return `JO-${paddedNumber}-${datePart}`;
+}
   setSigMode(target: string, mode: 'draw' | 'upload') {
     this.sigMode[target] = mode;
   }
@@ -995,11 +1019,14 @@ submitJobOrder() {
       : this.http.post(url, payload, { headers });
 
     request.subscribe({
-      next: (res: any) => {
+    next: (res: any) => {
         console.log('✅ Server response:', res);
+        // ✅ Use numbers from backend
+        this.joNumber = res.job_order_number || this.joNumber;
+        this.joCtrlNumber = res.ctrl_no || this.joCtrlNumber;
         this.showToastMsg(this.editMode ? 'Job Order updated!' : 'Job Order submitted successfully!', 'success');
         setTimeout(() => this.cancel(), 1500);
-      },
+    },
       error: (err) => {
         this.showToastMsg('Failed to save Job Order', 'error');
         console.error('❌ Error:', err);

@@ -3825,7 +3825,7 @@ app.get('/api/job-orders/my', async (req, res) => {
             }
         }
         
-        // ✅ Get department name for the current user
+        // Get department name for the current user
         if (userDeptId) {
             const [deptInfo] = await pool.query(
                 'SELECT name FROM departments WHERE id = ?', [userDeptId]
@@ -3843,47 +3843,56 @@ app.get('/api/job-orders/my', async (req, res) => {
             fullname: userFullname 
         });
         
-        // ✅ Get ALL orders with forwarded-to info (no forwarded_by JOIN)
+        // ✅ FIXED: Include creator info via JOIN with users/new_user tables
         const [allOrders] = await pool.query(
             `SELECT 
                 jo.*,
-                -- Forwarded To info (for "Our Job Orders" view)
+                -- ✅ Creator info (IMPORTANT for frontend filtering)
+                COALESCE(u.branch_id, nu.branch_id) as creator_branch_id,
+                COALESCE(u.department_id, nu.department_id) as creator_dept_id,
+                COALESCE(u.fullname, nu.fullname) as submitted_by_name,
+                -- Forwarded To info
                 fb.name as forwarded_to_branch_name,
                 fb.company_name as forwarded_to_company_name,
                 fd.name as forwarded_to_department_name,
-                -- Original branch info
+                -- Original branch/department info
                 b.name as branch_name,
                 b.company_name,
                 d.name as department_name,
-                -- Forwarder branch info (same as original branch for forwarded orders)
+                -- Forwarder branch info
                 b.name as forwarder_branch_name,
                 b.company_name as forwarder_company_name
              FROM job_orders jo
+             LEFT JOIN users u ON jo.submitted_by = u.id
+             LEFT JOIN new_user nu ON jo.submitted_by = nu.id
              LEFT JOIN branches b ON jo.branch_id = b.id
              LEFT JOIN departments d ON jo.department_id = d.id
              LEFT JOIN branches fb ON jo.forwarded_to_branch_id = fb.id
              LEFT JOIN departments fd ON jo.forwarded_to_department_id = fd.id
              WHERE 
+                -- My own job orders
                 jo.submitted_by = ?
-                OR (jo.branch_id = ? AND jo.department_id = ? AND jo.is_forwarded = 0)
+                -- OR Colleagues in my same branch+department (creator info match)
+                OR (COALESCE(u.branch_id, nu.branch_id) = ? AND COALESCE(u.department_id, nu.department_id) = ?)
+                -- OR Sent to my branch+department (not by me, not forwarded)
+                OR (jo.branch_id = ? AND jo.department_id = ? AND jo.submitted_by != ? AND jo.is_forwarded = 0)
+                -- OR Forwarded TO my branch+department
                 OR (jo.is_forwarded = 1 AND jo.forwarded_to_branch_id = ? AND jo.forwarded_to_department_id = ?)
+                -- OR Forwarded BY me
                 OR (jo.is_forwarded = 1 AND jo.forwarded_by_name = ?)
-                OR (jo.received_name = ?)
-                OR LOWER(jo.request_dept) = LOWER(?)
              ORDER BY jo.created_at DESC`,
             [
-                decoded.id,
-                userBranchId, userDeptId,
-                userBranchId, userDeptId,
-                userFullname,
-                userFullname,
-                userDeptName
+                decoded.id,                              // My own
+                userBranchId, userDeptId,                // Colleagues in same branch/dept
+                userBranchId, userDeptId, decoded.id,     // Sent to my dept (not by me)
+                userBranchId, userDeptId,                // Forwarded TO me
+                userFullname                             // Forwarded BY me
             ]
         );
         
-        console.log(`📋 Found ${allOrders.length} orders for user ${decoded.id} (dept: ${userDeptName})`);
-        
+        console.log(`📋 Found ${allOrders.length} orders for user ${decoded.id}`);
         res.json(allOrders);
+        
     } catch (error) {
         console.error('❌ Error fetching my job orders:', error);
         res.status(500).json({ error: error.message });
@@ -3921,10 +3930,8 @@ app.post('/api/job-orders', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -3936,28 +3943,14 @@ app.post('/api/job-orders', async (req, res) => {
             // ✅ Also accept these field names from frontend
             remarks, attn, request_from, prepared_name, prepared_date
         } = req.body;
-        
         console.log('📋 Client creating job order:', { 
-            job_order_number, 
             branch_id, 
             department_id,
             request_dept: request_dept || request_from
         });
-        
         const userId = submitted_by || decoded.id;
-        
-        if (job_order_number) {
-            const [existing] = await pool.query(
-                'SELECT id FROM job_orders WHERE job_order_number = ?',
-                [job_order_number]
-            );
-            if (existing.length > 0) {
-                return res.status(409).json({ error: 'Job order number already exists' });
-            }
-        }
-        
-        const joNumber = job_order_number || `JO-${Date.now().toString(36).toUpperCase()}`;
-        
+        // ✅ Insert with temporary number first
+        const tempJONumber = 'TEMP-JO-' + Date.now();
         const [result] = await pool.query(`
             INSERT INTO job_orders (
                 job_order_number, date, time, company, crtk_no, ctrl_no, date_needed, department,
@@ -3968,7 +3961,7 @@ app.post('/api/job-orders', async (req, res) => {
                 submitted_by
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            joNumber,
+            tempJONumber,
             date || null,
             time || null,
             company || null,
@@ -3994,10 +3987,23 @@ app.post('/api/job-orders', async (req, res) => {
             received_signature || null,
             userId
         ]);
-        
-        console.log('✅ Client job order created:', result.insertId);
-        res.json({ success: true, id: result.insertId, job_order_number: joNumber });
-        
+        // ✅ Generate unique JO number using the auto-increment ID
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+        const paddedId = String(result.insertId).padStart(3, '0');
+        const joNumber = `JO-${paddedId}-${datePart}`;
+        const ctrlNumber = joNumber; 
+        // ✅ Update with the generated numbers
+        await pool.query(
+    'UPDATE job_orders SET job_order_number = ?, ctrl_no = ? WHERE id = ?', 
+    [joNumber, ctrlNumber, result.insertId]
+       );
+     res.json({ 
+    success: true, 
+    id: result.insertId, 
+    job_order_number: joNumber,
+    ctrl_no: ctrlNumber 
+    });   
     } catch (error) {
         console.error('❌ Error creating job order:', error);
         res.status(500).json({ error: error.message });
@@ -4268,10 +4274,8 @@ app.post('/api/admin/job-orders', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
         const token = authHeader.split(' ')[1];
         const decoded = jwt.verify(token, 'secret_key');
-        
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -4281,32 +4285,18 @@ app.post('/api/admin/job-orders', async (req, res) => {
             requested_signature, approved_signature, received_signature,
             branch_id, department_id, status,
             remarks, attn, request_from, 
-            prepared_name, prepared_date, prepared_signature  // ✅ ADDED
+            prepared_name, prepared_date, prepared_signature
         } = req.body;
-        
         console.log('📋 Admin creating job order:', { 
-            job_order_number, 
             branch_id, 
             department_id,
             has_requested_signature: !!(requested_signature || prepared_signature),
             has_approved_signature: !!approved_signature,
             has_received_signature: !!received_signature
         });
-        
         const userId = submitted_by || decoded.id;
-        
-        if (job_order_number) {
-            const [existing] = await pool.query(
-                'SELECT id FROM job_orders WHERE job_order_number = ?',
-                [job_order_number]
-            );
-            if (existing.length > 0) {
-                return res.status(409).json({ error: 'Job order number already exists' });
-            }
-        }
-        
-        const joNumber = job_order_number || `JO-${Date.now().toString(36).toUpperCase()}`;
-        
+        // ✅ Insert with temporary number first
+        const tempJONumber = 'TEMP-JO-' + Date.now();
         const [result] = await pool.query(`
             INSERT INTO job_orders (
                 job_order_number, date, time, company, crtk_no, ctrl_no, date_needed, department,
@@ -4317,7 +4307,7 @@ app.post('/api/admin/job-orders', async (req, res) => {
                 submitted_by, status
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-            joNumber,
+            tempJONumber,
             date || null,
             time || null,
             company || null,
@@ -4338,16 +4328,30 @@ app.post('/api/admin/job-orders', async (req, res) => {
             approved_date || null,
             received_date || null,
             received_name || null,
-            requested_signature || prepared_signature || null,  // ✅ FIXED
+            requested_signature || prepared_signature || null,
             approved_signature || null,
             received_signature || null,
             userId,
             status || 'pending'
         ]);
-        
-        console.log('✅ Admin job order created:', result.insertId);
-        res.json({ success: true, id: result.insertId, job_order_number: joNumber });
-        
+        // ✅ Generate unique JO number using the auto-increment ID
+        const now = new Date();
+        const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
+        const paddedId = String(result.insertId).padStart(3, '0');
+        const joNumber = `JO-${paddedId}-${datePart}`;
+        const ctrlNumber = joNumber;
+        // ✅ Update with the generated numbers
+        await pool.query(
+       'UPDATE job_orders SET job_order_number = ?, ctrl_no = ? WHERE id = ?', 
+       [joNumber, ctrlNumber, result.insertId]
+            );
+        console.log('✅ Admin job order created:', result.insertId, 'Number:', joNumber);
+        res.json({ 
+            success: true, 
+            id: result.insertId, 
+            job_order_number: joNumber,
+            ctrl_no: ctrlNumber 
+        });
     } catch (error) {
         console.error('❌ Error creating admin job order:', error);
         res.status(500).json({ error: error.message });

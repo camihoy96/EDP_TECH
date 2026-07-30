@@ -20,7 +20,6 @@ import { environment } from '../../../environments/environment';
   <span class="header-sub">{{ approvalMode ? 'Fill in received by details and signature' : editMode ? 'Update your job order request' : 'Submit a job order for work/services' }}</span>
 </div>
     <div style="display: flex; gap: 8px; align-items: center;">
-      <button class="print-btn" (click)="printForm()">🖨️ Print</button>
       <button class="close-btn" (click)="cancel()" title="Close">✕</button>
     </div>
 </div>
@@ -80,12 +79,12 @@ import { environment } from '../../../environments/environment';
   </div>
   <div class="field-row">
     <label>Date:</label>
-   <input type="date" [(ngModel)]="joData.date" class="req-input" [readonly]="approvalMode">
-  </div>
-  <div class="field-row">
+    <input type="date" [(ngModel)]="joData.date" class="req-input" readonly>
+</div>
+<div class="field-row">
     <label>Time:</label>
-     <input type="time" [(ngModel)]="joData.time" class="req-input" [readonly]="approvalMode">
-  </div>
+    <input type="time" [(ngModel)]="joData.time" class="req-input" readonly>
+</div>
 </div>
         <div class="req-section">
           <label>Work Description / Remarks:</label>
@@ -140,26 +139,26 @@ import { environment } from '../../../environments/environment';
   </div>
 
   <!-- Form Approved By -->
-  <div class="sig-block">
-    <h5>Form Approved By:</h5>
-    <div class="sig-field">
-      <label>Name:</label>
-      <input type="text" [(ngModel)]="joData.approved_name" class="req-input-sm" placeholder="Approver name" [readonly]="approvalMode">
-    </div>
-    <div class="sig-field">
-      <label>Date:</label>
-      <input type="date" [(ngModel)]="joData.approved_date" class="req-input-sm" [readonly]="approvalMode">
-    </div>
-    
-    <!-- Show saved signature preview -->
-    <div class="sig-saved-preview" *ngIf="approvedSignature">
-      <img [src]="approvedSignature" alt="Signature" class="sig-image-small">
-      <span class="sig-saved-label">✓ Signature</span>
-      <button type="button" class="sig-clear" (click)="clearSignature('approved')" *ngIf="!approvalMode">✕</button>
-    </div>
-    
+<div class="sig-block" [class.readonly]="approvalMode || !canApprove()">
+  <h5>Form Approved By:</h5>
+  <div class="sig-field">
+    <label>Name:</label>
+    <input type="text" [(ngModel)]="joData.approved_name" class="req-input-sm" 
+           placeholder="Approver name" [readonly]="approvalMode || !canApprove()">
+  </div>
+  <div class="sig-field">
+    <label>Date:</label>
+    <input type="date" [(ngModel)]="joData.approved_date" class="req-input-sm" 
+           [readonly]="approvalMode || !canApprove()">
+  </div>
+  <!-- Show saved signature preview -->
+  <div class="sig-saved-preview" *ngIf="approvedSignature">
+    <img [src]="approvedSignature" alt="Signature" class="sig-image-small">
+    <span class="sig-saved-label">✓ Signature</span>
+    <button type="button" class="sig-clear" (click)="clearSignature('approved')" *ngIf="!approvalMode && canApprove()">✕</button>
+  </div>
     <!-- Draw/Upload options - ONLY when NOT in approval mode and no signature -->
-    <ng-container *ngIf="!approvalMode && !approvedSignature">
+     <ng-container *ngIf="!approvalMode && canApprove() && !approvedSignature">
       <div class="sig-options">
         <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'draw'" (click)="setSigMode('approved', 'draw')">✍️ Draw</button>
         <button type="button" class="sig-option-btn" [class.active]="sigMode['approved'] === 'upload'" (click)="setSigMode('approved', 'upload')">📁 Upload</button>
@@ -182,6 +181,10 @@ import { environment } from '../../../environments/environment';
         </div>
       </div>
     </ng-container>
+    <div *ngIf="!approvalMode && !canApprove() && !approvedSignature" 
+       style="padding: 12px; text-align: center; color: #888; font-style: italic; font-size: 12px;">
+    Requires Head/Manager or Supervisor approval
+  </div>
   </div>
 
   <!-- Form Received By - Fillable in approval mode, readonly otherwise -->
@@ -409,12 +412,12 @@ sigSaved: Record<string, boolean> = {
   'approved': false,
   'received': false
 };
-  joData: any = {
+ joData: any = {
     request_from: '',
     attn: '',
     department_id: null,
     date: new Date().toISOString().split('T')[0],
-    time: new Date().toTimeString().split(' ')[0].substring(0, 5), // ✅ Auto-fill current time
+    time: new Date().toTimeString().split(' ')[0].substring(0, 5),
     remarks: '',
     prepared_name: '',
     prepared_date: new Date().toISOString().split('T')[0],
@@ -422,7 +425,7 @@ sigSaved: Record<string, boolean> = {
     approved_date: '',
     received_name: '',
     received_date: '',  
-};  
+};
 
   constructor(
     private router: Router,
@@ -446,13 +449,13 @@ sigSaved: Record<string, boolean> = {
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
         this.loadJobOrder(params['id']);
       } else {
-        this.joNumber = this.generateJONumber();
+      this.joNumber = this.generateJONumber();
+       this.joCtrlNumber = this.joNumber;
         this.loadBranchesAndDepartments();
         this.authService.currentUser$.subscribe((user: any) => {
           if (user) {
             this.joData.prepared_name = user.fullname || '';
             this.joData.request_from = user.department || user.dept || '';
-            
             const role = (user.role || '').toLowerCase();
             if (role === 'head/manager' || role === 'supervisor' || role === 'branch manager') {
               this.joData.approved_name = user.fullname || '';
@@ -699,7 +702,15 @@ onDragEnd() {
   this.isDragging = false;
   this.currentDragModal = null;
 }
-
+canApprove(): boolean {
+    const currentUser = this.authService.getCurrentUser();
+    if (!currentUser) return false;
+    
+    if (this.approvalMode) return false;
+    
+    const role = (currentUser.role || '').toLowerCase();
+    return role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+}
 onBranchChange() {
     console.log('🔍 onBranchChange - selectedBranchId:', this.selectedBranchId);
     
@@ -815,47 +826,28 @@ filterDepartmentsByBranch(branchId: number) {
     this.generateCtrlNumber();
 }
 
-  generateCtrlNumber(): string {
-    let branchCode = 'BR';
-    let deptCode = 'DP';
-    
-    if (this.selectedBranchId) {
-      const branch = this.branches.find(b => b.id == this.selectedBranchId);
-      if (branch?.name) {
-        branchCode = branch.name.replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase();
-      }
-    }
-    
-    if (this.joData.department_id) {
-      const dept = this.filteredDepartments.find(d => d.id == this.joData.department_id);
-      if (dept?.name) {
-        deptCode = dept.name.replace(/[^a-zA-Z]/g, '').substring(0, 2).toUpperCase();
-      }
-    }
-    
-    this.joCtrlNumber = `JO-${branchCode}-${deptCode}-001`;
-    return this.joCtrlNumber;
-  }
-
-  generateJONumber(): string {
+generateCtrlNumber(): string {
+    // ✅ CTRL NO is the same as JO number
+    return this.joNumber;
+}
+generateJONumber(): string {
     const now = new Date();
     const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
-    let branchCode = 'BRC';
-    let deptCode = 'DEPT';
     
-    if (this.selectedBranchId) {
-      const branch = this.branches.find(b => b.id == this.selectedBranchId);
-      if (branch?.name) branchCode = branch.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
+    const lastDate = localStorage.getItem('lastJODate');
+    if (lastDate !== datePart) {
+        localStorage.setItem('lastJODate', datePart);
+        localStorage.setItem('lastJONumber', '0');
     }
     
-    if (this.joData.department_id) {
-      const dept = this.filteredDepartments.find(d => d.id == this.joData.department_id);
-      if (dept?.name) deptCode = dept.name.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase();
-    }
+    const lastNumber = parseInt(localStorage.getItem('lastJONumber') || '0');
+    const nextNumber = lastNumber + 1;
+    const paddedNumber = String(nextNumber).padStart(3, '0');
     
-    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-    return `JO-${branchCode}-${deptCode}-${datePart}-${random}`;
-  }
+    localStorage.setItem('lastJONumber', String(nextNumber));
+    
+    return `JO-${paddedNumber}-${datePart}`;
+}
 submitJobOrder() {
     // ✅ Approval mode - receive the job order
     if (this.approvalMode) {
@@ -990,11 +982,13 @@ submitJobOrder() {
       : this.http.post(url, payload, { headers });
 
     request.subscribe({
-      next: () => {
+    next: (response: any) => {
         this.submitting = false;
+        this.joNumber = response.job_order_number || this.joNumber;
+        this.joCtrlNumber = response.job_order_number || this.joCtrlNumber; // ✅ Same
         this.showToastMsg(this.editMode ? '✅ Job Order updated!' : '✅ Job Order submitted!', 'success');
         this.router.navigate(['/client/job-orders']);
-      },
+    },
       error: (err) => {
         this.submitting = false;
         const errorMsg = err.error?.error || err.message || 'Unknown error';
@@ -1096,7 +1090,19 @@ getDepartmentNameForSubmission(deptId: number): string {
             this.joData.received_date = this.joData.received_date || new Date().toISOString().split('T')[0];
           }
         }
-        
+        if (this.editMode && !this.approvalMode) {
+    const currentUser = this.authService.getCurrentUser();
+    if (currentUser) {
+        const role = (currentUser.role || '').toLowerCase();
+        if (role === 'head/manager' || role === 'supervisor' || role === 'branch manager') {
+            // Only auto-fill if not already filled
+            if (!this.joData.approved_name) {
+                this.joData.approved_name = currentUser.fullname || '';
+                this.joData.approved_date = new Date().toISOString().split('T')[0];
+            }
+        }
+    }
+}
         // ✅ Set current time if empty
         if (!this.joData.time) {
           this.joData.time = new Date().toTimeString().split(' ')[0].substring(0, 5);
@@ -1145,10 +1151,6 @@ getDepartmentNameForSubmission(deptId: number): string {
         });
       }
     });
-  }
-
-  printForm() {
-    window.print();
   }
 
   cancel() {
