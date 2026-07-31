@@ -9873,6 +9873,10 @@ app.get('/api/ticket-notifications', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// ============================================
+// ANNOUNCEMENTS API ENDPOINTS
+// ============================================
+
 // GET - Get all announcements
 app.get('/api/announcements', async (req, res) => {
     try {
@@ -9881,6 +9885,7 @@ app.get('/api/announcements', async (req, res) => {
         );
         res.json(announcements);
     } catch (error) {
+        console.error('GET /api/announcements error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -9888,13 +9893,51 @@ app.get('/api/announcements', async (req, res) => {
 // POST - Create announcement
 app.post('/api/announcements', async (req, res) => {
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
         const { title, message, priority, expires_at, created_by, created_by_name } = req.body;
+        
+        console.log('📢 Creating announcement:', { title, priority });
+        
         const [result] = await pool.query(
             'INSERT INTO announcements (title, message, priority, expires_at, created_by, created_by_name) VALUES (?, ?, ?, ?, ?, ?)',
             [title, message, priority || 'normal', expires_at || null, created_by, created_by_name]
         );
+        
+        console.log('✅ Announcement created:', result.insertId);
         res.status(201).json({ id: result.insertId, success: true });
     } catch (error) {
+        console.error('POST /api/announcements error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT - Update announcement
+app.put('/api/announcements/:id', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
+        const { id } = req.params;
+        const { title, message, priority, expires_at } = req.body;
+        
+        const [result] = await pool.query(
+            'UPDATE announcements SET title = ?, message = ?, priority = ?, expires_at = ? WHERE id = ?',
+            [title, message, priority || 'normal', expires_at || null, id]
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('PUT /api/announcements/:id error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -9902,9 +9945,43 @@ app.post('/api/announcements', async (req, res) => {
 // DELETE - Delete announcement
 app.delete('/api/announcements/:id', async (req, res) => {
     try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, 'secret_key');
+        
         await pool.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
+        
         res.json({ success: true });
     } catch (error) {
+        console.error('DELETE /api/announcements/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Save announcement notification for client users
+app.post('/api/client-notifications/announcement', async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        
+        const { type, title, message, announcement_id } = req.body;
+        
+        const [clientUsers] = await pool.query('SELECT id FROM new_user');
+        
+        for (const user of clientUsers) {
+            await pool.query(
+                `INSERT INTO client_notifications 
+                (user_id, user_table, type, title, message, announcement_id, notification_type, is_read) 
+                VALUES (?, 'new_user', ?, ?, ?, ?, 'announcement', 0)`,
+                [user.id, type || 'info', title, message, announcement_id || null]
+            );
+        }
+        
+        console.log('✅ Announcement notifications sent to', clientUsers.length, 'client users');
+        res.json({ success: true, notified: clientUsers.length });
+    } catch (error) {
+        console.error('Error saving announcement notification:', error);
         res.status(500).json({ error: error.message });
     }
 });

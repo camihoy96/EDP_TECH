@@ -1010,7 +1010,7 @@ import { environment } from '../../../../environments/environment';
   color: white;
   padding: 1px 5px;
   border-radius: 8px;
-  font-size: 8px;
+  font-size: 11px;
   margin-left: 4px;
 }
 .btn-cleaning.active-filter .badge-count {
@@ -1037,7 +1037,7 @@ import { environment } from '../../../../environments/environment';
   color: #2e7d32;
   padding: 2px 6px;
   border-radius: 3px;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1104,7 +1104,7 @@ import { environment } from '../../../../environments/environment';
 }
 
 .cleaning-stat-label {
-  font-size: 10px;
+  font-size: 11px;
   color: #666;
   display: block;
 }

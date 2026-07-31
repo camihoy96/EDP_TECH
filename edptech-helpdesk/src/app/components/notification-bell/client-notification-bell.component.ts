@@ -301,9 +301,11 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
       }
     } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
       this.router.navigate(['/client/request']);
+    } else if (notification.announcementId) {  // ✅ Add this
+        this.router.navigate(['/client/announcements']);
     }
     this.showDropdown = false;
-  }
+    }
 
   showMore() { this.visibleLimit += 20; }
 

@@ -21,6 +21,7 @@ export interface ClientNotification {
   timestamp: Date;
   read: boolean;
   notificationType?: 'incoming' | 'status_update' | 'requisition';
+  announcementId?: number; 
 }
 
 @Injectable({ providedIn: 'root' })
@@ -908,6 +909,7 @@ public resetForNewUser(): void {
                 ticketNumber: n.ticket_number,
                 jobOrderId: n.job_order_id,
                 jobOrderNumber: n.job_order_number,
+                announcementId: n.announcement_id,
                 targetUserId: n.user_id,
                 targetDeptId: n.department_id,
                 targetBranchId: n.branch_id,
@@ -1265,4 +1267,61 @@ public resetForNewUser(): void {
     this.toastContainer.id = 'client-toast-container';
     document.body.appendChild(this.toastContainer);
   }
+  /**
+ * Called when a new announcement is created by admin
+ * Only notifies client-side users (new_user table), not admin users
+ */
+handleNewAnnouncement(announcement: any): void {
+    const key = `announcement-new-${announcement.id}`;
+    if (this.shownToastIds.has(key)) return;
+    this.shownToastIds.add(key);
+
+    // Check if current user is a client user (not admin)
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const isClientUser = currentUser?.user_table === 'new_user';
+    
+    // Only show toast to client users
+    if (isClientUser) {
+        this.showToastPopup(
+            '📢 New Announcement',
+            announcement.title || 'New announcement posted',
+            undefined
+        );
+
+        const notif: ClientNotification = {
+            id: this.generateId(),
+            type: 'info',
+            title: '📢 New Announcement',
+            message: announcement.title || 'New announcement posted',
+            announcementId: announcement.id,
+            timestamp: new Date(),
+            read: false,
+            notificationType: 'incoming'
+        };
+        this.addLocalNotification(notif);
+    }
+    
+    // Save to server for ALL client users
+    this.saveAnnouncementNotificationToServer(announcement);
+}
+
+private saveAnnouncementNotificationToServer(announcement: any): void {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+
+    fetch(`${environment.apiUrl}/api/client-notifications/announcement`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            type: 'info',
+            title: '📢 New Announcement',
+            message: announcement.title || 'New announcement posted',
+            announcement_id: announcement.id,
+            notification_type: 'announcement'
+        }),
+    }).catch(err => console.log('⚠️ Failed to save announcement notification:', err));
+}
 }
