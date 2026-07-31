@@ -6,7 +6,7 @@ import { AuthService } from '../../../services/auth.service';
 import { Router, ActivatedRoute } from '@angular/router';  
 import { NotificationService } from '../../../services/notification.service';
 import { environment } from '../../../../environments/environment';
-
+import { ClientNotificationService } from '../../../services/client-notification.service';
 @Component({
   selector: 'app-admin-requisition-form',
   standalone: true,
@@ -467,13 +467,14 @@ export class AdminRequisitionFormComponent implements OnInit {
 
   dragOverTarget: string | null = null;
 
-  constructor(
+ constructor(
     private router: Router,
     private http: HttpClient,
     private authService: AuthService,
     private route: ActivatedRoute,
-    private notificationService: NotificationService
-  ) {}
+    private notificationService: NotificationService,
+    private clientNotificationService: ClientNotificationService  // ✅ ADD THIS
+) {}
 
   ngOnInit() {
     const url = this.router.url;
@@ -1099,17 +1100,24 @@ isAttnInList(): boolean {
       : this.http.post(url, payload, { headers });
 
     request.subscribe({
-      next: () => {
+    next: (response: any) => {
         this.submitting = false;
+        
+        // ✅ ADD: Notify recipient department about new requisition
+        if (!this.editMode && response.id) {
+            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            this.clientNotificationService.handleNewRequisition(
+                { id: response.id, requisition_number: this.reqNumber, submitted_by: currentUser.id },
+                currentUser.fullname || 'Admin',
+                this.selectedBranchId!,
+                this.reqData.department_id
+            );
+        }
+        
         this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
         this.router.navigate(['/admin/requisitions']);
-      },
-      error: (err) => {
-        this.submitting = false;
-        console.error('❌ Submit error:', err);
-        this.showToastMsg(`⚠️ Failed: ${err.error?.error || err.message}`, 'error');
-      }
-    });
+    }
+});
   }
 
   cancel() {

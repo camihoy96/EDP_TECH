@@ -8261,19 +8261,7 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
             return res.status(400).json({ error: 'branch_id and department_id are required' });
         }
         
-        // Build the query string
-        let userQuery = 'SELECT id FROM users WHERE branch_id = ? AND department_id = ? AND (role = ? OR role = ? OR role = ? OR role = ?)';
-        let userParams = [branch_id, department_id, 'head/manager', 'supervisor', 'admin', 'Technician'];
-        
-        if (exclude_user_id) {
-            userQuery += ' AND id != ?';
-            userParams.push(exclude_user_id);
-        }
-        
-        // Find all EDP/IT users in the target branch+department
-        const [users] = await pool.query(userQuery, userParams);
-        
-        // Also check new_user table
+        // ✅ Only get users from new_user table (clients) in the specific branch+department
         let newUserQuery = 'SELECT id FROM new_user WHERE branch_id = ? AND department_id = ?';
         let newUserParams = [branch_id, department_id];
         
@@ -8284,19 +8272,19 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
         
         const [newUsers] = await pool.query(newUserQuery, newUserParams);
         
-        const allUserIds = [...users.map((u) => u.id), ...newUsers.map((u) => u.id)];
-        
-        // Insert notification for each user
+        // Insert notification for each client user
         let insertCount = 0;
-        for (const userId of allUserIds) {
+        for (const user of newUsers) {
             await pool.query(
-                'INSERT INTO client_notifications (user_id, type, title, message, ticket_number, is_read, created_at) VALUES (?, ?, ?, ?, ?, 0, NOW())',
-                [userId, type || 'info', title, message, ticket_number || null]
+                `INSERT INTO client_notifications 
+                (user_id, user_table, type, title, message, ticket_number, department_id, branch_id, notification_type, is_read, created_at) 
+                VALUES (?, 'new_user', ?, ?, ?, ?, ?, ?, 'requisition', 0, NOW())`,
+                [user.id, type || 'info', title, message, ticket_number || null, department_id, branch_id]
             );
             insertCount++;
         }
         
-        console.log('Saved ' + insertCount + ' requisition notifications for branch ' + branch_id + ', dept ' + department_id);
+        console.log('✅ Saved', insertCount, 'client requisition notifications for branch', branch_id, 'dept', department_id);
         res.json({ success: true, count: insertCount });
     } catch (error) {
         console.error('POST /api/client-notifications/requisition error:', error);

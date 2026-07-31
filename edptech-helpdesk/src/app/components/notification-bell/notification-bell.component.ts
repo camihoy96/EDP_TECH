@@ -608,17 +608,20 @@ cancelClearAll() {
     this.notificationService.dismissNotification(id);
   }
 
- onNotificationClick(notification: Notification) {
-  this.notificationService.markAsRead(notification.id);
-  if (notification.ticketId) {
-    this.router.navigate(['/tickets', notification.ticketId]);
-  } else if (notification.jobOrderId || notification.jobOrderNumber) {
-    // Navigate to admin job orders
-    this.router.navigate(['/admin/job-orders'], { 
-      queryParams: { id: notification.jobOrderId } 
-    });
-  }
-  this.showDropdown = false;
+onNotificationClick(notification: Notification) {
+    this.notificationService.markAsRead(notification.id);
+    
+    if (notification.ticketId) {
+        this.router.navigate(['/tickets', notification.ticketId]);
+    } else if (notification.jobOrderId || notification.jobOrderNumber) {
+        this.router.navigate(['/admin/job-orders'], { 
+            queryParams: { id: notification.jobOrderId } 
+        });
+    } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
+        // ✅ Navigate to admin requisitions
+        this.router.navigate(['/admin/requisitions']);
+    }
+    this.showDropdown = false;
 }
 
   showMore() {
