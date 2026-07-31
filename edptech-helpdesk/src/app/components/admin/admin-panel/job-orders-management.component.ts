@@ -5,7 +5,8 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../../services/auth.service';
 import { Router, RouterLink } from '@angular/router';
 import { environment } from '../../../../environments/environment';
-
+import { NotificationService } from '../../../services/notification.service';
+import { ClientNotificationService } from '../../../services/client-notification.service';
 @Component({
   selector: 'app-job-orders-management',
   standalone: true,
@@ -1080,7 +1081,13 @@ export class JobOrdersManagementComponent implements OnInit {
   private isFetching = false;
   private lastRequestSignature: string = '';
   private pollingInterval: any;
-  constructor(private http: HttpClient, private authService: AuthService, private router: Router) {}
+ constructor(
+    private http: HttpClient, 
+    private authService: AuthService, 
+    private router: Router,
+    private notificationService: NotificationService,  
+    private clientNotificationService: ClientNotificationService  
+) {}
    ngOnInit() {
     this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
     this.loadReadOrdersFromStorage();
@@ -1088,7 +1095,7 @@ export class JobOrdersManagementComponent implements OnInit {
     this.loadAllOrders();
     this.loadFilterBranches();
     this.loadDepartments();
-    this.loadUserRoles();  // ✅ Add this
+    this.loadUserRoles();  
     
     document.addEventListener('mousemove', this.onMouseMove.bind(this));
     document.addEventListener('mouseup', this.onMouseUp.bind(this));
@@ -1813,10 +1820,11 @@ confirmForward() {
     if (!this.forwardTargetReq || !this.forwardBranchId || !this.forwardDepartmentId) return;
     
     const jo = this.forwardTargetReq;
+    const userName = this.currentUser?.fullname || 'Admin';
     const payload = {
       forwarded_to_branch_id: this.forwardBranchId,
       forwarded_to_department_id: this.forwardDepartmentId,
-      forwarded_by_name: this.currentUser?.fullname || 'Admin'
+      forwarded_by_name: userName
     };
     
     // Optimistic update
@@ -1833,6 +1841,21 @@ confirmForward() {
     
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/forward`, payload, { headers }).subscribe({
       next: () => {
+         const toBranchName = this.getBranchName(this.forwardBranchId!);
+        const toDeptName = this.getDepartmentName(this.forwardDepartmentId!);
+        const fromBranchName = this.getBranchName(jo.branch_id);
+        const fromDeptName = jo.department_name || jo.department || this.getDepartmentName(jo.department_id);
+         // Admin side - notify creator
+        this.notificationService.handleJobOrderForwarded(
+            jo, userName, toBranchName, toDeptName, jo.submitted_by
+        );
+        
+        // Client side - notify new recipient department
+        this.clientNotificationService.handleJobOrderForwarded(
+            jo, userName, this.forwardBranchId!, this.forwardDepartmentId!,
+            fromBranchName, fromDeptName
+        );
+        
         this.cancelForward();
         this.showToastMsg('📤 Job Order forwarded successfully!', 'success');
         setTimeout(() => this.fetchOrdersInBackground(), 1000);
@@ -2138,6 +2161,25 @@ confirmForward() {
     
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
+        const userName = this.currentUser?.fullname || 'Admin';
+        
+        if (status === 'done') {
+            if (jo.is_forwarded) {
+                this.notificationService.handleForwardedJobOrderDone(
+                    jo, userName, jo.submitted_by
+                );
+                this.clientNotificationService.handleForwardedJobOrderDone(
+                    jo, userName, jo.branch_id, jo.department_id
+                );
+            } else {
+                this.notificationService.handleJobOrderDone(
+                    jo, userName, jo.submitted_by
+                );
+                this.clientNotificationService.handleJobOrderDone(
+                    jo, userName, jo.branch_id, jo.department_id
+                );
+            }
+        }
         this.showConfirmModal = false; 
         this.confirmTarget = null; 
         this.confirmAction = null;
@@ -2457,6 +2499,23 @@ getAttnRole(attnName: string): string {
     
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
+         const userName = this.currentUser?.fullname || 'Admin';
+        
+        if (jo.is_forwarded) {
+            this.notificationService.handleForwardedJobOrderAssigned(
+                jo, userName, assignedNames, jo.submitted_by
+            );
+            this.clientNotificationService.handleForwardedJobOrderAssigned(
+                jo, userName, assignedNames, jo.branch_id, jo.department_id
+            );
+        } else {
+            this.notificationService.handleJobOrderAssigned(
+                jo, userName, assignedNames, jo.submitted_by
+            );
+            this.clientNotificationService.handleJobOrderAssigned(
+                jo, userName, assignedNames, jo.branch_id, jo.department_id
+            );
+        }
         this.showToastMsg('✅ Users assigned successfully!', 'success');
         setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },

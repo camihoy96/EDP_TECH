@@ -7,7 +7,7 @@ import { AuthService } from '../../services/auth.service';
 import { ActivatedRoute } from '@angular/router';
 import { NotificationService } from '../../services/notification.service';
 import { environment } from '../../../environments/environment';
-
+import { ClientNotificationService } from '../../services/client-notification.service';
 @Component({
   selector: 'app-client-job-order-form',
   standalone: true,
@@ -427,13 +427,14 @@ sigSaved: Record<string, boolean> = {
     received_date: '',  
 };
 
-  constructor(
+constructor(
     private router: Router,
     private http: HttpClient,
     private authService: AuthService,
     private route: ActivatedRoute,
-    private notificationService: NotificationService
-  ) {}
+    private notificationService: NotificationService,
+    private clientNotificationService: ClientNotificationService 
+) {}
 
  ngOnInit() {
     this.route.queryParams.subscribe(params => {
@@ -981,11 +982,24 @@ submitJobOrder() {
       ? this.http.put(url, payload, { headers })
       : this.http.post(url, payload, { headers });
 
-    request.subscribe({
+ request.subscribe({
     next: (response: any) => {
         this.submitting = false;
         this.joNumber = response.job_order_number || this.joNumber;
-        this.joCtrlNumber = response.job_order_number || this.joCtrlNumber; // ✅ Same
+        this.joCtrlNumber = response.job_order_number || this.joCtrlNumber;
+        
+        // ✅ ADD: Notify recipient department about new job order
+        if (!this.editMode && response.id) {
+            const currentUser = this.authService.getCurrentUser();
+            const userName = currentUser?.fullname || currentUser?.username || 'User';
+            this.clientNotificationService.handleNewJobOrder(
+                { id: response.id, job_order_number: this.joNumber, submitted_by: currentUser?.id },
+                userName,
+                this.selectedBranchId!,
+                this.joData.department_id
+            );
+        }
+        
         this.showToastMsg(this.editMode ? '✅ Job Order updated!' : '✅ Job Order submitted!', 'success');
         this.router.navigate(['/client/job-orders']);
     },

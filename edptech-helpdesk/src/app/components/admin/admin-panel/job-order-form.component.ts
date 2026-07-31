@@ -6,7 +6,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../../services/auth.service';
 import { NotificationService } from '../../../services/notification.service';
 import { environment } from '../../../../environments/environment';
-
+import { ClientNotificationService } from '../../../services/client-notification.service';
 @Component({
   selector: 'app-job-order-form',
   standalone: true,
@@ -396,13 +396,14 @@ export class AdminJobOrderFormComponent implements OnInit {
 sigModalPos = { x: 0, y: 0 };
 private isDraggingSig = false;
 private sigDragStart = { x: 0, y: 0 };
-  constructor(
+constructor(
     private router: Router, 
     private http: HttpClient, 
     private authService: AuthService,
     private route: ActivatedRoute,
-    private notificationService: NotificationService
-  ) {}
+    private notificationService: NotificationService,
+    private clientNotificationService: ClientNotificationService  
+) {}
 
   ngOnInit() {
     this.route.queryParams.subscribe(params => {
@@ -1021,9 +1022,20 @@ submitJobOrder() {
     request.subscribe({
     next: (res: any) => {
         console.log('✅ Server response:', res);
-        // ✅ Use numbers from backend
         this.joNumber = res.job_order_number || this.joNumber;
         this.joCtrlNumber = res.ctrl_no || this.joCtrlNumber;
+        
+        // ✅ ADD: Notify recipient department about new job order
+        if (!this.editMode && res.id) {
+            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            this.clientNotificationService.handleNewJobOrder(
+                { id: res.id, job_order_number: this.joNumber, submitted_by: currentUser.id },
+                currentUser.fullname || 'Admin',
+                this.selectedBranchId!,
+                this.joData.department_id
+            );
+        }
+        
         this.showToastMsg(this.editMode ? 'Job Order updated!' : 'Job Order submitted successfully!', 'success');
         setTimeout(() => this.cancel(), 1500);
     },
