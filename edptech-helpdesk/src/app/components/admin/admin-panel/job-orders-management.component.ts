@@ -2234,7 +2234,7 @@ confirmForward() {
 saveNotificationMapToStorage() {
   localStorage.setItem('jobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
-    confirmDelete() {
+  confirmDelete() {
     if (!this.confirmTarget) return;
     const jo = this.confirmTarget;
     const orderId = jo.id;
@@ -2244,14 +2244,21 @@ saveNotificationMapToStorage() {
     if (this.ordersCache) {
       this.ordersCache.data = this.ordersCache.data.filter(o => o.id !== orderId);
     }
-    this.applyFilters();
+    
+    // ✅ Force close modal and reset
     this.showConfirmModal = false; 
     this.confirmTarget = null; 
     this.confirmAction = null;
     
+    // ✅ Apply filters to update counts and display
+    this.applyFilters();
+    this.updateNotificationCounts();
+    
     this.http.delete(`${environment.apiUrl}/api/admin/job-orders/${orderId}`, { headers: this.getAuthHeaders() }).subscribe({
       next: () => {
         this.showToastMsg('✅ Job Order deleted!', 'success');
+        // ✅ Refresh from server to ensure sync
+        setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: () => {
         // Restore on error

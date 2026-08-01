@@ -3321,9 +3321,10 @@ loadAnnouncements() {
         })
         .slice(0, 4)
         .map((a: any) => ({
+          id: a.id,  // ✅ Make sure ID is included
           type: (a.priority || a.tag || 'info').toLowerCase(),
           text: a.title,
-          isNew: !readIds.includes(a.id)  // ✅ Track unread
+          isNew: !readIds.includes(a.id)  // ✅ Check against read IDs
         }));
     },
     error: (err) => console.error('Error loading announcements:', err)
