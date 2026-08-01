@@ -1744,17 +1744,28 @@ canSelectAll(): boolean {
 canDelete(req: any): boolean {
     if (!this.currentUser) return false;
     
+    const role = (this.currentUser?.role || '').toLowerCase().trim();
+    const isAdmin = role === 'admin';
+    const isHeadOrSupervisor = role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+    
     // ✅ Admin can always delete
-    const role = (this.currentUser?.role || '').toLowerCase();
-    if (role === 'admin') return true;
+    if (isAdmin) return true;
     
-    // ✅ ONLY creator can delete their OWN pending requests
-    if (req.submitted_by === this.currentUser.id && (req.status || 'pending') === 'pending') return true;
+    // ✅ Head/Manager/Supervisor can delete in BOTH views
+    if (isHeadOrSupervisor) return true;
     
-    // ✅ Head/Manager recipient can delete any request sent to their department
-    if (this.isHeadOrSupervisor()) return true;
+    // ❌ For "Request Management" (incoming) view:
+    // Regular users (Staff, Technician, etc.) CANNOT delete ANYTHING
+    if (this.viewMode === 'incoming') return false;
     
-    // ❌ Staff, Supervisor, Technician, and other colleagues CANNOT delete
+    // ✅ For "Our Requests" (our) view:
+    // Regular users can ONLY delete their OWN pending requests
+    if (this.viewMode === 'our') {
+        const isOwner = req.submitted_by === this.currentUser.id;
+        const isPending = (req.status || 'pending') === 'pending';
+        return isOwner && isPending;
+    }
+    
     return false;
 }
 

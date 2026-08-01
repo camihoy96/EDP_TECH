@@ -9116,13 +9116,16 @@ app.get('/api/reports/:type', async (req, res) => {
         const reportType = req.params.type;
         const scope = req.query.scope || 'department';
         
-        // Get user info
+        // Get user info with department role
         const [users] = await pool.query(
             `SELECT u.id, u.department_id, u.branch_id, u.role, u.department,
-                    b.name as branch_name, d.name as dept_name
+                    b.name as branch_name, d.name as dept_name,
+                    dr.role_name as department_role
              FROM new_user u
              LEFT JOIN branches b ON u.branch_id = b.id
              LEFT JOIN departments d ON u.department_id = d.id
+             LEFT JOIN department_roles dr ON u.department_id = dr.department_id 
+                 AND u.role = dr.role_name
              WHERE u.id = ?`,
             [userId]
         );
@@ -9133,17 +9136,39 @@ app.get('/api/reports/:type', async (req, res) => {
         const branchId = user.branch_id;
         const departmentId = user.department_id;
         const userRole = (user.role || '').toLowerCase().trim();
+        const departmentRole = (user.department_role || '').toLowerCase().trim();
         
-        // Verify permissions
-        const isBranchManager = userRole === 'branch manager';
-        const isHeadManager = userRole === 'head/manager' || userRole === 'head manager';
+        // Check if user is Branch Manager (from department_roles table)
+        const isBranchManager = departmentRole === 'branch manager';
         
+        // Check if user is Department Head/Manager
+        const isHeadManager = departmentRole === 'head/manager';
+        
+        // Verify permissions - must be either Branch Manager or Head/Manager
         if (!isBranchManager && !isHeadManager) {
-            return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
+            return res.status(403).json({ 
+                error: 'Access denied. Only Branch Managers and Department Heads/Managers can view reports.',
+                userRole: userRole,
+                departmentRole: departmentRole
+            });
         }
         
-        // Determine scope
-        const isBranchScope = scope === 'branch' && isBranchManager;
+        // Determine scope based on role
+        // Branch Managers automatically get branch scope
+        // Head/Managers get department scope
+        let effectiveScope = scope;
+        if (isBranchManager) {
+            effectiveScope = 'branch';
+        } else if (isHeadManager) {
+            effectiveScope = 'department';
+        }
+        
+        // Override if scope is explicitly set in query (only if user has permission)
+        if (scope === 'branch' && !isBranchManager) {
+            return res.status(403).json({ 
+                error: 'Access denied. Only Branch Managers can view branch-wide reports.' 
+            });
+        }
         
         // Calculate date range
         const now = new Date();
@@ -9155,7 +9180,7 @@ app.get('/api/reports/:type', async (req, res) => {
                 break;
             case 'weekly':
                 const weekStart = new Date(now);
-                weekStart.setDate(now.getDate() - now.getDay() + 1);
+                weekStart.setDate(now.getDate() - now.getDay() + 1); // Monday
                 weekStart.setHours(0, 0, 0, 0);
                 dateFrom = weekStart.toISOString().split('T')[0];
                 break;
@@ -9169,48 +9194,140 @@ app.get('/api/reports/:type', async (req, res) => {
                 dateFrom = now.toISOString().split('T')[0];
         }
         
-        // Build WHERE clause and params
+        // Build WHERE clause based on scope
+        const isBranchScope = effectiveScope === 'branch';
+        
+        // For stats queries (no JOINs, so no ambiguity)
         let ticketWhere = 'branch_id = ? AND DATE(created_at) >= ?';
         let reqWhere = 'branch_id = ? AND DATE(created_at) >= ?';
         let joWhere = 'branch_id = ? AND DATE(created_at) >= ?';
         const queryParams = [branchId, dateFrom];
         
+        // For list queries (with JOINs, need table aliases to avoid ambiguity)
+        let ticketListWhere = 't.branch_id = ? AND DATE(t.created_at) >= ?';
+        let reqListWhere = 'r.branch_id = ? AND DATE(r.created_at) >= ?';
+        let joListWhere = 'j.branch_id = ? AND DATE(j.created_at) >= ?';
+        const listQueryParams = [branchId, dateFrom];
+        
         if (!isBranchScope) {
+            // Department scope - filter by department_id (stats queries)
             ticketWhere += ' AND department_id = ?';
             reqWhere += ' AND department_id = ?';
             joWhere += ' AND department_id = ?';
             queryParams.push(departmentId);
+            
+            // Department scope - filter by department_id (list queries with aliases)
+            ticketListWhere += ' AND t.department_id = ?';
+            reqListWhere += ' AND r.department_id = ?';
+            joListWhere += ' AND j.department_id = ?';
+            listQueryParams.push(departmentId);
         }
         
-        // Fetch data
+        // For Head/Manager: Also include forwarded requisitions and job orders
+        // that were forwarded TO their department from other departments/branches
+        let forwardedReqWhere = '';
+        let forwardedJoWhere = '';
+        let forwardedReqListWhere = '';
+        let forwardedJoListWhere = '';
+        const forwardedParams = [];
+        const forwardedListParams = [];
+        
+        if (!isBranchScope && isHeadManager) {
+            // Include requisitions forwarded to this department (stats)
+            forwardedReqWhere = ` OR (forwarded_to_department_id = ? AND DATE(created_at) >= ?)`;
+            forwardedParams.push(departmentId, dateFrom);
+            
+            // Include job orders forwarded to this department (stats)
+            forwardedJoWhere = ` OR (forwarded_to_department_id = ? AND DATE(created_at) >= ?)`;
+            forwardedParams.push(departmentId, dateFrom);
+            
+            // Include requisitions forwarded to this department (list with aliases)
+            forwardedReqListWhere = ` OR (r.forwarded_to_department_id = ? AND DATE(r.created_at) >= ?)`;
+            forwardedListParams.push(departmentId, dateFrom);
+            
+            // Include job orders forwarded to this department (list with aliases)
+            forwardedJoListWhere = ` OR (j.forwarded_to_department_id = ? AND DATE(j.created_at) >= ?)`;
+            forwardedListParams.push(departmentId, dateFrom);
+        }
+        
+        // Fetch tickets (stats)
         const [tickets] = await pool.query(
-            `SELECT * FROM tickets WHERE ${ticketWhere}`, queryParams
+            `SELECT * FROM tickets WHERE ${ticketWhere}`, 
+            queryParams
         );
         
+        // Fetch requisitions (stats - own department + forwarded to department)
         const [requisitions] = await pool.query(
-            `SELECT * FROM requisitions WHERE ${reqWhere}`, queryParams
+            `SELECT * FROM requisitions WHERE (${reqWhere})${forwardedReqWhere}`, 
+            [...queryParams, ...forwardedParams]
         );
         
+        // Fetch job orders (stats - own department + forwarded to department)
         const [jobOrders] = await pool.query(
-            `SELECT * FROM job_orders WHERE ${joWhere}`, queryParams
+            `SELECT * FROM job_orders WHERE (${joWhere})${forwardedJoWhere}`, 
+            [...queryParams, ...forwardedParams]
         );
+        
+        // ============ FETCH LIST DATA FOR TABLES (with table aliases) ============
+        
+        // Fetch ticket list with department names
+        const [ticketList] = await pool.query(
+            `SELECT t.id, t.ticket_number, t.title, t.priority, t.status, 
+                    d.name as department_name, t.created_by_name, t.created_at, t.resolved_at
+             FROM tickets t
+             LEFT JOIN departments d ON t.department_id = d.id
+             WHERE ${ticketListWhere}
+             ORDER BY t.created_at DESC`,
+            listQueryParams
+        );
+        
+        // Fetch requisition list with department names
+        const [reqList] = await pool.query(
+            `SELECT r.id, r.requisition_number, r.request_from, 
+                    d.name as department_name, r.status, r.date, r.prepared_name, 
+                    r.is_forwarded
+             FROM requisitions r
+             LEFT JOIN departments d ON r.department_id = d.id
+             WHERE (${reqListWhere})${forwardedReqListWhere}
+             ORDER BY r.created_at DESC`,
+            [...listQueryParams, ...forwardedListParams]
+        );
+        
+        // Fetch job order list with department names
+        const [joList] = await pool.query(
+            `SELECT j.id, j.job_order_number, j.job_order_for,
+                    d.name as department_name, j.status, j.date, j.requested_name, 
+                    j.is_forwarded
+             FROM job_orders j
+             LEFT JOIN departments d ON j.department_id = d.id
+             WHERE (${joListWhere})${forwardedJoListWhere}
+             ORDER BY j.created_at DESC`,
+            [...listQueryParams, ...forwardedListParams]
+        );
+        
+        // ============ END LIST DATA ============
         
         // Fetch departments for branch (only for branch scope)
         let departmentBreakdown = [];
         if (isBranchScope) {
+            // Get all departments that have tickets in this branch
             const [depts] = await pool.query(
-                `SELECT DISTINCT d.id, d.name FROM departments d
-                 JOIN tickets t ON t.department_id = d.id
-                 WHERE t.branch_id = ? AND DATE(t.created_at) >= ?`,
+                `SELECT DISTINCT d.id, d.name 
+                 FROM departments d
+                 INNER JOIN tickets t ON t.department_id = d.id
+                 WHERE t.branch_id = ? AND DATE(t.created_at) >= ?
+                 ORDER BY d.name`,
                 [branchId, dateFrom]
             );
-            departmentBreakdown = depts.map((d) => ({
-                name: d.name,
-                count: tickets.filter((t) => t.department_id === d.id).length
+            
+            // Count tickets per department
+            departmentBreakdown = depts.map((dept) => ({
+                name: dept.name,
+                count: tickets.filter((t) => t.department_id === dept.id).length
             }));
         }
         
-        // Calculate average resolution time
+        // Calculate average resolution time and SLA compliance
         const resolvedTickets = tickets.filter((t) => t.status === 'resolved' && t.resolved_at);
         let avgResolutionTime = 'N/A';
         let slaCompliance = 0;
@@ -9232,6 +9349,7 @@ app.get('/api/reports/:type', async (req, res) => {
                 avgResolutionTime = (avgHours / 24).toFixed(1) + 'd';
             }
             
+            // SLA: resolved within 24 hours
             const compliant = resolvedTickets.filter((t) => {
                 const created = new Date(t.created_at).getTime();
                 const resolved = new Date(t.resolved_at).getTime();
@@ -9241,7 +9359,7 @@ app.get('/api/reports/:type', async (req, res) => {
             slaCompliance = Math.round((compliant / resolvedTickets.length) * 100);
         }
         
-        // Process tickets
+        // Process ticket statistics
         const ticketStats = {
             total: tickets.length,
             open: tickets.filter((t) => !['resolved', 'closed'].includes(t.status)).length,
@@ -9263,10 +9381,11 @@ app.get('/api/reports/:type', async (req, res) => {
             },
             byDepartment: departmentBreakdown,
             avgResolutionTime: avgResolutionTime,
-            slaCompliance: slaCompliance
+            slaCompliance: slaCompliance,
+            list: ticketList
         };
         
-        // Process requisitions
+        // Process requisition statistics
         const reqStats = {
             total: requisitions.length,
             pending: requisitions.filter((r) => r.status === 'pending').length,
@@ -9275,10 +9394,11 @@ app.get('/api/reports/:type', async (req, res) => {
             released: requisitions.filter((r) => r.status === 'released').length,
             rejected: requisitions.filter((r) => r.status === 'rejected').length,
             forwarded: requisitions.filter((r) => r.is_forwarded === 1 || r.status === 'forwarded').length,
-            byDepartment: []
+            byDepartment: [],
+            list: reqList
         };
         
-        // Process job orders
+        // Process job order statistics
         const joStats = {
             total: jobOrders.length,
             pending: jobOrders.filter((j) => j.status === 'pending').length,
@@ -9286,10 +9406,11 @@ app.get('/api/reports/:type', async (req, res) => {
             assigned: jobOrders.filter((j) => j.status === 'assigned').length,
             forwarded: jobOrders.filter((j) => j.is_forwarded === 1 || j.status === 'forwarded').length,
             done: jobOrders.filter((j) => j.status === 'done').length,
-            byDepartment: []
+            byDepartment: [],
+            list: joList
         };
         
-        // Summary
+        // Calculate summary
         const totalRequests = tickets.length + requisitions.length + jobOrders.length;
         const completedRequests = ticketStats.resolved + ticketStats.closed + reqStats.released + joStats.done;
         

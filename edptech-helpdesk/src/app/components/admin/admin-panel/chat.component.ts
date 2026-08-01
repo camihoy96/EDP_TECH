@@ -791,68 +791,92 @@ get clientUnreadCount(): number {
   });
 }
 
-  loadUnreadCounts() {
-    this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${this.currentUsername}`, { headers: this.getHeaders() }).subscribe({
-      next: (unread) => {
-        // Update BOTH the current users list and the source arrays
-        const updateUser = (user: ChatUser) => {
-          const match = unread.find((u: any) => u.from_username === user.username);
-          user.unreadCount = match ? match.count : 0;
-        };
-        
-        // Update current users list
-        this.users.forEach(updateUser);
-        
-        // Update source arrays for tab badges
-        this.staffUsers.forEach(updateUser);
-        this.clientUsers.forEach(updateUser);
-        
-        this.filterUsers();
-      },
-      error: (err) => console.error('Error loading unread counts:', err)
-    });
+ loadUnreadCounts() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/messages/unread/${this.currentUsername}`, { headers: this.getHeaders() }).subscribe({
+    next: (unread) => {
+      const updateUser = (user: ChatUser) => {
+        const match = unread.find((u: any) => u.from_username === user.username);
+        user.unreadCount = match ? match.count : 0;
+      };
+      
+      this.users.forEach(updateUser);
+      this.staffUsers.forEach(updateUser);
+      this.clientUsers.forEach(updateUser);
+      
+      this.filterUsers(); // This will now also sort
+    },
+    error: (err) => console.error('Error loading unread counts:', err)
+  });
+}
+loadLastMessages() {
+  this.http.get<any[]>(`${environment.apiUrl}/api/messages/last/${this.currentUsername}`, { headers: this.getHeaders() }).subscribe({
+    next: (lastMessages) => {
+      lastMessages.forEach(msg => { 
+        let user = this.users.find(u => u.username === msg.username); 
+        if (user) { 
+          // ✅ Truncate long messages for preview
+          const rawMsg = msg.message || '';
+          user.lastMessage = rawMsg.length > 40 ? rawMsg.substring(0, 40) + '...' : rawMsg;
+          user.lastMessageTime = new Date(msg.timestamp); 
+        } 
+      });
+      this.filterUsers();
+    },
+    error: (err) => console.error('Error loading last messages:', err)
+  });
+}
+filterUsers() {
+  if (!this.searchTerm.trim()) { 
+    this.filteredUsers = [...this.users]; 
+  } else { 
+    const term = this.searchTerm.toLowerCase(); 
+    this.filteredUsers = this.users.filter(u => 
+      u.fullname?.toLowerCase().includes(term) || 
+      u.username?.toLowerCase().includes(term) || 
+      u.department?.toLowerCase().includes(term)
+    ); 
   }
-
-  loadLastMessages() {
-    this.http.get<any[]>(`${environment.apiUrl}/api/messages/last/${this.currentUsername}`, { headers: this.getHeaders() }).subscribe({
-      next: (lastMessages) => {
-        lastMessages.forEach(msg => { 
-          let user = this.users.find(u => u.username === msg.username); 
-          if (user) { 
-            user.lastMessage = msg.message; 
-            user.lastMessageTime = new Date(msg.timestamp); 
-          } 
-        });
-        this.filterUsers();
-      },
-      error: (err) => console.error('Error loading last messages:', err)
-    });
-  }
-
-  filterUsers() {
-    if (!this.searchTerm.trim()) { 
-      this.filteredUsers = [...this.users]; 
-    } else { 
-      const term = this.searchTerm.toLowerCase(); 
-      this.filteredUsers = this.users.filter(u => 
-        u.fullname?.toLowerCase().includes(term) || 
-        u.username?.toLowerCase().includes(term) || 
-        u.department?.toLowerCase().includes(term)
-      ); 
+  
+  // ✅ Apply sorting
+  this.sortUsers();
+}
+sortUsers(): void {
+  this.filteredUsers.sort((a, b) => {
+    // 1️⃣ Users with unread messages go to the TOP
+    if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
+    if (b.unreadCount > 0 && a.unreadCount === 0) return 1;
+    
+    // 2️⃣ Both have unread messages - sort by most recent message
+    if (a.unreadCount > 0 && b.unreadCount > 0) {
+      const aTime = a.lastMessageTime?.getTime() || 0;
+      const bTime = b.lastMessageTime?.getTime() || 0;
+      return bTime - aTime; // Most recent first
     }
-  }
-
-  selectUser(user: ChatUser) {
-    this.selectedUser = user;
-    this.replyingTo = null;
-    this.selectedFile = null;
-    if (user.unreadCount > 0) { 
-      this.markMessagesAsRead(user.username); 
-      user.unreadCount = 0; 
+    
+    // 3️⃣ Users with recent conversations (last message time)
+    if (a.lastMessageTime && b.lastMessageTime) {
+      return b.lastMessageTime.getTime() - a.lastMessageTime.getTime();
     }
-    this.loadMessages();
+    
+    // 4️⃣ One has recent conversation, other doesn't
+    if (a.lastMessageTime && !b.lastMessageTime) return -1;
+    if (!a.lastMessageTime && b.lastMessageTime) return 1;
+    
+    // 5️⃣ Alphabetical order as fallback
+    return (a.fullname || a.username).localeCompare(b.fullname || b.username);
+  });
+}
+selectUser(user: ChatUser) {
+  this.selectedUser = user;
+  this.replyingTo = null;
+  this.selectedFile = null;
+  if (user.unreadCount > 0) { 
+    this.markMessagesAsRead(user.username); 
+    user.unreadCount = 0;
+    this.filterUsers(); // ✅ Re-sort after marking as read
   }
-
+  this.loadMessages();
+}
   loadMessages() {
     if (!this.selectedUser) return;
     
@@ -1001,7 +1025,8 @@ get clientUnreadCount(): number {
         this.loadMessages();
         const user = this.users.find(u => u.username === this.selectedUser?.username);
         if (user) { 
-          user.lastMessage = messageText || '📎 File'; 
+          const preview = messageText || '📎 File';
+          user.lastMessage = preview.length > 40 ? preview.substring(0, 40) + '...' : preview;
           user.lastMessageTime = new Date(); 
         }
         this.filterUsers();

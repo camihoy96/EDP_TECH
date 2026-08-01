@@ -609,21 +609,10 @@ cancelClearAll() {
   }
 
 onNotificationClick(notification: Notification) {
+    // ✅ Just mark as read, no navigation
     this.notificationService.markAsRead(notification.id);
-    
-    if (notification.ticketId) {
-        this.router.navigate(['/tickets', notification.ticketId]);
-    } else if (notification.jobOrderId || notification.jobOrderNumber) {
-        this.router.navigate(['/admin/job-orders'], { 
-            queryParams: { id: notification.jobOrderId } 
-        });
-    } else if (notification.ticketNumber && notification.title?.includes('Requisition')) {
-        // ✅ Navigate to admin requisitions
-        this.router.navigate(['/admin/requisitions']);
-    }
     this.showDropdown = false;
 }
-
   showMore() {
     this.visibleLimit += 20;
   }

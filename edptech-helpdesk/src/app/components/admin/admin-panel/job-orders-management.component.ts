@@ -239,7 +239,7 @@ import { ClientNotificationService } from '../../../services/client-notification
           (click)="updateStatus(jo, 'rejected')" title="Reject">❌</button>
   
   <!-- ✅ Delete button - Show in both views -->
-  <button class="action-btn delete-btn" (click)="deleteOrder(jo)" title="Delete">🗑️</button>
+  <button class="action-btn delete-btn" *ngIf="canDelete(jo)" (click)="deleteOrder(jo)" title="Delete">🗑️</button>
 </td>
             </tr>
           </tbody>
@@ -2042,8 +2042,32 @@ confirmForward() {
   }
 
   canDelete(jo: any): boolean {
-    return true;
-  }
+    if (!this.currentUser) return false;
+    
+    const role = (this.currentUser?.role || '').toLowerCase().trim();
+    const isAdmin = role === 'admin';
+    const isHeadOrSupervisor = role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
+    
+    // ✅ Admin can always delete
+    if (isAdmin) return true;
+    
+    // ✅ Head/Manager/Supervisor can delete in BOTH views
+    if (isHeadOrSupervisor) return true;
+    
+    // ❌ For "J.O. Request Management" (incoming) view:
+    // Regular users (Staff, Technician, etc.) CANNOT delete ANYTHING
+    if (this.viewMode === 'incoming') return false;
+    
+    // ✅ For "Our Job Orders" (our) view:
+    // Regular users can ONLY delete their OWN pending orders
+    if (this.viewMode === 'our') {
+        const isOwner = jo.submitted_by === this.currentUser.id;
+        const isPending = (jo.status || 'pending') === 'pending';
+        return isOwner && isPending;
+    }
+    
+    return false;
+}
 
   loadFilterBranches() {
     this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({

@@ -3112,13 +3112,40 @@ get isChatRoute(): boolean {
   if (this.isTicketListRoute) return this.isEDPUser() ? 'All Tickets' : 'My Tickets';
   return 'Dashboard';
 }
-// Add this method to the class
+// Replace the existing isEDPUser() method with this:
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
-  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
-  const isEDP = dept === 'edp' || dept === 'it' || dept === 'edp/it' || dept === 'it/edp' ||
-                dept.includes('edp') || dept.includes('it');
-  return isEDP;
+  
+  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase().trim();
+  const role = (this.currentUser.role || '').toLowerCase().trim();
+  
+  // ✅ Exact match for EDP/IT department names
+  const edpDepartments = [
+    'edp',
+    'it', 
+    'edp/it',
+    'it/edp',
+    'edp - it department',
+    'it department',
+    'edp department'
+  ];
+  
+  const isEDPDept = edpDepartments.includes(dept) || 
+                    dept === 'edp' || 
+                    dept === 'it' ||
+                    dept.startsWith('edp/') || 
+                    dept.startsWith('it/') ||
+                    dept.endsWith('/edp') || 
+                    dept.endsWith('/it');
+  
+  // ✅ Also check if role is technician or main_edp_it
+  const isEDPRole = role === 'technician' || 
+                    role === 'main_edp_it' || 
+                    role === 'edp_it' ||
+                    role === 'it technician' ||
+                    role === 'edp technician';
+  
+  return isEDPDept || isEDPRole;
 }
   updateDateTime() {
     const now = new Date();
