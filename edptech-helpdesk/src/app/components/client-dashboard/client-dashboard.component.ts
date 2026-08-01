@@ -3112,12 +3112,20 @@ get isChatRoute(): boolean {
   if (this.isTicketListRoute) return this.isEDPUser() ? 'All Tickets' : 'My Tickets';
   return 'Dashboard';
 }
-// Replace the existing isEDPUser() method with this:
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
   
   const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase().trim();
   const role = (this.currentUser.role || '').toLowerCase().trim();
+  
+  // ✅ Check if user is Head/Manager, Supervisor, or Branch Manager
+  const isManagementRole = role === 'head/manager' || 
+                           role === 'head manager' ||
+                           role === 'supervisor' || 
+                           role === 'branch manager';
+  
+  // If management role, allow chat access
+  if (isManagementRole) return true;
   
   // ✅ Exact match for EDP/IT department names
   const edpDepartments = [
