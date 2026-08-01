@@ -27,7 +27,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     </div>
   </div>
 
- <div class="detail-layout" [class.full-width]="!isEDPUser()">
+ <div class="detail-layout" [class.full-width]="!isEDPUser() || !canPerformActions()">
     
     <!-- LEFT: Main Info -->
     <div class="main-panel">
@@ -146,7 +146,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     </div>
 
     <!-- RIGHT: Actions Panel -->
-    <div class="actions-panel" *ngIf="isEDPUser()">
+    <div class="actions-panel" *ngIf="isEDPUser() && canPerformActions()">
       <div class="detail-card">
         <h4 class="section-title">⚙️ Actions</h4>
         
@@ -586,6 +586,7 @@ showDeleteCommentModal = false;
 deleteCommentData: any = null;
 private ticketsSub: any;
 private ticketUpdateSub: any;
+private readonly MAIN_BRANCH_IDS = [1, 5];
   constructor(
     private route: ActivatedRoute,
     private router: Router,
@@ -712,11 +713,40 @@ isAssignedAgent(): boolean {
   }
   return false;
 }
+isTicketSentToMain(): boolean {
+  if (!this.ticket) return false;
+  const deptName = (this.ticket.department_name || '').toLowerCase();
+  const branchName = (this.ticket.branch_name || '').toLowerCase();
+  return branchName.includes('main') || 
+         branchName.includes('lsp') ||
+         deptName.includes('lsp main');
+}
 
+isNonMainEDPUser(): boolean {
+  if (!this.currentUser) return false;
+  const userBranchId = this.currentUser.branch_id;
+  const isMainBranch = this.MAIN_BRANCH_IDS.includes(Number(userBranchId));
+  return this.isEDPUser() && !isMainBranch;
+}
+
+// ✅ Check if user can perform actions on this ticket
+canPerformActions(): boolean {
+  // If user is NOT a non-main EDP user, they can perform actions normally
+  if (!this.isNonMainEDPUser()) return true;
+  
+  // If ticket is NOT sent to Main, they can perform actions
+  if (!this.isTicketSentToMain()) return true;
+  
+  // Non-main EDP user viewing a ticket sent to Main → READ ONLY
+  return false;
+}
 // ─── PERMISSIONS ───────────────────────────
-
 canChangeStatus(): boolean {
   if (!this.ticket) return false;
+  
+  // ✅ Non-main EDP users cannot change status of tickets sent to Main
+  if (this.isNonMainEDPUser() && this.isTicketSentToMain()) return false;
+  
   if (this.ticket.status === 'resolved' || this.ticket.status === 'closed') return false;
   if (this.ticket.status === 'new') return false;
   if (this.isAdmin()) return true;
@@ -727,31 +757,30 @@ canChangeStatus(): boolean {
 
 canReassign(): boolean {
   if (!this.ticket) return false;
+  
+  // ✅ Non-main EDP users cannot reassign tickets sent to Main
+  if (this.isNonMainEDPUser() && this.isTicketSentToMain()) return false;
+  
   if (['resolved', 'closed', 'in_progress', 'pending'].includes(this.ticket.status)) return false;
-  
-  // Admin can always reassign
   if (this.isAdmin()) return true;
-  
-  // Head/Manager or Supervisor can reassign
   if (this.isHeadOrSupervisor()) return true;
-  
-  // Staff/Technician can ONLY assign if ticket is NEW and UNASSIGNED
   if (this.isStaffOrTechnician()) {
     return this.ticket.status === 'new' && !this.ticket.assigned_to;
   }
-  
   return false;
 }
-
 canDelete(): boolean {
   if (!this.ticket) return false;
+  
+  // ✅ Non-main EDP users cannot delete tickets sent to Main
+  if (this.isNonMainEDPUser() && this.isTicketSentToMain()) return false;
+  
   if (this.isAdmin()) return true;
   if (this.isHeadOrSupervisor()) return true;
   if (this.isStaffOrTechnician()) return false;
   if (this.isCreator() && this.ticket.status === 'new') return true;
   return false;
 }
-
 // ─── ASSIGN METHODS ───────────────────────────
 
 openAssignModal() {
@@ -822,12 +851,18 @@ canDeleteComment(comment: any): boolean {
 canShowAddComment(): boolean {
   if (!this.ticket) return false;
   
+  // ✅ Non-main EDP users viewing tickets sent to Main can ONLY comment
+  // when there's at least one EDP/IT comment from Main branch
+  if (this.isNonMainEDPUser() && this.isTicketSentToMain()) {
+    return this.comments.some(c => c.user_table === 'users');
+  }
+  
   // EDP/IT users can always add comments
   if (this.isEDPUser()) return true;
   
   // Ticket creator can only add comments if there's at least one EDP comment
   if (this.isCreator()) {
-    return this.comments.some(c => c.user_table === 'users'); // users table = EDP
+    return this.comments.some(c => c.user_table === 'users');
   }
   
   return false;

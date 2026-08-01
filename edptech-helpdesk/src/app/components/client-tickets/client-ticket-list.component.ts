@@ -48,35 +48,57 @@ import { ClientNotificationService } from '../../services/client-notification.se
       </div>
 
       <!-- Filter Bar -->
-      <div class="filter-bar">
-        <div class="filter-group">
-          <label>Priority:</label>
-          <select class="classic-select" [(ngModel)]="filters.priority" (change)="applyFilters()">
-            <option value="">All Priority</option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-        </div>
-        
-        <div class="filter-group search-group">
-          <label>Search:</label>
-          <input type="text" class="classic-input" placeholder="Ticket #, title..." 
-                 [(ngModel)]="searchTerm" (input)="applyFilters()">
-        </div>
-        
-        <button class="classic-btn" (click)="clearFilters()">
-          <span>🔄</span> Clear
-        </button>
-      </div>
+<div class="filter-bar">
+  <div class="filter-group">
+    <label>Priority:</label>
+    <select class="classic-select" [(ngModel)]="filters.priority" (change)="applyFilters()">
+      <option value="">All Priority</option>
+      <option value="critical">Critical</option>
+      <option value="high">High</option>
+      <option value="medium">Medium</option>
+      <option value="low">Low</option>
+    </select>
+  </div>
+  
+<!-- ✅ Filter toggles - only for non-main branch EDP/IT users -->
+<div class="filter-group" *ngIf="isEDPUser() && !isMainBranch">
+  <button 
+    class="classic-btn filter-toggle-btn" 
+    [class.active]="showTicketsManagement"
+    (click)="toggleTicketsManagement()">
+    🎫 Tickets Management
+    <span class="filter-count">{{ ticketsManagementCount }}</span>
+    <span class="filter-indicator" *ngIf="showTicketsManagement">✓</span>
+  </button>
+  <button 
+    class="classic-btn filter-toggle-btn" 
+    [class.active]="showSentToMainOnly"
+    (click)="toggleSentToMainFilter()">
+    📤 Sent to LSP Main
+    <span class="filter-count">{{ sentToMainCount }}</span>
+    <span class="filter-indicator" *ngIf="showSentToMainOnly">✓</span>
+  </button>
+</div>
+  
+  <div class="filter-group search-group">
+    <label>Search:</label>
+    <input type="text" class="classic-input" placeholder="Ticket #, title..." 
+           [(ngModel)]="searchTerm" (input)="applyFilters()">
+  </div>
+  
+  <button class="classic-btn" (click)="clearFilters()">
+    <span>🔄</span> Clear
+  </button>
+</div>
 
       <!-- Status Bar -->
-      <div class="classic-status-bar">
-        <span>Showing: <strong>{{ filteredTickets.length }}</strong> tickets</span>
-        <span class="status-sep">|</span>
-        <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
-      </div>
+<div class="classic-status-bar">
+  <span>Showing: <strong>{{ filteredTickets.length }}</strong> tickets</span>
+  <span class="status-sep">|</span>
+  <span>View: <strong>{{ getActiveViewLabel() }}</strong></span>
+  <span class="status-sep">|</span>
+  <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
+</div>
 
       <!-- Tickets Table -->
       <div class="classic-table-container">
@@ -486,6 +508,34 @@ import { ClientNotificationService } from '../../services/client-notification.se
 
 .assigned-to-info { margin-top: 6px; font-size: 11px; color: #333; }
 .assigned-to-info strong { color: #0a3a8c; }
+/* Add to your styles array */
+.filter-toggle-btn {
+  transition: all 0.2s;
+}
+.filter-toggle-btn.active {
+  background: #0a246a;
+  color: white;
+  border-color: #0a246a;
+}
+.filter-toggle-btn.active:hover {
+  background: #1a3a8a;
+}
+.filter-indicator {
+  font-size: 10px;
+  margin-left: 4px;
+}
+  .filter-count {
+  background: rgba(255,255,255,0.3);
+  color: inherit;
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: bold;
+  margin: 0 2px;
+}
+.filter-toggle-btn.active .filter-count {
+  background: rgba(255,255,255,0.3);
+}
   `]
 })
 export class ClientTicketListComponent implements OnInit {
@@ -512,6 +562,13 @@ successTicketTitle: string = '';
 successAssignedNames: string = '';
 private userSub!: Subscription;
 private ticketUpdateSub!: Subscription;
+showTicketsManagement = false;
+showSentToMainOnly = false;
+ticketsManagementCount = 0;
+sentToMainCount = 0;
+currentUserBranchId: number | null = null;
+isMainBranch = false;
+private readonly MAIN_BRANCH_IDS = [1, 5];
   constructor(
     private ticketService: ClientTicketService,
     private authService: AuthService,
@@ -523,12 +580,13 @@ private ticketUpdateSub!: Subscription;
 ngOnInit() {
   this.userSub = this.authService.currentUser$.subscribe((user:any)=>{
     this.currentUser = user;
+    this.currentUserBranchId = user?.branch_id || null;
+    this.isMainBranch = this.MAIN_BRANCH_IDS.includes(Number(this.currentUserBranchId));
+    
     console.log('👤 Current user set:', user?.fullname, '| dept:', user?.department, '| branch:', user?.branch_id);
     
-    // DIRECT FETCH - bypass the service
     if (user) {
       this.fetchTicketsDirectly(user);
-       console.count('fetchTicketsDirectly called');
     }
   });
 
@@ -672,10 +730,15 @@ isTicketCreator(ticket: Ticket): boolean {
 }
 
 // ─── PERMISSION METHODS ───────────────────────────
-
 canEditTicket(ticket: Ticket): boolean {
   // Only NEW tickets can be edited
   if (ticket.status !== 'new') return false;
+  
+  // ✅ Non-main branch users CAN edit their OWN new tickets even if sent to Main
+  // (Only the creator can edit their own tickets)
+  if (!this.isMainBranch && this.isTicketSentToMain(ticket)) {
+    return this.isTicketCreator(ticket);
+  }
   
   // Head/Manager or Supervisor can edit any NEW ticket
   if (this.isHeadOrSupervisor()) return true;
@@ -688,8 +751,13 @@ canEditTicket(ticket: Ticket): boolean {
   
   return false;
 }
-
 canDeleteTicket(ticket: Ticket): boolean {
+  // ✅ Non-main branch users CAN delete their OWN new tickets even if sent to Main
+  // (Only the creator can delete their own tickets)
+  if (!this.isMainBranch && this.isTicketSentToMain(ticket)) {
+    return this.isTicketCreator(ticket) && ticket.status === 'new';
+  }
+  
   // Head/Manager or Supervisor in EDP/IT department can delete ANY ticket
   if (this.isEDPUser() && this.isHeadOrSupervisor()) return true;
   
@@ -708,6 +776,9 @@ canAssignTicket(ticket: Ticket): boolean {
   // Must be EDP user
   if (!this.isEDPUser()) return false;
   
+  // ✅ Non-main branch EDP/IT users CANNOT assign tickets sent to Main branch
+  if (!this.isMainBranch && this.isTicketSentToMain(ticket)) return false;
+  
   // Head/Manager or Supervisor can always assign/reassign
   if (this.isHeadOrSupervisor()) return true;
   
@@ -717,6 +788,15 @@ canAssignTicket(ticket: Ticket): boolean {
   }
   
   return false;
+}
+
+// ✅ Helper to check if ticket is sent to Main branch
+private isTicketSentToMain(ticket: Ticket): boolean {
+  const deptName = (ticket.department_name || '').toLowerCase();
+  const branchName = (ticket.branch_name || '').toLowerCase();
+  return branchName.includes('main') || 
+         branchName.includes('lsp') ||
+         deptName.includes('lsp main');
 }
 
 // ─── ASSIGN METHODS ───────────────────────────
@@ -896,25 +976,124 @@ filterMyTickets() {
   this.applyFilters();
 }
 
-  setActiveTab(tab: string) { this.activeTab = tab; this.applyFilters(); }
-
-  applyFilters() {
-    let filtered = [...this.tickets];
-    if (this.activeTab !== 'all') filtered = filtered.filter(t => t.status === this.activeTab);
-    if (this.filters.priority) filtered = filtered.filter(t => t.priority === this.filters.priority);
-    if (this.searchTerm) {
-      const term = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(t => 
-        t.ticket_number?.toLowerCase().includes(term) ||
-        t.title?.toLowerCase().includes(term)
-      );
-    }
-    this.filteredTickets = filtered;
+setActiveTab(tab: string) { this.activeTab = tab; this.applyFilters(); }
+toggleTicketsManagement() {
+  this.showTicketsManagement = !this.showTicketsManagement;
+  // Turn off the other filter if this one is activated
+  if (this.showTicketsManagement) {
+    this.showSentToMainOnly = false;
   }
+  this.applyFilters();
+}
 
-  clearFilters() { this.activeTab = 'all'; this.filters = { priority: '' }; this.searchTerm = ''; this.applyFilters(); }
-  getStatusCount(status: string): number { return this.tickets.filter(t => t.status === status).length; }
+toggleSentToMainFilter() {
+  this.showSentToMainOnly = !this.showSentToMainOnly;
+  // Turn off the other filter if this one is activated
+  if (this.showSentToMainOnly) {
+    this.showTicketsManagement = false;
+  }
+  this.applyFilters();
+}
 
+applyFilters() {
+  let filtered = [...this.tickets];
+  
+  // Status tab filter
+  if (this.activeTab !== 'all') {
+    filtered = filtered.filter(t => t.status === this.activeTab);
+  }
+  
+  // Priority filter
+  if (this.filters.priority) {
+    filtered = filtered.filter(t => t.priority === this.filters.priority);
+  }
+  
+  // ✅ Calculate counts for filter buttons
+  if (this.isEDPUser() && !this.isMainBranch) {
+    // Tickets Management count - tickets assigned to user or their department
+    this.ticketsManagementCount = this.tickets.filter(t => 
+      t.assigned_to === this.currentUser?.id ||
+      t.department_id === this.currentUser?.department_id
+    ).length;
+    
+    // Sent to Main count - tickets sent to Main branch EDP/IT
+    this.sentToMainCount = this.tickets.filter(t => {
+      const deptName = (t.department_name || '').toLowerCase();
+      const branchName = (t.branch_name || '').toLowerCase();
+      return branchName.includes('main') || 
+             branchName.includes('lsp') ||
+             deptName.includes('lsp main');
+    }).length;
+  }
+  
+  // ✅ Tickets Management filter
+  if (this.showTicketsManagement && this.isEDPUser() && !this.isMainBranch) {
+    filtered = filtered.filter(t => 
+      t.assigned_to === this.currentUser?.id ||
+      t.department_id === this.currentUser?.department_id
+    );
+  }
+  
+  // ✅ Sent to Main filter
+  if (this.showSentToMainOnly && this.isEDPUser() && !this.isMainBranch) {
+    filtered = filtered.filter(t => {
+      const deptName = (t.department_name || '').toLowerCase();
+      const branchName = (t.branch_name || '').toLowerCase();
+      return branchName.includes('main') || 
+             branchName.includes('lsp') ||
+             deptName.includes('lsp main');
+    });
+  }
+  
+  // Search filter
+  if (this.searchTerm) {
+    const term = this.searchTerm.toLowerCase();
+    filtered = filtered.filter(t => 
+      t.ticket_number?.toLowerCase().includes(term) ||
+      t.title?.toLowerCase().includes(term)
+    );
+  }
+  
+  this.filteredTickets = filtered;
+}
+clearFilters() { 
+  this.activeTab = 'all'; 
+  this.filters = { priority: '' }; 
+  this.searchTerm = ''; 
+  this.showTicketsManagement = false;
+  this.showSentToMainOnly = false;
+  this.applyFilters(); 
+}
+getActiveViewLabel(): string {
+  if (this.showTicketsManagement) return '🎫 Tickets Management';
+  if (this.showSentToMainOnly) return '📤 Sent to LSP Main';
+  return '📋 All Tickets';
+}
+ getStatusCount(status: string): number { 
+  // ✅ Apply the same filters as the current view
+  let filtered = [...this.tickets];
+  
+  // Apply Tickets Management filter if active
+  if (this.showTicketsManagement && this.isEDPUser() && !this.isMainBranch) {
+    filtered = filtered.filter(t => 
+      t.assigned_to === this.currentUser?.id ||
+      t.department_id === this.currentUser?.department_id
+    );
+  }
+  
+  // Apply Sent to Main filter if active
+  if (this.showSentToMainOnly && this.isEDPUser() && !this.isMainBranch) {
+    filtered = filtered.filter(t => {
+      const deptName = (t.department_name || '').toLowerCase();
+      const branchName = (t.branch_name || '').toLowerCase();
+      return branchName.includes('main') || 
+             branchName.includes('lsp') ||
+             deptName.includes('lsp main');
+    });
+  }
+  
+  return filtered.filter(t => t.status === status).length; 
+}
   getAssignedNames(ticket: Ticket): string {
     if (!ticket) return '—';
     const assignedUsers = (ticket as any).assigned_users;

@@ -1148,19 +1148,20 @@ app.get('/api/client/tickets', async (req, res) => {
             }
         }
         
-        // ✅ SIMPLE QUERY - no complex JSON subquery
-       let query = `
+    // ✅ SIMPLE QUERY - with fallback for branch_name
+let query = `
     SELECT t.*, 
            t.created_by_name,
            COALESCE(u.department, nu.department, '') as creator_department,
            cb.name as creator_branch_name,
            d.name as department_name,
-           b.name as branch_name,
-           b.company_name as company_name,
+           COALESCE(b.name, tb.name) as branch_name,
+           COALESCE(b.company_name, tb.company_name) as company_name,
            COALESCE(a.fullname, na.fullname) as agent_name
     FROM tickets t
     LEFT JOIN departments d ON t.department_id = d.id
     LEFT JOIN branches b ON d.branch_id = b.id
+    LEFT JOIN branches tb ON t.branch_id = tb.id
     LEFT JOIN users a ON t.assigned_to = a.id
     LEFT JOIN new_user na ON t.assigned_to = na.id
     LEFT JOIN users u ON t.created_by = u.id
@@ -1170,12 +1171,20 @@ app.get('/api/client/tickets', async (req, res) => {
 `;
         
         const values = [];
+        const mainBranchIds = [1, 5];
         
         if (isEDPIT && userDeptId && userBranchId) {
-            query += ' AND t.department_id = ?';
-            values.push(userDeptId);
-            query += ' AND ((u.branch_id = ? OR nu.branch_id = ?) OR d.branch_id = ?)';
-            values.push(userBranchId, userBranchId, userBranchId);
+            if (mainBranchIds.includes(userBranchId)) {
+                // User IS in main branch - show all tickets to their department
+                query += ' AND t.department_id = ?';
+                values.push(userDeptId);
+            } else {
+                // User is in OTHER branch - show:
+                // 1. Tickets sent to their own department, OR
+                // 2. Tickets THEY created (includes tickets sent to Main branch)
+                query += ' AND (t.department_id = ? OR t.created_by = ?)';
+                values.push(userDeptId, userId);
+            }
         } else {
             query += ' AND t.created_by = ?';
             values.push(userId);
