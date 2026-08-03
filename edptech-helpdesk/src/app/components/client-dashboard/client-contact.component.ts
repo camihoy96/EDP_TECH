@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -137,8 +137,13 @@ interface ChatMessage {
 
       <!-- Chat Modal -->
       <div class="modal-overlay" *ngIf="showChatModal" (click)="closeChat()">
-        <div class="chat-modal" (click)="$event.stopPropagation()">
-          <div class="chat-header" [style.backgroundColor]="selectedUser?.avatar_color || '#0a3a8c'">
+  <div class="chat-modal" 
+       [style.transform]="'translate(' + chatModalPos.x + 'px, ' + chatModalPos.y + 'px)'"
+       (click)="$event.stopPropagation()">
+    <div class="chat-header" 
+         [style.backgroundColor]="selectedUser?.avatar_color || '#0a3a8c'"
+         (mousedown)="startDragChat($event)"
+         style="cursor: grab;">
             <div class="chat-user-info">
               <div class="chat-avatar" [style.backgroundColor]="selectedUser?.avatar_color || '#0a3a8c'">
                 <img *ngIf="selectedUser?.photo_url" [src]="apiUrl + selectedUser?.photo_url" [alt]="selectedUser?.fullname" class="avatar-img">
@@ -237,24 +242,34 @@ interface ChatMessage {
         </div>
       </div>
       
-      <!-- Image Preview Modal -->
-      <div class="image-overlay" *ngIf="showImagePreview" (click)="closeImagePreview()">
-        <img [src]="previewImageUrl" (click)="$event.stopPropagation()" class="preview-image">
-        <button class="close-preview" (click)="closeImagePreview()">✕</button>
-      </div>
+      <!-- Image Preview Modal - Draggable -->
+<div class="image-overlay" *ngIf="showImagePreview" (click)="closeImagePreview()">
+  <div class="image-modal" 
+       [style.transform]="'translate(' + imageModalPos.x + 'px, ' + imageModalPos.y + 'px)'"
+       (click)="$event.stopPropagation()">
+    <div class="image-header" (mousedown)="startDragImage($event)" style="cursor: grab;">
+      <span>🖼️ Image Preview</span>
+      <button class="close-preview" (click)="closeImagePreview()">✕</button>
     </div>
-    <!-- Confirmation Dialog -->
-    <div class="confirm-overlay" *ngIf="showConfirmDialog" (click)="cancelConfirm()">
-      <div class="confirm-dialog" (click)="$event.stopPropagation()">
-        <div class="confirm-icon">⚠️</div>
-        <h3>Confirm Action</h3>
-        <p>{{ confirmMessage }}</p>
-        <div class="confirm-actions">
-          <button class="confirm-btn cancel" (click)="cancelConfirm()">Cancel</button>
-          <button class="confirm-btn confirm" (click)="confirmAction()">Confirm</button>
-        </div>
-      </div>
+    <img [src]="previewImageUrl" class="preview-image">
+  </div>
+</div>
+    <!-- Confirmation Dialog - Draggable -->
+<div class="confirm-overlay" *ngIf="showConfirmDialog" (click)="cancelConfirm()">
+  <div class="confirm-dialog" 
+       [style.transform]="'translate(' + confirmModalPos.x + 'px, ' + confirmModalPos.y + 'px)'"
+       (click)="$event.stopPropagation()">
+    <div class="confirm-header" (mousedown)="startDragConfirm($event)" style="cursor: grab;">
+      <div class="confirm-icon">⚠️</div>
+      <h3>Confirm Action</h3>
     </div>
+    <p>{{ confirmMessage }}</p>
+    <div class="confirm-actions">
+      <button class="confirm-btn cancel" (click)="cancelConfirm()">Cancel</button>
+      <button class="confirm-btn confirm" (click)="confirmAction()">Confirm</button>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
     .contact-container {
@@ -872,7 +887,37 @@ interface ChatMessage {
     .confirm-btn.confirm:hover {
       background: #aa0000;
     }
-
+    .image-modal {
+  background: white;
+  border: 2px solid #808080;
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.4);
+  max-width: 90vw;
+  max-height: 90vh;
+}
+.image-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: #0a246a;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  user-select: none;
+}
+.image-header:active {
+  cursor: grabbing;
+}
+.confirm-header {
+  text-align: center;
+  user-select: none;
+}
+.confirm-header:active {
+  cursor: grabbing;
+}
+.chat-header:active {
+  cursor: grabbing !important;
+}
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -895,7 +940,23 @@ export class ClientContactComponent implements OnInit, OnDestroy {
   statusFilter = 'all';
   currentUsername = '';
   apiUrl = environment.apiUrl;
-  
+  // Dragging properties for chat modal
+private isDraggingChat = false;
+private dragStartXChat = 0;
+private dragStartYChat = 0;
+chatModalPos = { x: 0, y: 0 };
+
+// Dragging properties for confirm dialog
+private isDraggingConfirm = false;
+private dragStartXConfirm = 0;
+private dragStartYConfirm = 0;
+confirmModalPos = { x: 0, y: 0 };
+
+// Dragging properties for image preview
+private isDraggingImage = false;
+private dragStartXImage = 0;
+private dragStartYImage = 0;
+imageModalPos = { x: 0, y: 0 };
   // Chat properties
   showChatModal = false;
   selectedUser: SupportUser | null = null;
@@ -1732,7 +1793,57 @@ export class ClientContactComponent implements OnInit, OnDestroy {
       error: (err) => console.error('Failed to send message:', err)
     });
   }
+  // ─── DRAG MODALS ───────────────────────────
 
+startDragChat(event: MouseEvent) {
+  this.isDraggingChat = true;
+  this.dragStartXChat = event.clientX - this.chatModalPos.x;
+  this.dragStartYChat = event.clientY - this.chatModalPos.y;
+  event.preventDefault();
+}
+
+startDragConfirm(event: MouseEvent) {
+  this.isDraggingConfirm = true;
+  this.dragStartXConfirm = event.clientX - this.confirmModalPos.x;
+  this.dragStartYConfirm = event.clientY - this.confirmModalPos.y;
+  event.preventDefault();
+}
+
+startDragImage(event: MouseEvent) {
+  this.isDraggingImage = true;
+  this.dragStartXImage = event.clientX - this.imageModalPos.x;
+  this.dragStartYImage = event.clientY - this.imageModalPos.y;
+  event.preventDefault();
+}
+
+@HostListener('document:mousemove', ['$event'])
+onMouseMove(event: MouseEvent) {
+  if (this.isDraggingChat) {
+    this.chatModalPos = {
+      x: event.clientX - this.dragStartXChat,
+      y: event.clientY - this.dragStartYChat
+    };
+  }
+  if (this.isDraggingConfirm) {
+    this.confirmModalPos = {
+      x: event.clientX - this.dragStartXConfirm,
+      y: event.clientY - this.dragStartYConfirm
+    };
+  }
+  if (this.isDraggingImage) {
+    this.imageModalPos = {
+      x: event.clientX - this.dragStartXImage,
+      y: event.clientY - this.dragStartYImage
+    };
+  }
+}
+
+@HostListener('document:mouseup')
+onMouseUp() {
+  this.isDraggingChat = false;
+  this.isDraggingConfirm = false;
+  this.isDraggingImage = false;
+}
   scrollToBottom() {
     setTimeout(() => {
       const messagesContainer = document.querySelector('.chat-messages');

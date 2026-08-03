@@ -1,7 +1,9 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
+import { CustomRouterService } from '../../services/custom-router.service';
+import { HiddenRouteDirective } from '../../services/hidden-route.directive';
 import { filter } from 'rxjs/operators';
 import { AuthService } from '../../services/auth.service';
 import { TicketService, Ticket } from '../../services/ticket.service';
@@ -16,7 +18,7 @@ import { ReportModalComponent } from './report-modal.component';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
- imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, NotificationBellComponent, AiAssistantComponent, ReportModalComponent ],
+ imports: [CommonModule, FormsModule, RouterOutlet, HiddenRouteDirective,  RouterLink, RouterLinkActive, NotificationBellComponent, AiAssistantComponent, ReportModalComponent ],
   template: `
     <div class="app-container" (click)="closeAllMenus()">
 
@@ -121,7 +123,7 @@ import { ReportModalComponent } from './report-modal.component';
         <button class="toolbar-btn" [class.active-btn]="isProfileRoute" (click)="goToProfile()">
           <span>👨🏻‍💼</span> Profile
         </button>
-        <button class="toolbar-btn" routerLinkActive="active" (click)="goToTickets()">
+        <button class="toolbar-btn" (click)="goToTickets()">
   <span>🎫</span> All Tickets
   <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
 </button>
@@ -166,94 +168,88 @@ import { ReportModalComponent } from './report-modal.component';
 
       <!-- Main Layout -->
       <div class="main-layout">
-
-       <!-- Sidebar -->
+<!-- Sidebar -->
 <div class="sidebar" [class.sidebar-hidden]="sidebarHidden">
- <div class="sidebar-header">
-  <h3>{{ systemSettings?.system_title || 'EDPtech Ticketing System' }}</h3>
-</div>
+  <div class="sidebar-header">
+    <h3>{{ systemSettings?.system_title || 'EDPtech Ticketing System' }}</h3>
+  </div>
   <div class="sidebar-menu">
-    <a routerLink="/dashboard" routerLinkActive="active" class="sidebar-link">
+    <a hiddenRoute="/dashboard" [class.active]="currentRoute === '/dashboard'" class="sidebar-link">
       <span class="nav-icon">🏠</span> Dashboard
     </a>
-    <a routerLink="/tickets" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">🎫</span> All Tickets
-  <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
-</a>
-<a routerLink="/admin/job-orders" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📋</span>Manage Job Orders
-  <span class="badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
-</a>
-<a routerLink="/admin/requisitions" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📩</span>Manage Requisitions
-  <span class="badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
-</a>
-    <!-- Knowledge Base Section -->
+    <a hiddenRoute="/tickets" [class.active]="currentRoute.startsWith('/tickets')" class="sidebar-link">
+      <span class="nav-icon">🎫</span> All Tickets
+      <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
+    </a>
+    <a hiddenRoute="/admin/job-orders" [class.active]="currentRoute.startsWith('/admin/job-orders')" class="sidebar-link">
+      <span class="nav-icon">📋</span>Manage Job Orders
+      <span class="badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
+    </a>
+    <a hiddenRoute="/admin/requisitions" [class.active]="currentRoute.startsWith('/admin/requisitions')" class="sidebar-link">
+      <span class="nav-icon">📩</span>Manage Requisitions
+      <span class="badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
+    </a>
+    
     <div class="sidebar-divider"></div>
-    <a routerLink="/knowledge-base" routerLinkActive="active" class="sidebar-link">
+    <a hiddenRoute="/knowledge-base" [class.active]="currentRoute.startsWith('/knowledge-base')" class="sidebar-link">
       <span class="nav-icon">📚</span> Knowledge Base
     </a>
     
-    <!-- Reports Section -->
     <div class="sidebar-divider"></div>
-    <a routerLink="/admin/reports" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📊</span> Reports
-</a>
+    <a hiddenRoute="/admin/reports" [class.active]="currentRoute === '/admin/reports'" class="sidebar-link">
+      <span class="nav-icon">📊</span> Reports
+    </a>
     
-    <!-- Admin/Management Section (only visible to admins and agents) -->
-<ng-container *ngIf="currentUser">
-  <div class="sidebar-divider"></div>
-  <div class="sidebar-section-title">Management</div>
+    <ng-container *ngIf="currentUser">
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-title">Management</div>
 
-  <a *ngIf="currentUser?.user_table === 'users'" 
-   routerLink="/admin/users-management" 
-   routerLinkActive="active" 
-   class="sidebar-link">
-  <span class="nav-icon">👥</span> User Management
-</a>
+      <a *ngIf="currentUser?.user_table === 'users'" 
+         hiddenRoute="/admin/users-management" 
+         [class.active]="currentRoute === '/admin/users-management'" 
+         class="sidebar-link">
+        <span class="nav-icon">👥</span> User Management
+      </a>
 
-  <a routerLink="/admin/registration-keys" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">🔑</span> Registration Keys
-  </a>
+      <a hiddenRoute="/admin/registration-keys" [class.active]="currentRoute === '/admin/registration-keys'" class="sidebar-link">
+        <span class="nav-icon">🔑</span> Registration Keys
+      </a>
 
-  <a routerLink="/admin/departments" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">🏢</span>Org Directory
-  </a>
+      <a hiddenRoute="/admin/departments" [class.active]="currentRoute === '/admin/departments'" class="sidebar-link">
+        <span class="nav-icon">🏢</span>Org Directory
+      </a>
 
- <a routerLink="/admin/computer-monitoring" routerLinkActive="active" class="sidebar-link" style="position: relative;">
-  <span class="nav-icon">💻</span> Computer Monitoring
-  <span *ngIf="computerMonitoringNotifCount > 0" 
-        class="sidebar-notif-badge" 
-        [title]="computerMonitoringNotifCount + ' active alert(s)'">
-    {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
-  </span>
-</a>
-  <a routerLink="/admin/announcements" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">📢</span>Manage Announcements
-  </a>
-</ng-container>
+      <a hiddenRoute="/admin/computer-monitoring" [class.active]="currentRoute === '/admin/computer-monitoring'" class="sidebar-link" style="position: relative;">
+        <span class="nav-icon">💻</span> Computer Monitoring
+        <span *ngIf="computerMonitoringNotifCount > 0" class="sidebar-notif-badge">
+          {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
+        </span>
+      </a>
+      <a hiddenRoute="/admin/announcements" [class.active]="currentRoute === '/admin/announcements'" class="sidebar-link">
+        <span class="nav-icon">📢</span>Manage Announcements
+      </a>
+    </ng-container>
 
-<!-- System Section (admin, head/manager, supervisor) -->
-<ng-container *ngIf="hasSystemAccess()">
-  <div class="sidebar-divider"></div>
-  <div class="sidebar-section-title">System</div>
-  
-  <a routerLink="/admin/settings" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">⚙️</span> System Settings
-  </a>
-  
-  <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
-    <span class="nav-icon">🗄️</span> Database
-  </a>
-  
-  <a routerLink="/admin/logs" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">📋</span> System Logs
-  </a>
-  
-  <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
-    <span class="nav-icon">🩺</span> System Health
-  </a>
-</ng-container>
+    <ng-container *ngIf="hasSystemAccess()">
+      <div class="sidebar-divider"></div>
+      <div class="sidebar-section-title">System</div>
+      
+      <a hiddenRoute="/admin/settings" [class.active]="currentRoute === '/admin/settings'" class="sidebar-link">
+        <span class="nav-icon">⚙️</span> System Settings
+      </a>
+      
+      <a hiddenRoute="/admin/database" [class.active]="currentRoute === '/admin/database'" class="sidebar-link" *ngIf="isAdminUser()">
+        <span class="nav-icon">🗄️</span> Database
+      </a>
+      
+      <a hiddenRoute="/admin/logs" [class.active]="currentRoute === '/admin/logs'" class="sidebar-link">
+        <span class="nav-icon">📋</span> System Logs
+      </a>
+      
+      <a hiddenRoute="/admin/system-health" [class.active]="currentRoute === '/admin/system-health'" class="sidebar-link" *ngIf="isAdminUser()">
+        <span class="nav-icon">🩺</span> System Health
+      </a>
+    </ng-container>
   </div>
   
   <div class="sidebar-footer">
@@ -1098,6 +1094,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   incomingOrdersUnreadCount: number = 0;
   totalUnreadCount: number = 0;
   unreadMessagesCount = 0;
+  currentRoute: string = '';
   // Dragging properties
 private isDragging = false;
 private dragOffsetX = 0;
@@ -1116,7 +1113,7 @@ private get seenReqNotificationIds(): Set<number> {
   // ADD THE CONSTRUCTOR - was missing!
   constructor(
     private authService: AuthService,
-    public router: Router,
+    public router: CustomRouterService,
     private ticketService: TicketService,
     private notificationService: NotificationService,
     private http: HttpClient
@@ -1134,6 +1131,11 @@ private get seenReqNotificationIds(): Set<number> {
     this.loadJobOrdersCount();
     document.addEventListener('mousemove', this.onDragMove.bind(this));
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
+    this.router.events.pipe(
+  filter(event => event instanceof NavigationEnd)
+).subscribe((event: any) => {
+  this.currentRoute = event.url || '';
+});
     this.router.events.pipe(
   filter(event => event instanceof NavigationEnd)
 ).subscribe((event: any) => {
@@ -2111,11 +2113,9 @@ loadRegistrationKeys() {
   goToChat() {
   this.router.navigate(['/admin/chat']);
 }
-  goToUsers() { this.router.navigate(['/admin/users-management']); }
-  goToDashboard()    { this.router.navigate(['/dashboard']); }
-  goToProfile() { 
-  this.router.navigate(['/profile']); 
-}
+  goToUsers(){ this.router.navigate(['/admin/users-management']); }
+  goToDashboard(){ this.router.navigate(['/dashboard']); }
+  goToProfile(){ this.router.navigate(['/profile']); }
 
 get isProfileRoute(): boolean {
   return this.router.url === '/profile';
