@@ -6,7 +6,6 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 import { ClientNotificationService } from '../../services/client-notification.service';
-import { CustomRouterService } from '../../services/custom-router.service';
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -841,7 +840,7 @@ export class LoginComponent implements OnInit, OnDestroy {
 
   constructor(
     private authService: AuthService, 
-     private router: CustomRouterService, 
+    private router: Router, 
      private clientNotificationService: ClientNotificationService,
     private http: HttpClient
   ) {}
@@ -907,9 +906,9 @@ export class LoginComponent implements OnInit, OnDestroy {
         // Users from 'new_user' table or with role 'user' go to client dashboard
         // Users from 'users' table (EDP) or with admin/Technician roles go to admin dashboard
         if (userTable === 'new_user' || user?.role === 'user') {
-          this.router.navigate(['/client/dashboard']); // ✅ Uses CustomRouterService
+          this.router.navigate(['/client/dashboard']);
         } else {
-          this.router.navigate(['/dashboard']); // ✅ Uses CustomRouterService
+          this.router.navigate(['/dashboard']);
         }
       },
       error: (error) => {
@@ -931,6 +930,7 @@ export class LoginComponent implements OnInit, OnDestroy {
       }
     });
   }
+
   startLockoutTimer() {
     this.lockoutRemaining = 30;
     this.lockoutInterval = setInterval(() => {

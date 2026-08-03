@@ -1,14 +1,12 @@
 import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
-import { CustomRouterService } from '../../services/custom-router.service';
+import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { HiddenRouteDirective } from '../../services/hidden-route.directive';
 import { TicketService, Ticket } from '../../services/ticket.service';
 import { HttpClient } from '@angular/common/http';
-import { takeUntil } from 'rxjs/operators';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { ClientNotificationBellComponent } from '../notification-bell/client-notification-bell.component';
 import { ClientNotificationService } from '../../services/client-notification.service';
 import type { ClientNotification } from '../../services/client-notification.service';
@@ -32,7 +30,7 @@ interface ClientTicket {
 @Component({
   selector: 'app-client-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, HiddenRouteDirective, ClientNotificationBellComponent, AiAssistantComponent,  ClientCalendarModalComponent,  ClientReportsModalComponent ],
+  imports: [CommonModule, FormsModule, RouterOutlet, RouterLink, RouterLinkActive, ClientNotificationBellComponent, AiAssistantComponent,  ClientCalendarModalComponent,  ClientReportsModalComponent ],
   template: `
     <div class="app-container" (click)="closeAllMenus()">
 
@@ -176,26 +174,26 @@ interface ClientTicket {
   
   <div class="toolbar-separator"></div>
 
-  <button class="toolbar-btn" [class.active-btn]="isDashboardRoute" [hiddenRoute]="'/client/dashboard'">
-  <span class="tbtn-icon">🏠</span> Dashboard
-</button>
-  <button class="toolbar-btn" [class.active-btn]="isProfileRoute" [hiddenRoute]="'/client/profile'">
+  <button class="toolbar-btn" [class.active-btn]="isDashboardRoute" (click)="goToDashboard()">
+    <span class="tbtn-icon">🏠</span> Dashboard
+  </button>
+  <button class="toolbar-btn" [class.active-btn]="isProfileRoute" (click)="goToProfile()">
     <span class="tbtn-icon">👤</span> Profile
   </button>
-  <button class="toolbar-btn" [class.active-btn]="isTicketListRoute" [hiddenRoute]="'/client/tickets'">
+  <button class="toolbar-btn" [class.active-btn]="isTicketListRoute" (click)="setView('all'); markAllTicketsRead()">
   <span class="tbtn-icon">🎫</span>
   {{ isEDPUser() ? 'All Tickets' : 'My Tickets' }}
   <span class="tbadge" *ngIf="getNotificationCount() > 0">{{ getNotificationCount() }}</span>
 </button>
-  <button class="toolbar-btn primary-btn" [hiddenRoute]="'/client/tickets/new'" *ngIf="!isEDPUser()">
+  <button class="toolbar-btn primary-btn" (click)="newTicket()" *ngIf="!isEDPUser()">
   <span class="tbtn-icon">＋</span> New Ticket
 </button>
-  <button class="toolbar-btn" [class.active-btn]="isContactRoute" [hiddenRoute]="'/client/contact'">
+  <button class="toolbar-btn" [class.active-btn]="isContactRoute" (click)="goToContact()">
   <span class="tbtn-icon">📞</span>
   {{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}
   <span class="tbadge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
 </button>
-<button class="toolbar-btn" [class.active-btn]="isChatRoute" [hiddenRoute]="'/client/chat'" *ngIf="isEDPUser()">
+<button class="toolbar-btn" [class.active-btn]="isChatRoute" (click)="goToChat()" *ngIf="isEDPUser()">
     <span class="tbtn-icon">💬</span> Chat
     <span class="tbadge" *ngIf="chatUnreadCount > 0">{{ chatUnreadCount > 99 ? '99+' : chatUnreadCount }}</span>
 </button>
@@ -265,39 +263,31 @@ interface ClientTicket {
 
           <div class="sidebar-section-label">WORKSPACE</div>
           <div class="sidebar-menu">
-            <a [hiddenRoute]="'/client/dashboard'" 
-            [class.active]="isDashboardRoute" 
-            class="sidebar-link">
-            <span class="nav-icon">🏠</span>
-            <span class="nav-label">Dashboard</span>
-          </a>
+            <a routerLink="/client/dashboard" routerLinkActive="active"
+               [routerLinkActiveOptions]="{exact:true}" class="sidebar-link">
+              <span class="nav-icon">🏠</span>
+              <span class="nav-label">Dashboard</span>
+            </a>
 
-            <a [hiddenRoute]="'/client/tickets'" 
-            [class.active]="isTicketListRoute" 
-            class="sidebar-link" (click)="markAllTicketsRead()">
+            <a routerLink="/client/tickets" routerLinkActive="active"
+            [routerLinkActiveOptions]="{exact:true}" class="sidebar-link" (click)="markAllTicketsRead()">
             <span class="nav-icon">🎫</span>
             <span class="nav-label">{{ isEDPUser() ? 'All Tickets' : 'My Tickets' }}</span>
             <span class="nav-badge" *ngIf="getNotificationCount() > 0">{{ getNotificationCount() }}</span>
           </a>
 
-            <a [hiddenRoute]="'/client/tickets/new'" 
-            [class.active]="isNewTicketRoute" 
-            class="sidebar-link" *ngIf="!isEDPUser()">
+            <a routerLink="/client/tickets/new" routerLinkActive="active" class="sidebar-link" *ngIf="!isEDPUser()">
           <span class="nav-icon">➕</span>
           <span class="nav-label">New Ticket</span>
         </a>
 
-           <a [hiddenRoute]="'/client/job-orders'" 
-            [class.active]="isJobOrdersRoute" 
-            class="sidebar-link" (click)="markJobOrdersAsRead()">
+           <a routerLink="/client/job-orders" routerLinkActive="active" class="sidebar-link" (click)="markJobOrdersAsRead()">
   <span class="nav-icon">✍️</span>
   <span class="nav-label">Job Orders</span>
   <span class="nav-badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
 </a>
 
-           <a [hiddenRoute]="'/client/request'" 
-            [class.active]="isRequestsRoute" 
-            class="sidebar-link">
+           <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
   <span class="nav-icon">📩</span>
   <span class="nav-label">Requests</span>
   <span class="nav-badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
@@ -305,23 +295,17 @@ interface ClientTicket {
             <div class="sidebar-divider"></div>
             <div class="sidebar-section-label">RESOURCES</div>
 
-            <a [hiddenRoute]="'/client/knowledge-base'" 
-   [class.active]="isKnowledgeBaseRoute" 
-   class="sidebar-link">
-  <span class="nav-icon">📚</span>
-  <span class="nav-label">Knowledge Base</span>
-</a>
+            <a routerLink="/client/knowledge-base" routerLinkActive="active" class="sidebar-link">
+              <span class="nav-icon">📚</span>
+              <span class="nav-label">Knowledge Base</span>
+            </a>
 
-            <a [hiddenRoute]="'/client/sla-info'" 
-               [class.active]="isSLAInfoRoute" 
-               class="sidebar-link">
+            <a routerLink="/client/sla-info" routerLinkActive="active" class="sidebar-link">
               <span class="nav-icon">📋</span>
               <span class="nav-label">SLA Info</span>
             </a>
 
-           <a [hiddenRoute]="'/client/contact'" 
-          [class.active]="isContactRoute" 
-          class="sidebar-link">
+           <a routerLink="/client/contact" routerLinkActive="active" class="sidebar-link">
           <span class="nav-icon">📞</span>
           <span class="nav-label">{{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}</span>
           <span class="nav-badge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
@@ -461,7 +445,7 @@ interface ClientTicket {
         <div class="announce-empty" *ngIf="announcements.length === 0">
           <span>No active announcements</span>
         </div>
-        <div class="announce-viewall" [hiddenRoute]="'/client/announcements'">
+        <div class="announce-viewall" (click)="goToAnnouncements()">
           View all announcements →
         </div>
       </div>
@@ -1790,9 +1774,7 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isTokenValid = false;
   isRefreshing = false;
   chatUnreadCount = 0;
-  private destroy$ = new Subject<void>();
-  currentRoute: string = '';
-  private chatCountInterval: any;
+private chatCountInterval: any;
   // ✅ New properties for notifications
   ourOrdersUnreadCount: number = 0;
   incomingOrdersUnreadCount: number = 0;
@@ -1837,12 +1819,13 @@ announcements: any[] = [];
   constructor(
     private authService: AuthService,
     private ticketService: TicketService,
-    private router: CustomRouterService,
+    private router: Router,
     private http: HttpClient,
     private clientNotificationService: ClientNotificationService,
-    private sanitizer: DomSanitizer,
-    private customRouter: CustomRouterService 
+    private sanitizer: DomSanitizer
   ) {}
+
+  private destroy$ = new Subject<void>();
  // ✅ Generate a unique request signature
   private getRequestSignature(method: string, url: string, params?: any): string {
     const userId = this.currentUser?.id || 'anonymous';
@@ -1975,13 +1958,6 @@ this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
   setInterval(() => this.loadAnnouncements(), 300000);
-  this.customRouter.events
-    .pipe(takeUntil(this.destroy$))
-    .subscribe(event => {
-      if (event instanceof NavigationEnd) {
-        this.currentRoute = event.urlAfterRedirects;
-      }
-    });
   this.router.events.subscribe((event: any) => {
     if (event.url && event.url.includes('/client/request')) {
       this.markRequisitionNotificationsAsRead();
@@ -3128,23 +3104,7 @@ get isChatRoute(): boolean {
     }, 1000);
     this.logoutWarningTimer = setTimeout(() => { this.performLogout(); }, 60000);
   }
-// Add these after your existing getters, before the last closing brace
 
-get isJobOrdersRoute(): boolean { 
-  return this.router.url === '/client/job-orders'; 
-}
-
-get isRequestsRoute(): boolean { 
-  return this.router.url === '/client/request'; 
-}
-
-get isKnowledgeBaseRoute(): boolean { 
-  return this.router.url === '/client/knowledge-base'; 
-}
-
-get isSLAInfoRoute(): boolean { 
-  return this.router.url === '/client/sla-info'; 
-}
   get isProfileRoute(): boolean { return this.router.url === '/client/profile'; }
   get isTicketListRoute(): boolean { return this.router.url === '/client/tickets' || this.router.url.startsWith('/client/tickets?'); }
   get isNewTicketRoute(): boolean { return this.router.url === '/client/tickets/new'; }
