@@ -15,7 +15,7 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ClientCalendarModalComponent } from '../client-calendar-modal/client-calendar-modal.component';
 import { ClientReportsModalComponent } from '../client-reports/client-reports-modal.component';
-
+import { RouteMaskService } from '../../services/route-mask.service';
 interface ClientTicket {
   id: number;
   ticket_number: string;
@@ -1821,6 +1821,7 @@ announcements: any[] = [];
     private ticketService: TicketService,
     private router: Router,
     private http: HttpClient,
+    private routeMask: RouteMaskService,
     private clientNotificationService: ClientNotificationService,
     private sanitizer: DomSanitizer
   ) {}
@@ -2334,6 +2335,7 @@ closeReportModal() {
           this.handleUnauthorized('User session ended');
           return;
         }
+         this.routeMask.activate();
         this.currentUser = user;
         this.loadJobOrdersCount();
         this.loadRequisitionsCount();
@@ -2406,6 +2408,7 @@ private addSeenReqIds(ids: number[]): void {
   }
 
  performLogout() {
+  this.routeMask.deactivate();
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();

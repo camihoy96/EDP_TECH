@@ -13,6 +13,7 @@ import { takeUntil } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
 import { ReportModalComponent } from './report-modal.component';
+import { RouteMaskService } from '../../services/route-mask.service';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -1117,6 +1118,7 @@ private get seenReqNotificationIds(): Set<number> {
   constructor(
     private authService: AuthService,
     public router: Router,
+    private routeMask: RouteMaskService,
     private ticketService: TicketService,
     private notificationService: NotificationService,
     private http: HttpClient
@@ -1456,7 +1458,7 @@ get requisitionsNotificationCount(): number {
 
   private initializeComponent(): void {
     // Now it's safe to load all data since authentication is verified
-    
+    this.routeMask.activate();
     this.updateDateTime();
     this.clockInterval = setInterval(() => this.updateDateTime(), 1000);
     
@@ -1604,6 +1606,7 @@ resetInactivityTimer() {
     }, this.INACTIVITY_TIMEOUT - 60000);
   }
    performLogout() {
+    this.routeMask.deactivate();
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();
@@ -2121,10 +2124,7 @@ get isProfileRoute(): boolean {
   return this.router.url === '/profile';
 }
 goToKnowledgeBase() { 
-    // Navigate to admin knowledge base (with CRUD capabilities)
-    this.router.navigate(['/admin/knowledge-base']); 
-    // OR if it's the same route:
-    // this.router.navigate(['/knowledge-base']);
+    this.routeMask.navigateTo('/knowledge-base');
 }
 
   refreshData() {
