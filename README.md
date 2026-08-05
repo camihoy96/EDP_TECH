@@ -11,15 +11,15 @@ A comprehensive IT Operations & Service Management Platform designed to centrali
 
 ![Login](image/1.png)
 
-## Dashboard
+## Signup
 
-![Dashboard](image/2.png)
+![Signup](image/2.png)
 
-## Screenshot 3
+## Client Dashboard
 
-![Screenshot 3](image/3.png)
+![Client Dashboard](image/3.png)
 
-## Screenshot 4
+## Client Ticket Management
 
 ![Screenshot 4](image/4.png)
 
@@ -27,7 +27,7 @@ A comprehensive IT Operations & Service Management Platform designed to centrali
 
 ![Screenshot 5](image/5.png)
 
-## Screenshot 6
+## CLient Job Order Management
 
 ![Screenshot 6](image/6.png)
 
@@ -35,43 +35,43 @@ A comprehensive IT Operations & Service Management Platform designed to centrali
 
 ![Screenshot 7](image/7.png)
 
-## Screenshot 8
+## Client Chat Interface 
 
 ![Screenshot 8](image/8.png)
 
-## Screenshot 9
+## Client Profile Interface
 
 ![Screenshot 9](image/9.png)
 
-## Screenshot 10
+## Create Tickets Form
 
 ![Screenshot 10](image/10.png)
 
-## Screenshot 11
+## Admin side Dashboard
 
 ![Screenshot 11](image/11.png)
 
-## Screenshot 12
+## Admin Ticket Management
 
 ![Screenshot 12](image/12.png)
 
-## Screenshot 13
+## Admin Job Order Management
 
 ![Screenshot 13](image/13.png)
 
-## Screenshot 14
+## Admin Requisition Management
 
 ![Screenshot 14](image/14.png)
 
-## Screenshot 15
+## Admin User Management 
 
 ![Screenshot 15](image/15.png)
 
-## Screenshot 16
+## Admin Org Directory
 
 ![Screenshot 16](image/16.png)
 
-## Screenshot 17
+## System Settings
 
 ![Screenshot 17](image/17.png)
 ```text
