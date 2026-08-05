@@ -1,9 +1,79 @@
 # EDP_TECH
 
-IT Helpdesk System to centralize the operation of the LSP company from their branches and departments, providing interaction between users and the IT technical support team.
+A comprehensive IT Operations & Service Management Platform designed to centralize and streamline the support operations of LSP company across all branches and departments. The system bridges the gap between end-users and the IT technical team through a robust suite of integrated features.
 
 ## Project Structure
+---
 
+# System Screenshots
+
+## Login
+
+![Login](image/1.png)
+
+## Dashboard
+
+![Dashboard](image/2.png)
+
+## Screenshot 3
+
+![Screenshot 3](image/3.png)
+
+## Screenshot 4
+
+![Screenshot 4](image/4.png)
+
+## Screenshot 5
+
+![Screenshot 5](image/5.png)
+
+## Screenshot 6
+
+![Screenshot 6](image/6.png)
+
+## Screenshot 7
+
+![Screenshot 7](image/7.png)
+
+## Screenshot 8
+
+![Screenshot 8](image/8.png)
+
+## Screenshot 9
+
+![Screenshot 9](image/9.png)
+
+## Screenshot 10
+
+![Screenshot 10](image/10.png)
+
+## Screenshot 11
+
+![Screenshot 11](image/11.png)
+
+## Screenshot 12
+
+![Screenshot 12](image/12.png)
+
+## Screenshot 13
+
+![Screenshot 13](image/13.png)
+
+## Screenshot 14
+
+![Screenshot 14](image/14.png)
+
+## Screenshot 15
+
+![Screenshot 15](image/15.png)
+
+## Screenshot 16
+
+![Screenshot 16](image/16.png)
+
+## Screenshot 17
+
+![Screenshot 17](image/17.png)
 ```text
 EDP_TECH/
 ├── edptech-helpdesk/     # Angular Frontend
