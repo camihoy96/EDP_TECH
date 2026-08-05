@@ -70,7 +70,7 @@ interface ChatMessage {
               <div class="user-avatar" [style.backgroundColor]="user.avatar_color || '#4f46e5'">
                 <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" [alt]="user.fullname">
                 <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
-                <span class="online-dot" *ngIf="user.status === 'online'"></span>
+                <span class="online-dot" [class.offline]="user.status !== 'online'"></span>
               </div>
               <div class="user-info">
                 <div class="user-name">
@@ -101,7 +101,10 @@ interface ChatMessage {
             </div>
             <div class="chat-user-details">
               <div class="chat-user-name">{{ selectedUser.fullname }}</div>
-              <div class="chat-user-status">{{ selectedUser.role }} · {{ selectedUser.department || 'General' }}</div>
+            <div class="chat-user-status">
+  <span class="status-indicator" [class.online]="selectedUser.status === 'online'" [class.offline]="selectedUser.status !== 'online'"></span>
+  {{ selectedUser.status === 'online' ? 'Online' : 'Offline' }} · {{ selectedUser.role }} · {{ selectedUser.department || 'General' }}
+</div>
             </div>
             <div class="chat-header-actions">
               <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
@@ -355,10 +358,32 @@ interface ChatMessage {
     .confirm-btn.cancel:hover { background: #e0e0e0; }
     .confirm-btn.confirm { background: #ef4444; color: white; }
     .confirm-btn.confirm:hover { background: #dc2626; }
-
+.status-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.status-indicator.online {
+  background: #22c55e;
+}
+.status-indicator.offline {
+  background: #888;
+}
     .modal-close-btn { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3); color: white; cursor: pointer; font-size: 14px; padding: 2px 8px; }
     .modal-close-btn:hover { background: rgba(239,68,68,0.5); }
-
+    .online-dot { 
+  position: absolute; bottom: 2px; right: 2px; 
+  width: 10px; height: 10px; 
+  background: #22c55e;  /* Green = online */
+  border-radius: 50%; 
+  border: 2px solid white; 
+}
+.online-dot.offline { 
+  background: #888;  /* Gray = offline */
+}
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: #f1f1f1; }
     ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
@@ -369,7 +394,8 @@ export class ClientChatComponent implements OnInit, OnDestroy {
   @ViewChild('messagesContainer') messagesContainer!: ElementRef;
   apiUrl = environment.apiUrl;
   currentBranch: any = null;
-  
+  private onlineUsernames: Set<string> = new Set();
+  private statusPolling: any;
   users: ChatUser[] = [];
   filteredUsers: ChatUser[] = [];
   selectedUser: ChatUser | null = null;
@@ -429,7 +455,8 @@ export class ClientChatComponent implements OnInit, OnDestroy {
     
     this.loadBranchInfo();
     this.loadUsers();
-    
+    this.loadOnlineStatus();
+    this.statusPolling = setInterval(() => this.loadOnlineStatus(), 10000);
     this.messagePolling = setInterval(() => {
       if (this.selectedUser) this.loadMessages();
       this.loadUnreadCounts();
@@ -439,8 +466,30 @@ export class ClientChatComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     if (this.messagePolling) clearInterval(this.messagePolling);
+    if (this.statusPolling) clearInterval(this.statusPolling);
   }
-
+loadOnlineStatus() {
+  this.http.get<any>(`${environment.apiUrl}/api/users/online-status`, { headers: this.getHeaders() })
+    .subscribe({
+      next: (data) => {
+        this.onlineUsernames = new Set(data.online || []);
+        this.updateUserStatuses();
+      },
+      error: () => {
+        // Silently fail - keep existing statuses
+      }
+    });
+}
+updateUserStatuses() {
+  this.users.forEach(user => {
+    if (user.username === this.currentUsername) {
+      user.status = 'online';
+      return;
+    }
+    user.status = this.onlineUsernames.has(user.username) ? 'online' : 'offline';
+  });
+  this.filterUsers();
+}
   get totalUnreadCount(): number {
     return this.users.reduce((sum, u) => sum + (u.unreadCount || 0), 0);
   }

@@ -17,6 +17,9 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
+const JWT_SECRET = process.env.JWT_SECRET || 'JWT_SECRET';
+const JWT_EXPIRY = '7d';
+const OFFLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 // Middleware
 app.use(cors({
     origin: [
@@ -88,7 +91,36 @@ const upload = multer({
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ✅ Token authentication middleware
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Access denied. No token provided.' });
+    }
+    
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(403).json({ error: 'Invalid or expired token.' });
+    }
+}
 
+// ✅ Optional: Role-based middleware
+function requireRole(...roles) {
+    return (req, res, next) => {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Not authenticated' });
+        }
+        if (!roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Insufficient permissions' });
+        }
+        next();
+    };
+}
 // Create attachments table if not exists
 async function createAttachmentsTable() {
     try {
@@ -228,6 +260,40 @@ app.post('/api/auth/register', async (req, res) => {
         res.status(500).json({ message: 'Registration failed: ' + error.message });
     }
 });
+
+// Track user activity timestamps (in memory)
+const userActivity = new Map();
+
+// Middleware to update last activity on authenticated requests
+app.use('/api', (req, res, next) => {
+    const skipPaths = ['/api/auth/logout', '/api/users/online-status'];
+    if (skipPaths.includes(req.path)) {
+        return next();
+    }
+    
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+        try {
+            // ✅ Try new secret first, fallback to old
+            let decoded;
+            try {
+                decoded = jwt.verify(token, JWT_SECRET);
+            } catch (e) {
+                decoded = jwt.verify(token, 'secret_key');
+            }
+            
+            const username = decoded.username || decoded.id;
+            userActivity.set(username, Date.now());
+            
+            // ✅ Attach decoded user to request for all routes to use
+            req.decodedUser = decoded;
+        } catch (e) {
+            // Token completely invalid - ignore
+        }
+    }
+    next();
+});
+
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -355,14 +421,14 @@ app.post('/api/auth/login', async (req, res) => {
         // ✅ LOG: Successful login
         await logSystemEvent('INFO', 'auth', user.id, user.username, userTable, 
             'User logged in successfully', req.ip);
-        
+       userActivity.set(user.username, Date.now());
+        console.log('✅ User activity tracked:', user.username);
         // Generate token
         const token = jwt.sign(
-            { id: user.id, username: user.username, role: user.role, userTable: userTable },
-            'secret_key',
-            { expiresIn: '7d' }
-        );
-        
+    { id: user.id, username: user.username, role: user.role, userTable: userTable },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRY }
+);
         // Build user response with all fields including branch_name and company_name
         const userResponse = {
             id: user.id,
@@ -403,6 +469,58 @@ app.post('/api/auth/login', async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+app.post('/api/auth/logout', (req, res) => {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    
+    console.log('🚪 Logout request received');
+    
+    if (token) {
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            const username = decoded.username || decoded.id;
+            
+            // ✅ Remove user from activity tracking
+            userActivity.delete(username);
+            console.log('✅ User activity cleared for:', username);
+            
+            // ✅ Also log the logout event
+            logSystemEvent('INFO', 'auth', decoded.id, decoded.username, decoded.userTable || 'users', 
+                'User logged out', req.ip);
+        } catch (e) {
+            console.log('⚠️ Token already expired, clearing activity for current user');
+            // Still try to clear - the token might have expired but we still want to mark offline
+        }
+    }
+    
+    // Always return success
+    res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// ✅ NEW: Endpoint to get online users
+app.get('/api/users/online-status', (req, res) => {
+    const now = Date.now();
+    const OFFLINE_THRESHOLD = 5 * 60 * 1000;
+    
+    const onlineUsernames = new Set();
+    
+    userActivity.forEach((timestamp, username) => {
+        if (now - timestamp < OFFLINE_THRESHOLD) {
+            onlineUsernames.add(username);
+        }
+    });
+    
+    res.json({
+        online: Array.from(onlineUsernames),
+        timestamp: now
+    });
+});
+
+app.post('/api/users/heartbeat', authenticateToken, (req, res) => {
+    const username = req.user.username || req.user.id;
+    userActivity.set(username, Date.now());
+    res.json({ success: true });
+});
 // Verify user is in new_user table and is authorized
 app.get('/api/auth/verify', async (req, res) => {
     try {
@@ -410,7 +528,7 @@ app.get('/api/auth/verify', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // Check if user exists in new_user table
         const [rows] = await pool.query(
@@ -452,7 +570,7 @@ app.get('/api/auth/verify-admin', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         console.log('🔐 verify-admin - Decoded token:', decoded);
         console.log('🔐 userTable from token:', decoded.userTable);
@@ -565,7 +683,7 @@ app.get('/api/auth/validate-admin-token', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         console.log('🔐 validate-admin-token - Decoded:', decoded);
         
@@ -636,7 +754,7 @@ app.get('/api/auth/validate-token', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // Check if user still exists and is valid
         const [rows] = await pool.query(
@@ -2078,7 +2196,7 @@ app.delete('/api/client/tickets/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         console.log('🔑 Decoded token:', decoded);
         console.log('📋 Ticket ID to delete:', req.params.id);
@@ -2188,7 +2306,7 @@ app.get('/api/users', async (req, res) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
 
         console.log('🔍 Decoded user ID:', decoded.id);
 
@@ -2544,7 +2662,7 @@ app.use(async (req, res, next) => {
     }
     
     try {
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         req.user = decoded;
         req.userId = decoded.id;
         console.log('✅ Auth success for:', req.path, 'User:', decoded.id);
@@ -2565,7 +2683,7 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
 
         const { branchId } = req.params;
         const mainBranchIds = [1, 5];
@@ -2682,7 +2800,7 @@ app.get('/api/users/main-branch', async (req, res) => {
         }
 
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
 
         const mainBranchIds = [1, 5];
 
@@ -2894,7 +3012,7 @@ app.get('/api/admin/users', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -2933,7 +3051,7 @@ app.get('/api/admin/new-users', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -2993,7 +3111,7 @@ app.post('/api/admin/users/:table/:id/lock', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -3028,7 +3146,7 @@ app.post('/api/admin/users/:table/:id/unlock', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -3062,7 +3180,7 @@ app.delete('/api/admin/users/:table/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -3095,7 +3213,7 @@ app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -3152,7 +3270,7 @@ app.put('/api/profile/:table/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
@@ -3207,7 +3325,7 @@ app.get('/api/departments', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const userId = decoded.id;
         
         const { branch_id } = req.query;
@@ -3252,7 +3370,7 @@ app.post('/api/departments', async (req, res) => {
             return res.status(401).json({ error: 'No token provided' });
         }
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
@@ -3298,7 +3416,7 @@ app.put('/api/departments/:id', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
@@ -3349,7 +3467,7 @@ app.delete('/api/departments/:id', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
@@ -3398,7 +3516,7 @@ app.get('/api/department-roles', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -3433,7 +3551,7 @@ app.post('/api/department-roles', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
@@ -3460,7 +3578,7 @@ app.put('/api/department-roles/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
@@ -3487,7 +3605,7 @@ app.delete('/api/department-roles/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
         
@@ -3580,7 +3698,7 @@ app.get('/api/reports', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const period = req.query.period || 'last7days';
         
@@ -3808,7 +3926,7 @@ app.get('/api/job-orders/my', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         let userBranchId = null;
         let userDeptId = null;
@@ -3914,7 +4032,7 @@ app.get('/api/job-orders/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const id = req.params.id;
         
@@ -3940,7 +4058,7 @@ app.post('/api/job-orders', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -4026,7 +4144,7 @@ app.put('/api/job-orders/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const id = req.params.id;
         const {
@@ -4084,7 +4202,7 @@ app.put('/api/job-orders/:id/receive', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { received_name, received_date, received_signature } = req.body;
         
@@ -4144,7 +4262,7 @@ app.delete('/api/job-orders/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const id = req.params.id;
         
@@ -4284,7 +4402,7 @@ app.post('/api/admin/job-orders', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -4373,7 +4491,7 @@ app.put('/api/admin/job-orders/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         
@@ -4432,7 +4550,7 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'Technician', 'Head/Manager', 'head/manager', 'supervisor', 'branch manager'];
         let isEDP = allowedRoles.includes(decoded.role);
@@ -4570,7 +4688,7 @@ app.put('/api/admin/job-orders/:id/receive', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const { received_name, received_date, received_signature, status } = req.body;
@@ -4615,7 +4733,7 @@ app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name } = req.body;
         
@@ -4644,7 +4762,7 @@ app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { approved_name, approved_signature, received_name, received_date, received_signature, status } = req.body;
         
@@ -4715,7 +4833,7 @@ app.delete('/api/admin/job-orders/:id', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         
@@ -4744,7 +4862,7 @@ app.get('/api/requisitions/my', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         console.log('📋 GET /api/requisitions/my - User:', decoded.id);
         
@@ -4824,7 +4942,7 @@ app.get('/api/admin/requisitions', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (jwtError) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -4907,7 +5025,7 @@ app.post('/api/admin/requisitions', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const {
             request_from, attn, date, remarks, time, items,
@@ -4973,7 +5091,7 @@ app.put('/api/admin/requisitions/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const {
@@ -5026,7 +5144,7 @@ app.post('/api/requisitions', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const {
             request_from, attn, date, time, remarks, items,
@@ -5092,7 +5210,7 @@ app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const { 
@@ -5130,7 +5248,7 @@ app.get('/api/requisitions/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const id = req.params.id;
         const numericId = parseInt(id);
@@ -5221,7 +5339,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         let userBranchId = null;
         let userDeptId = null;
@@ -5377,7 +5495,7 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // ✅ Get user info for recipient check
         let userBranchId = null;
@@ -5459,7 +5577,7 @@ app.delete('/api/admin/requisitions/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         
@@ -5483,7 +5601,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const id = req.params.id;
         const numericId = parseInt(id);
@@ -5637,7 +5755,7 @@ app.get('/api/admin/users', async (req, res) => {
         // ✅ Better error handling for JWT
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (jwtError) {
             console.error('JWT verification failed:', jwtError.message);
             return res.status(401).json({ error: 'Invalid token' });
@@ -5669,7 +5787,7 @@ app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { departmentId } = req.params;
         
@@ -5709,7 +5827,7 @@ app.get('/api/client/users', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const [users] = await pool.query(
             `SELECT id, fullname, username, role, branch_id, department_id 
@@ -5731,7 +5849,7 @@ app.delete('/api/requisitions/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const id = req.params.id;
         const [existing] = await pool.query(
@@ -5768,7 +5886,7 @@ app.get('/api/admin/health/db-check', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const startTime = Date.now();
         await pool.query('SELECT 1');
@@ -5793,7 +5911,7 @@ app.get('/api/admin/health/file-check', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const fs = require('fs');
         const path = require('path');
@@ -5832,7 +5950,7 @@ app.get('/api/admin/health', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -5979,7 +6097,7 @@ app.post('/api/admin/clear-cache', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -6021,7 +6139,7 @@ app.post('/api/admin/restart', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -6078,7 +6196,7 @@ app.get('/api/computers/locations', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // Direct from MySQL - no Python dependency
         const [locations] = await pool.query(
@@ -6105,7 +6223,7 @@ app.get('/api/computers', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // ✅ Check if Python is available with a quick health check
         let pythonAvailable = false;
@@ -6175,7 +6293,7 @@ app.get('/api/computers/cleaning/all-ids', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const [rows] = await pool.query(
             'SELECT DISTINCT computer_id FROM computer_cleaning_records WHERE computer_id IS NOT NULL'
@@ -6193,7 +6311,7 @@ app.get('/api/computers/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // ✅ Quick health check instead of waiting for timeout
         let pythonAvailable = false;
@@ -6258,7 +6376,7 @@ app.post('/api/computers/scan', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // Try to call Python for scan
         try {
@@ -6294,7 +6412,7 @@ app.get('/api/computers/expiring', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // ✅ Direct from MySQL (fast - no Python dependency needed for this)
         const [expiring] = await pool.query(
@@ -6339,7 +6457,7 @@ app.post('/api/computers', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { 
             computer_name, user_name, location, department, ip_address, mac_address,
@@ -6398,7 +6516,7 @@ app.put('/api/computers/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
          const { 
         computer_name, user_name, location, department, ip_address, mac_address,
@@ -6435,7 +6553,7 @@ app.delete('/api/computers/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         await pool.query('DELETE FROM computer_monitoring WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Computer deleted' });
@@ -6450,7 +6568,7 @@ app.get('/api/computers/dashboard/stats', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         // ✅ Direct from MySQL - statistics don't need Python
         const [stats] = await pool.query(`
@@ -6482,7 +6600,7 @@ app.post('/api/computers/cleaning', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { 
             computer_id, computer_name, location, ip_address, os, bit,
@@ -6556,7 +6674,7 @@ app.get('/api/computers/cleaning/all-dates', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { month, year } = req.query;
         
@@ -6598,7 +6716,7 @@ app.get('/api/computers/cleaning/all-records', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const [records] = await pool.query(
             'SELECT id, computer_id, computer_name, cleaning_date FROM computer_cleaning_records ORDER BY cleaning_date DESC'
@@ -6616,7 +6734,7 @@ app.get('/api/computers/cleaning/all-ids', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const [records] = await pool.query(
             'SELECT DISTINCT computer_id FROM computer_cleaning_records'
@@ -6636,7 +6754,7 @@ app.get('/api/computers/cleaning/:computerId', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { computerId } = req.params;
         const { month, year } = req.query;
@@ -6669,7 +6787,7 @@ app.delete('/api/computers/cleaning/:recordId', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { recordId } = req.params;
         const [result] = await pool.query('DELETE FROM computer_cleaning_records WHERE id = ?', [recordId]);
@@ -6736,7 +6854,7 @@ app.post('/api/knowledge-base', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
@@ -6763,7 +6881,7 @@ app.put('/api/knowledge-base/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
@@ -6790,7 +6908,7 @@ app.delete('/api/knowledge-base/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         await pool.query('DELETE FROM knowledge_base WHERE id = ?', [req.params.id]);
         
@@ -6899,7 +7017,7 @@ app.get('/api/admin/settings', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager',];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -6934,7 +7052,7 @@ app.post('/api/admin/settings', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -6982,7 +7100,7 @@ app.post('/api/admin/upload-logo', uploadLogo.single('logo'), async (req, res) =
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7021,7 +7139,7 @@ app.delete('/api/admin/remove-logo', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager',];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7093,7 +7211,7 @@ app.get('/api/admin/branches', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7115,7 +7233,7 @@ app.get('/api/admin/branches/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'Technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7142,7 +7260,7 @@ app.post('/api/admin/branches', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
        const allowedRoles = ['admin', 'head/manager', 'head manager',  'branch manager', ];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7187,7 +7305,7 @@ app.put('/api/admin/branches/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7244,7 +7362,7 @@ app.delete('/api/admin/branches/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7395,7 +7513,7 @@ app.get('/api/admin/database/info', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7434,7 +7552,7 @@ app.post('/api/auth/verify-password', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { password } = req.body;
         const username = decoded.username;
@@ -7468,7 +7586,7 @@ app.post('/api/admin/database/optimize/:table', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7487,7 +7605,7 @@ app.post('/api/admin/database/repair/:table', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7506,7 +7624,7 @@ app.post('/api/admin/database/truncate/:table', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7525,7 +7643,7 @@ app.post('/api/admin/database/optimize-all', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7561,7 +7679,7 @@ function verifyToken(req, res) {
   if (!authHeader) { res.status(401).json({ error: 'No token provided' }); return null; }
   try {
     const token = authHeader.split(' ')[1];
-    return jwt.verify(token, 'secret_key');
+    return jwt.verify(token, 'JWT_SECRET');
   } catch {
     res.status(401).json({ error: 'Invalid token' });
     return null;
@@ -7918,16 +8036,12 @@ app.post('/api/locations', async (req, res) => {
 // ============================================
 // UPDATED CHAT MESSAGES API
 // ============================================
-
 // GET - Messages between two users (using usernames)
 app.get('/api/messages/:username', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const currentUsername = decoded.username;
+        const currentUsername = req.decodedUser.username;
         const otherUsername = req.params.username;
         
         const [messages] = await pool.query(
@@ -7940,324 +8054,185 @@ app.get('/api/messages/:username', async (req, res) => {
         
         res.json(messages);
     } catch (error) {
-        console.error('Error fetching messages:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error fetching messages:', error.message);
+        res.json([]);
     }
 });
 
 // POST - Send a message (with file upload and reply support)
 app.post('/api/messages', uploadChat.single('file'), async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const { to_username, message, reply_to_id, reply_to_message, reply_to_username } = req.body;
-        const from_username = decoded.username;
+        const from_username = req.decodedUser.username;
         
-        if (!to_username) {
-            return res.status(400).json({ error: 'Missing to_username' });
-        }
+        if (!to_username) return res.status(400).json({ error: 'Missing to_username' });
+        if (!message && !req.file) return res.status(400).json({ error: 'Message or file is required' });
         
-        if (!message && !req.file) {
-            return res.status(400).json({ error: 'Message or file is required' });
-        }
-        
-        // Find the target user
-        let to_user_id = null;
-        let to_user_table = 'users';
-        
+        // Find target user
+        let to_user_id = null, to_user_table = 'users';
         const [userRows] = await pool.query('SELECT id FROM users WHERE username = ?', [to_username]);
-        if (userRows.length > 0) {
-            to_user_id = userRows[0].id;
-            to_user_table = 'users';
-        } else {
+        if (userRows.length > 0) { to_user_id = userRows[0].id; to_user_table = 'users'; }
+        else {
             const [clientRows] = await pool.query('SELECT id FROM new_user WHERE username = ?', [to_username]);
-            if (clientRows.length > 0) {
-                to_user_id = clientRows[0].id;
-                to_user_table = 'new_user';
-            }
+            if (clientRows.length > 0) { to_user_id = clientRows[0].id; to_user_table = 'new_user'; }
         }
+        if (!to_user_id) return res.status(404).json({ error: 'User not found' });
         
-        if (!to_user_id) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        
-        // Get from_user_id
-        let from_user_id = null;
-        let from_user_table = 'users';
+        // Find from user
+        let from_user_id = null, from_user_table = 'users';
         const [fromUserRows] = await pool.query('SELECT id FROM users WHERE username = ?', [from_username]);
-        if (fromUserRows.length > 0) {
-            from_user_id = fromUserRows[0].id;
-            from_user_table = 'users';
-        } else {
+        if (fromUserRows.length > 0) { from_user_id = fromUserRows[0].id; from_user_table = 'users'; }
+        else {
             const [fromClientRows] = await pool.query('SELECT id FROM new_user WHERE username = ?', [from_username]);
-            if (fromClientRows.length > 0) {
-                from_user_id = fromClientRows[0].id;
-                from_user_table = 'new_user';
-            }
+            if (fromClientRows.length > 0) { from_user_id = fromClientRows[0].id; from_user_table = 'new_user'; }
         }
         
-        // File info
-        let file_url = null;
-        let file_name = null;
-        let file_type = null;
-        
-        if (req.file) {
-            file_url = '/uploads/chat/' + req.file.filename;
-            file_name = req.file.originalname;
-            file_type = req.file.mimetype;
-        }
+        let file_url = null, file_name = null, file_type = null;
+        if (req.file) { file_url = '/uploads/chat/' + req.file.filename; file_name = req.file.originalname; file_type = req.file.mimetype; }
         
         const [result] = await pool.query(
-            `INSERT INTO chat_messages (
-                from_user_id, to_user_id, from_username, to_username, 
-                from_user_table, to_user_table, message, 
-                file_url, file_name, file_type,
-                reply_to_id, reply_to_message, reply_to_username,
-                timestamp, is_read
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)`,
-            [
-                from_user_id, to_user_id, from_username, to_username,
-                from_user_table, to_user_table, message || '',
-                file_url, file_name, file_type,
-                reply_to_id || null, reply_to_message || null, reply_to_username || null
-            ]
+            `INSERT INTO chat_messages (from_user_id, to_user_id, from_username, to_username, from_user_table, to_user_table, message, file_url, file_name, file_type, reply_to_id, reply_to_message, reply_to_username, timestamp, is_read)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 0)`,
+            [from_user_id, to_user_id, from_username, to_username, from_user_table, to_user_table, message || '', file_url, file_name, file_type, reply_to_id || null, reply_to_message || null, reply_to_username || null]
         );
         
-        console.log('Message sent successfully, ID:', result.insertId);
-        if (req.file) {
-            console.log('File uploaded:', req.file.filename);
-        }
-
-        // ── 🔔 CREATE NOTIFICATION FOR THE RECIPIENT ──────────────────
+        // Create notification for recipient
         try {
-            const notifMessage = message 
-                ? `New message from ${from_username}: "${message.substring(0, 100)}${message.length > 100 ? '...' : ''}"`
-                : `New file from ${from_username}: 📎 ${req.file.originalname}`;
-            
-            await pool.query(
-                `INSERT INTO notifications (user_id, user_table, username, title, message, type, link, is_read, created_at)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
-                [
-                    to_user_id,
-                    to_user_table,
-                    to_username,
-                    '💬 New Message',
-                    notifMessage,
-                    'message',
-                    '/chat',
-                ]
-            );
-            console.log('✅ Notification created for recipient:', to_username);
-        } catch (notifError) {
-            console.error('Failed to create notification:', notifError);
-        }
-        // ──────────────────────────────────────────────────────────────
+            const notifMessage = message ? `New message from ${from_username}: "${message.substring(0, 100)}${message.length > 100 ? '...' : ''}"` : `New file from ${from_username}: 📎 ${req.file.originalname}`;
+            await pool.query(`INSERT INTO notifications (user_id, user_table, username, title, message, type, link, is_read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+                [to_user_id, to_user_table, to_username, '💬 New Message', notifMessage, 'message', '/chat']);
+        } catch (e) {}
         
         res.json({ success: true, id: result.insertId, file_url });
     } catch (error) {
-        console.error('Error sending message:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error sending message:', error.message);
+        res.json({ success: false });
     }
 });
-
 // DELETE - Delete a specific message
 app.delete('/api/messages/:messageId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const messageId = req.params.messageId;
+        const [message] = await pool.query('SELECT * FROM chat_messages WHERE id = ? AND from_username = ?', [req.params.messageId, req.decodedUser.username]);
+        if (message.length === 0) return res.status(403).json({ error: 'You can only delete your own messages' });
         
-        // Only allow deletion of own messages
-        const [message] = await pool.query(
-            'SELECT * FROM chat_messages WHERE id = ? AND from_username = ?',
-            [messageId, decoded.username]
-        );
-        
-        if (message.length === 0) {
-            return res.status(403).json({ error: 'You can only delete your own messages' });
-        }
-        
-        // Delete the file if exists
         if (message[0].file_url) {
             const filePath = path.join(__dirname, message[0].file_url);
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-                console.log('Deleted file:', filePath);
-            }
+            if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
         }
         
-        await pool.query('DELETE FROM chat_messages WHERE id = ?', [messageId]);
-        
+        await pool.query('DELETE FROM chat_messages WHERE id = ?', [req.params.messageId]);
         res.json({ success: true });
     } catch (error) {
-        console.error('Error deleting message:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error deleting message:', error.message);
+        res.json({ success: false });
     }
 });
+
 
 // DELETE - Delete entire conversation
 app.delete('/api/conversation/:username', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const currentUsername = decoded.username;
+        const currentUsername = req.decodedUser.username;
         const otherUsername = req.params.username;
         
-        // Get all messages with files to delete
         const [messages] = await pool.query(
-            `SELECT * FROM chat_messages 
-             WHERE (from_username = ? AND to_username = ?) 
-                OR (from_username = ? AND to_username = ?)
-                AND file_url IS NOT NULL`,
-            [currentUsername, otherUsername, otherUsername, currentUsername]
-        );
+            `SELECT * FROM chat_messages WHERE ((from_username = ? AND to_username = ?) OR (from_username = ? AND to_username = ?)) AND file_url IS NOT NULL`,
+            [currentUsername, otherUsername, otherUsername, currentUsername]);
         
-        // Delete associated files
         messages.forEach(msg => {
             if (msg.file_url) {
                 const filePath = path.join(__dirname, msg.file_url);
-                if (fs.existsSync(filePath)) {
-                    fs.unlinkSync(filePath);
-                    console.log('Deleted file:', filePath);
-                }
+                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
             }
         });
         
-        // Delete all messages in the conversation
-        await pool.query(
-            `DELETE FROM chat_messages 
-             WHERE (from_username = ? AND to_username = ?) 
-                OR (from_username = ? AND to_username = ?)`,
-            [currentUsername, otherUsername, otherUsername, currentUsername]
-        );
+        await pool.query(`DELETE FROM chat_messages WHERE (from_username = ? AND to_username = ?) OR (from_username = ? AND to_username = ?)`,
+            [currentUsername, otherUsername, otherUsername, currentUsername]);
         
-        console.log(`Conversation between ${currentUsername} and ${otherUsername} deleted`);
         res.json({ success: true });
     } catch (error) {
-        console.error('Error deleting conversation:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error deleting conversation:', error.message);
+        res.json({ success: false });
     }
 });
 // GET - Unread messages count
 app.get('/api/messages/unread/:username', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const [count] = await pool.query(
-            `SELECT from_username, COUNT(*) as count FROM chat_messages 
-             WHERE to_username = ? AND is_read = 0 
-             GROUP BY from_username`,
-            [req.params.username]
-        );
+            `SELECT from_username, COUNT(*) as count FROM chat_messages WHERE to_username = ? AND is_read = 0 GROUP BY from_username`,
+            [req.params.username]);
         res.json(count);
     } catch (error) {
-        console.error('Error loading unread counts:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error loading unread counts:', error.message);
+        res.json([]);
     }
 });
+
 
 // GET - Last message for each conversation
 app.get('/api/messages/last/:username', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const [messages] = await pool.query(
-            `SELECT DISTINCT 
-                CASE WHEN from_username = ? THEN to_username ELSE from_username END as username,
-                message, timestamp
-             FROM chat_messages 
-             WHERE from_username = ? OR to_username = ?
-             ORDER BY timestamp DESC`,
-            [req.params.username, req.params.username, req.params.username]
-        );
+            `SELECT DISTINCT CASE WHEN from_username = ? THEN to_username ELSE from_username END as username, message, timestamp
+             FROM chat_messages WHERE from_username = ? OR to_username = ? ORDER BY timestamp DESC`,
+            [req.params.username, req.params.username, req.params.username]);
         
-        // Process to get unique conversations (latest message only)
         const uniqueMessages = [];
         const seenKeys = new Set();
-        
         for (const msg of messages) {
-            if (!seenKeys.has(msg.username)) {
-                seenKeys.add(msg.username);
-                uniqueMessages.push(msg);
-            }
+            if (!seenKeys.has(msg.username)) { seenKeys.add(msg.username); uniqueMessages.push(msg); }
         }
-        
         res.json(uniqueMessages);
     } catch (error) {
-        console.error('Error loading last messages:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error loading last messages:', error.message);
+        res.json([]);
     }
 });
 // PUT - Mark messages as read
 app.put('/api/messages/read/:fromUsername', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        await pool.query(
-            `UPDATE chat_messages SET is_read = 1 
-             WHERE from_username = ? AND to_username = ? AND is_read = 0`,
-            [req.params.fromUsername, decoded.username]
-        );
-        
+        await pool.query(`UPDATE chat_messages SET is_read = 1 WHERE from_username = ? AND to_username = ? AND is_read = 0`,
+            [req.params.fromUsername, req.decodedUser.username]);
         res.json({ success: true });
     } catch (error) {
-        console.error('Error marking messages as read:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error marking messages as read:', error.message);
+        res.json({ success: false });
     }
 });
+
 app.get('/api/notifications', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const [notifications] = await pool.query(
-            'SELECT * FROM notifications WHERE username = ? ORDER BY created_at DESC LIMIT 50',
-            [decoded.username]
-        );
+        const [notifications] = await pool.query('SELECT * FROM notifications WHERE username = ? ORDER BY created_at DESC LIMIT 50', [req.decodedUser.username]);
         res.json(notifications);
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.json([]);
     }
 });
 
 // DELETE - Delete notification
 app.delete('/api/notifications/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const id = req.params.id.replace('srv_', ''); // Remove prefix if present
-        
-        await pool.query(
-            'DELETE FROM notifications WHERE id = ? AND username = ?',
-            [id, decoded.username]
-        );
-        
+        const id = req.params.id.replace('srv_', '');
+        await pool.query('DELETE FROM notifications WHERE id = ? AND username = ?', [id, req.decodedUser.username]);
         res.json({ success: true });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.json({ success: false });
     }
 });
 // ============ CLIENT NOTIFICATION ROUTES ============
@@ -8347,7 +8322,7 @@ app.post('/api/client-notifications', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { user_id, type, title, message, ticket_id, ticket_number } = req.body;
         
@@ -8384,7 +8359,7 @@ app.put('/api/client-notifications/:id/read', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const [result] = await pool.query(
             'UPDATE client_notifications SET is_read = 1 WHERE id = ?',
@@ -8408,7 +8383,7 @@ app.delete('/api/client-notifications/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const id = req.params.id.replace('srv_', ''); // Remove prefix if present
         
@@ -8465,26 +8440,27 @@ app.post('/api/client-notifications/branch', async (req, res) => {
 // GET - New users endpoint (for client users) - SINGLE VERSION
 app.get('/api/new-users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : authHeader;
-        
-        try {
-            jwt.verify(token, 'secret_key');
-        } catch (jwtError) {
+        // ✅ Use pre-decoded user from middleware
+        if (!req.decodedUser) {
             return res.status(401).json({ error: 'Invalid token' });
         }
         
+        console.log('📋 Fetching new users (clients) for:', req.decodedUser.username);
+        
         const [users] = await pool.query(
-            'SELECT id, username, fullname, email, role, department, avatar_color, photo_url, created_at FROM new_user ORDER BY fullname'
+            `SELECT id, username, fullname, email, role, department, 
+                    branch_id, department_id, avatar_color, photo_url,
+                    is_verified, created_at
+             FROM new_user 
+             WHERE is_verified = 1
+             ORDER BY fullname ASC`
         );
         
-        console.log('📋 /api/new-users - Returning', users.length, 'users');
+        console.log('✅ Client users found:', users.length);
         res.json(users);
     } catch (error) {
-        console.error('Error loading new users:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Error loading new users:', error.message);
+        res.json([]);  // Return empty array instead of error
     }
 });
 
@@ -8512,7 +8488,7 @@ app.use((req, res, next) => {
         try {
             const token = authHeader.split(' ')[1];
             if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
-                const decoded = jwt.verify(token, 'secret_key');
+                const decoded = jwt.verify(token, JWT_SECRET);
                 req.userInfo = {
                     userId: decoded.id,
                     userName: decoded.username,
@@ -8546,7 +8522,7 @@ app.get('/api/admin/logs', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -8629,7 +8605,7 @@ app.delete('/api/admin/logs', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -8664,7 +8640,7 @@ app.get('/api/admin/logs/stats', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -8723,7 +8699,7 @@ app.get('/api/department-stats', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -8960,7 +8936,7 @@ app.get('/api/system-status', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -9069,7 +9045,7 @@ app.post('/api/feedback', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -9120,7 +9096,7 @@ app.get('/api/reports/:type', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         const userId = decoded.id;
         const reportType = req.params.type;
         const scope = req.query.scope || 'department';
@@ -9458,7 +9434,7 @@ app.get('/api/stats', async (req, res) => {
         const token = authHeader.split(' ')[1];
         let decoded;
         try {
-            decoded = jwt.verify(token, 'secret_key');
+            decoded = jwt.verify(token, 'JWT_SECRET');
         } catch (err) {
             return res.status(401).json({ error: 'Invalid or expired token' });
         }
@@ -9592,7 +9568,7 @@ app.get('/api/admin/database/export', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         console.log('💾 Starting database export...');
         
@@ -9730,7 +9706,7 @@ app.get('/api/admin/database/export/:table', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const tableName = req.params.table;
         console.log(`💾 Exporting table: ${tableName}`);
@@ -9785,7 +9761,7 @@ app.post('/api/admin/database/import', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         // Only admin can restore
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -9853,7 +9829,7 @@ app.post('/api/ticket-notifications', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { type, title, message, ticket_id, ticket_number, user_id, user_table } = req.body;
         
@@ -9869,16 +9845,13 @@ app.post('/api/ticket-notifications', async (req, res) => {
     }
 });
 
-// ❌ REMOVE THIS - It's a duplicate and doesn't filter cleared notifications
-// app.get('/api/ticket-notifications', async (req, res) => { ... });
-
 // DELETE - Delete a ticket notification
 app.delete('/api/ticket-notifications/:id', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         await pool.query('DELETE FROM ticket_notifications WHERE id = ?', [id]);
@@ -9887,9 +9860,6 @@ app.delete('/api/ticket-notifications/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-// ❌ REMOVE THIS - Duplicate route, same path as below
-// app.put('/api/ticket-notifications/:id/read', async (req, res) => { ... });
 
 // ============================================
 // track which users have read/cleared each notification
@@ -9901,7 +9871,7 @@ app.put('/api/ticket-notifications/:id/read', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const { id } = req.params;
         const { cleared } = req.body;
@@ -9924,7 +9894,7 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        const decoded = jwt.verify(token, JWT_SECRET);
         
         const currentUserId = decoded.id;
         const currentUserTable = decoded.userTable || 'users';
@@ -9956,14 +9926,21 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
 // ✅ KEEP THIS ONE - The proper GET with cleared notification filtering
 app.get('/api/ticket-notifications', async (req, res) => {
     try {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, 'secret_key');
+        
+        // ✅ Try new secret first, fallback to old secret
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            // Fallback: try old secret for existing browser sessions
+            decoded = jwt.verify(token, 'secret_key');
+        }
         
         const currentUserId = decoded.id;
         const currentUserTable = decoded.userTable || 'users';
@@ -9987,8 +9964,9 @@ app.get('/api/ticket-notifications', async (req, res) => {
         
         res.json(notifications);
     } catch (error) {
-        console.error('Get ticket notifications error:', error);
-        res.status(500).json({ error: error.message });
+        console.error('Get ticket notifications error:', error.message);
+        // Don't send 500 - just return empty array to stop the spam
+        res.json([]);
     }
 });
 // ============================================
@@ -10014,7 +9992,7 @@ app.post('/api/announcements', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { title, message, priority, expires_at, created_by, created_by_name } = req.body;
         
@@ -10039,7 +10017,7 @@ app.put('/api/announcements/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const { title, message, priority, expires_at } = req.body;
@@ -10066,7 +10044,7 @@ app.delete('/api/announcements/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         await pool.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
         
@@ -10164,7 +10142,7 @@ app.put('/api/admin/profile/new_user/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const { username, fullname, email, department, role, avatar_color } = req.body;
@@ -10207,7 +10185,7 @@ app.get('/api/admin/profile/new_user/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         
@@ -10234,7 +10212,7 @@ app.put('/api/admin/profile/users/:id', async (req, res) => {
         const authHeader = req.headers['authorization'];
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'secret_key');
+        jwt.verify(token, 'JWT_SECRET');
         
         const { id } = req.params;
         const { username, fullname, email, department, role, avatar_color } = req.body;
@@ -10270,6 +10248,7 @@ app.put('/api/admin/profile/users/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
 // Start server
 async function startServer() {
     await testConnection();

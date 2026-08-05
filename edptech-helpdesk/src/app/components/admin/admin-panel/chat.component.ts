@@ -121,7 +121,9 @@ interface ChatMessage {
       {{ selectedUser.fullname }}
       <span class="user-department" *ngIf="selectedUser.department">({{ selectedUser.department }})</span>
     </div>
-    <div class="chat-user-status">{{ getUserStatusText(selectedUser) }}</div>
+    <div class="chat-user-status" [class.online]="isUserOnline(selectedUser)" [class.offline]="!isUserOnline(selectedUser)">
+  {{ getUserStatusText(selectedUser) }}
+</div>
   </div>
   <div class="chat-header-actions">
     <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
@@ -327,16 +329,6 @@ interface ChatMessage {
     }
     .user-item:hover { background: #f8f9fa; }
     .user-item.active { background: #e8f0ff; }
-   .user-avatar {
-  width: 48px; height: 48px;
-  border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  color: white; font-weight: bold; font-size: 18px;
-  margin-right: 12px;
-  position: relative; flex-shrink: 0;
-  overflow: visible !important; /* ✅ Important */
-}
-    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
     .status-dot {
       position: absolute; bottom: 2px; right: 2px;
       width: 12px; height: 12px;
@@ -562,7 +554,8 @@ interface ChatMessage {
   animation: popupFadeIn 0.15s ease;
   transform: translate(60px, -20px);
 }
-
+.chat-user-status.online { color: #008800; }
+.chat-user-status.offline { color: #888; }
 .popup-name {
   font-weight: 700;
   font-size: 13px;
@@ -657,7 +650,8 @@ apiUrl = environment.apiUrl;
   // Image preview
   showImagePreview = false;
   previewImageUrl = '';
-
+ private onlineUsernames: Set<string> = new Set();
+  private statusPolling: any;
   // Confirmation dialog
   showConfirmDialog = false;
   confirmMessage = '';
@@ -671,6 +665,10 @@ apiUrl = environment.apiUrl;
     this.currentUserRole = currentUser.role;
     this.loadAllUsers();
     
+    // ✅ Start polling online status
+    this.loadOnlineStatus();
+    this.statusPolling = setInterval(() => this.loadOnlineStatus(), 10000); // Every 10 seconds
+    
     this.messagePolling = setInterval(() => {
       if (this.selectedUser) this.loadMessages();
       this.loadUnreadCounts();
@@ -678,8 +676,41 @@ apiUrl = environment.apiUrl;
     }, 3000);
   }
 
-  ngOnDestroy() {
+
+   ngOnDestroy() {
     if (this.messagePolling) clearInterval(this.messagePolling);
+    if (this.statusPolling) clearInterval(this.statusPolling); // ✅ Clean up
+  }
+    loadOnlineStatus() {
+    this.http.get<any>(`${environment.apiUrl}/api/users/online-status`, { headers: this.getHeaders() })
+      .subscribe({
+        next: (data) => {
+          this.onlineUsernames = new Set(data.online || []);
+          this.updateUserStatuses();
+        },
+        error: () => {
+          // Silently fail - keep existing statuses
+        }
+      });
+  }
+  updateUserStatuses() {
+    const updateUser = (user: ChatUser) => {
+      // Current user is always "online" to themselves
+      if (user.username === this.currentUsername) {
+        user.status = 'online';
+        return;
+      }
+      
+      // Check if user is in the online set
+      user.status = this.onlineUsernames.has(user.username) ? 'online' : 'offline';
+    };
+    
+    this.users.forEach(updateUser);
+    this.staffUsers.forEach(updateUser);
+    this.clientUsers.forEach(updateUser);
+    
+    // Refresh filtered list
+    this.filterUsers();
   }
 
   getHeaders() {
@@ -700,10 +731,13 @@ apiUrl = environment.apiUrl;
     return role === 'Technician' ? '🔧' : role === 'admin' ? '👨‍💼' : '👤'; 
   }
   
-  isUserOnline(user: ChatUser): boolean { return user.status === 'online'; }
-  
-  getUserStatusText(user: ChatUser): string { 
-    return user.status === 'online' ? 'Online' : user.status === 'lunch' ? 'Lunch Break' : user.status === 'onLeave' ? 'On Leave' : 'Offline'; 
+    isUserOnline(user: ChatUser): boolean {
+    return user.status === 'online';
+  }
+
+  getUserStatusText(user: ChatUser): string {
+    if (user.username === this.currentUsername) return 'Online (You)';
+    return user.status === 'online' ? '🟢 Online' : '⚫ Offline';
   }
 
   formatFileSize(bytes: number): string {
@@ -722,9 +756,53 @@ apiUrl = environment.apiUrl;
     this.messages = [];
     this.replyingTo = null;
     this.selectedFile = null;
-    this.users = tab === 'staff' ? [...this.staffUsers] : [...this.clientUsers];
+    
+    if (tab === 'staff') {
+        this.users = [...this.staffUsers];
+    } else {
+        this.users = [...this.clientUsers];
+        // ✅ If client users are empty, reload them
+        if (this.clientUsers.length === 0) {
+            this.loadClientUsers();
+        }
+    }
     this.filterUsers();
-  }
+    this.updateUserStatuses(); 
+}
+
+// ✅ Add this method to reload only client users
+loadClientUsers() {
+    this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers: this.getHeaders() }).subscribe({
+        next: (clientData) => {
+            console.log('📥 Client users loaded:', clientData?.length);
+            this.clientUsers = (clientData || []).map(user => ({
+                username: user.username,
+                fullname: user.fullname,
+                email: user.email,
+                role: user.role || 'user',
+                department: user.department,
+                branch: user.branch || user.branch_name || user.branchName || '',
+                company: user.company || user.company_name || user.companyName || '',
+                avatar_color: user.avatar_color || '#3b82f6',
+                photo_url: user.photo_url,
+                status: 'offline',  // ✅ Start as offline, will be updated
+                unreadCount: 0,
+                lastMessage: '',
+                lastMessageTime: undefined,
+                userType: 'client' as const
+            }));
+            
+            this.users = [...this.clientUsers];
+            this.filterUsers();
+            this.loadUnreadCounts();
+            this.loadLastMessages();
+            this.updateUserStatuses();  // ✅ Update online/offline status
+        },
+        error: (err) => {
+            console.error('Error loading client users:', err);
+        }
+    });
+}
 get staffUnreadCount(): number {
   return this.staffUsers.reduce((total, user) => total + (user.unreadCount || 0), 0);
 }
@@ -749,7 +827,7 @@ get clientUnreadCount(): number {
           company: user.company || user.company_name || user.companyName || '',
           avatar_color: user.avatar_color,
           photo_url: user.photo_url,
-          status: 'online',
+          status: 'offline',
           unreadCount: 0,
           lastMessage: '',
           lastMessageTime: undefined,
@@ -758,6 +836,8 @@ get clientUnreadCount(): number {
       
       this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers: this.getHeaders() }).subscribe({
         next: (clientData) => {
+          console.log('📥 Client users loaded:', clientData?.length);  // ✅ Add this
+        console.log('📥 Client data sample:', clientData?.[0]);
           this.clientUsers = (clientData || []).map(user => ({
             username: user.username,
             fullname: user.fullname,
@@ -768,7 +848,7 @@ get clientUnreadCount(): number {
             company: user.company || user.company_name || user.companyName || '',
             avatar_color: user.avatar_color || '#3b82f6',
             photo_url: user.photo_url,
-            status: 'online',
+            status: 'offline',
             unreadCount: 0,
             lastMessage: '',
             lastMessageTime: undefined,
@@ -779,6 +859,7 @@ get clientUnreadCount(): number {
           this.filterUsers();
           this.loadUnreadCounts();
           this.loadLastMessages();
+          this.updateUserStatuses();
         },
         error: () => {
           this.clientUsers = [];
@@ -1030,11 +1111,21 @@ selectUser(user: ChatUser) {
           user.lastMessageTime = new Date(); 
         }
         this.filterUsers();
-        
+         this.onlineUsernames.add(this.currentUsername);
+    this.updateUserStatuses();
       },
       error: (err) => console.error('Error sending message:', err)
     });
   }
+  // ✅ Send heartbeat periodically
+  private sendHeartbeat() {
+    this.http.post(`${environment.apiUrl}/api/users/heartbeat`, {}, { headers: this.getHeaders() })
+      .subscribe({
+        next: () => {},
+        error: () => {} // Silent
+      });
+  }
+  
   markMessagesAsRead(fromUsername: string) {
     this.http.put(`${environment.apiUrl}/api/messages/read/${fromUsername}`, {}, { headers: this.getHeaders() }).subscribe({ 
       error: (err) => console.error('Error marking messages as read:', err) 
