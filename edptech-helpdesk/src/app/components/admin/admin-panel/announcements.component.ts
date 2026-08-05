@@ -47,9 +47,9 @@ interface Announcement {
         </div>
       </div>
 
-      <div class="toolbar" *ngIf="isAdmin">
-        <button class="create-btn" (click)="openCreateModal()">✍️ Create Announcement</button>
-      </div>
+      <div class="toolbar" *ngIf="canCreate">
+  <button class="create-btn" (click)="openCreateModal()">✍️ Create Announcement</button>
+</div>
 
       <div class="announcements-list">
         <div class="announcement-card" *ngFor="let ann of announcements" [class.unread]="!ann.isRead">
@@ -60,10 +60,10 @@ interface Announcement {
             <span class="ann-date">{{ ann.date | date:'MMM d, yyyy h:mm a' }}</span>
             <span class="ann-author" *ngIf="ann.created_by_name">by {{ ann.created_by_name }}</span>
             <span class="read-status" *ngIf="!ann.isRead">● New</span>
-            <div class="admin-actions" *ngIf="isAdmin">
-              <button class="icon-btn edit" (click)="openEditModal(ann)" title="Edit">✏️</button>
-              <button class="icon-btn delete" (click)="openDeleteModal(ann)" title="Delete">🗑️</button>
-            </div>
+            <div class="admin-actions" *ngIf="canEdit(ann) || canDelete(ann)">
+  <button class="icon-btn edit" *ngIf="canEdit(ann)" (click)="openEditModal(ann)" title="Edit">✏️</button>
+  <button class="icon-btn delete" *ngIf="canDelete(ann)" (click)="openDeleteModal(ann)" title="Delete">🗑️</button>
+</div>
           </div>
           <h3 class="ann-title">{{ ann.title }}</h3>
           <p class="ann-content">{{ ann.content }}</p>
@@ -218,7 +218,11 @@ export class AnnouncementsComponent implements OnInit, OnDestroy {
   formData = { title: '', content: '', tag: 'INFO', expires_at: '' };
   editingId: number | null = null;
   deleteTarget: Announcement | null = null;
-  isAdmin = false;
+   canCreate = false;       // Admin, Head/Manager, Supervisor
+  canEditAll = false;      // Head/Manager only
+  canDeleteAll = false;    // Head/Manager only
+  currentUserRole = '';    // Store current user's role
+  currentUserId: number | null = null; 
   showFormModal = false;
   showDeleteModal = false;
   isLive = false;
@@ -240,7 +244,7 @@ constructor(
 ) {}
 
   ngOnInit() {
-    this.checkIfAdmin();
+    this.checkUserPermissions();
     this.loadAnnouncements();
     this.startPolling(); // ✅ Start auto-refresh
     document.addEventListener('mousemove', this.onDragMove.bind(this));
@@ -268,6 +272,132 @@ constructor(
       clearInterval(this.pollingInterval);
       this.pollingInterval = null;
     }
+  }
+  checkUserPermissions() {
+    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const role = (currentUser.role || '').toLowerCase().trim();
+    const userTable = currentUser?.user_table || '';
+    this.currentUserRole = role;
+    this.currentUserId = currentUser?.id || null;
+    
+    console.log('🔍 Checking permissions for:', { role, userTable, userId: this.currentUserId });
+    
+    // Must be from 'users' table (admin side)
+    if (userTable !== 'users') {
+      this.canCreate = false;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+      return;
+    }
+    
+    // Admin can do everything
+    if (role === 'admin') {
+      this.canCreate = true;
+      this.canEditAll = true;
+      this.canDeleteAll = true;
+      console.log('✅ Admin - full access');
+      return;
+    }
+    
+    // Head/Manager can create, edit all, delete all
+    if (role === 'head/manager' || role === 'head manager') {
+      this.canCreate = true;
+      this.canEditAll = true;
+      this.canDeleteAll = true;
+      console.log('✅ Head/Manager - full access');
+      return;
+    }
+    
+    // Supervisor can create, but only edit/delete their own
+    if (role === 'supervisor') {
+      this.canCreate = true;
+      this.canEditAll = false;   // Cannot edit all
+      this.canDeleteAll = false; // Cannot delete all
+      console.log('✅ Supervisor - can create, edit/delete own only');
+      return;
+    }
+    
+    // Check department_roles for management roles
+    const departmentId = currentUser?.department_id;
+    if (departmentId) {
+      this.verifyDepartmentRole(departmentId, currentUser);
+    } else {
+      this.canCreate = false;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+    }
+  }
+   // ✅ NEW: Verify role from department_roles table
+  verifyDepartmentRole(departmentId: number, user: any) {
+    const headers = this.getHeaders();
+    this.http.get<any[]>(`${this.apiUrl}/api/department-roles?department_id=${departmentId}`, { headers })
+      .subscribe({
+        next: (roles) => {
+          const roleEntries = (roles || []).filter((r: any) => 
+            Number(r.user_id) === Number(user.id)
+          );
+          
+          const hasHeadManager = roleEntries.some((r: any) => {
+            const roleName = (r.role_name || '').toLowerCase().trim();
+            return roleName === 'head/manager' || roleName === 'head manager';
+          });
+          
+          const hasSupervisor = roleEntries.some((r: any) => {
+            const roleName = (r.role_name || '').toLowerCase().trim();
+            return roleName === 'supervisor';
+          });
+          
+          if (hasHeadManager) {
+            this.canCreate = true;
+            this.canEditAll = true;
+            this.canDeleteAll = true;
+            this.currentUserRole = 'head/manager';
+            console.log('✅ Head/Manager (dept_roles) - full access');
+          } else if (hasSupervisor) {
+            this.canCreate = true;
+            this.canEditAll = false;
+            this.canDeleteAll = false;
+            this.currentUserRole = 'supervisor';
+            console.log('✅ Supervisor (dept_roles) - can create, edit/delete own');
+          } else {
+            this.canCreate = false;
+            this.canEditAll = false;
+            this.canDeleteAll = false;
+            console.log('❌ Read-only access');
+          }
+        },
+        error: () => {
+          this.canCreate = false;
+          this.canEditAll = false;
+          this.canDeleteAll = false;
+        }
+      });
+  }
+
+  // ✅ NEW: Check if current user can edit a specific announcement
+  canEdit(announcement: Announcement): boolean {
+    if (this.canEditAll) return true;  // Head/Manager or Admin
+    
+    // Supervisor can only edit their own
+    if (this.canCreate && this.currentUserRole === 'supervisor') {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      return announcement.created_by_name === currentUser?.fullname;
+    }
+    
+    return false;
+  }
+
+  // ✅ NEW: Check if current user can delete a specific announcement
+  canDelete(announcement: Announcement): boolean {
+    if (this.canDeleteAll) return true;  // Head/Manager or Admin
+    
+    // Supervisor can only delete their own
+    if (this.canCreate && this.currentUserRole === 'supervisor') {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+      return announcement.created_by_name === currentUser?.fullname;
+    }
+    
+    return false;
   }
 
   // ✅ Check for new announcements without resetting read status
@@ -311,11 +441,6 @@ constructor(
         console.warn('Polling check failed:', err.status);
       }
     });
-  }
-
-  checkIfAdmin() {
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    this.isAdmin = currentUser?.user_table === 'users';
   }
 
   getHeaders() {

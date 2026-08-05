@@ -19,10 +19,10 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
           <span class="header-sub">Manage articles and documentation</span>
         </div>
         <div class="header-actions">
-          <button class="retro-btn primary" (click)="createArticle()" *ngIf="canEdit()">
-            📝 Create Article
-          </button>
-        </div>
+  <button class="retro-btn primary" (click)="createArticle()" *ngIf="canCreate">
+    📝 Create Article
+  </button>
+</div>
       </div>
 
       <div class="articles-list">
@@ -40,15 +40,15 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
               <span>📅 {{ article.created_at | date:'MMM d, yyyy' }}</span>
             </div>
           </div>
-          <div class="article-actions" *ngIf="canEdit()">
-            <button class="retro-btn" (click)="editArticle(article)">✏️ Edit</button>
-            <button class="retro-btn danger" (click)="confirmDeleteFromList(article)">🗑️ Delete</button>
-          </div>
+          <div class="article-actions" *ngIf="canEditArticle(article) || canDeleteArticle(article)">
+  <button class="retro-btn" (click)="editArticle(article)" *ngIf="canEditArticle(article)">✏️ Edit</button>
+  <button class="retro-btn danger" (click)="confirmDeleteFromList(article)" *ngIf="canDeleteArticle(article)">🗑️ Delete</button>
+</div>
         </div>
-        <div class="empty-state" *ngIf="articles.length === 0 && !isLoading">
-          <span>📭</span><p>No articles yet</p>
-          <button class="retro-btn primary" (click)="createArticle()" *ngIf="canEdit()">📝 Create First Article</button>
-        </div>
+       <div class="empty-state" *ngIf="articles.length === 0 && !isLoading">
+  <span>📭</span><p>No articles yet</p>
+  <button class="retro-btn primary" (click)="createArticle()" *ngIf="canCreate">📝 Create First Article</button>
+</div>
         <div class="loading-state" *ngIf="isLoading"><div class="spinner"></div><p>Loading articles...</p></div>
       </div>
     </div>
@@ -248,7 +248,10 @@ export class KnowledgeBaseAdminComponent implements OnInit {
   // Modal states
   showDeleteModal = false; deleteTarget: any = null;
   showSuccessModal = false; showErrorModal = false;
-  
+  canCreate = false;
+  canEditAll = false;
+  canDeleteAll = false;
+  currentUserRole = '';
   // Dragging
   deleteModalPos = { x: 0, y: 0 }; successModalPos = { x: 0, y: 0 }; errorModalPos = { x: 0, y: 0 };
   private isDragging = false; private dragType = ''; private dragOffsetX = 0; private dragOffsetY = 0;
@@ -266,25 +269,163 @@ export class KnowledgeBaseAdminComponent implements OnInit {
   ngOnInit() {
     try {
       const storedUser = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
-      if (storedUser) { this.currentUser = JSON.parse(storedUser); if (this.currentUser?.fullname) this.articleForm.author_name = this.currentUser.fullname; }
+      if (storedUser) { 
+        this.currentUser = JSON.parse(storedUser); 
+        if (this.currentUser?.fullname) this.articleForm.author_name = this.currentUser.fullname; 
+      }
     } catch (e) {}
-    if (!this.canEdit()) { this.showError('Access denied. Only Admin and Head/Manager can manage articles.'); setTimeout(() => this.router.navigate(['/knowledge-base']), 3000); return; }
+    
+    // ✅ Check permissions - but DON'T block viewing
+    this.checkUserPermissions();
+    
+    // ❌ REMOVE THIS BLOCK - it prevents read-only access
+    // if (!this.canCreate && !this.canEditAll && !this.canDeleteAll) {
+    //   this.showError('Access denied. You do not have permission to manage articles.');
+    //   setTimeout(() => this.router.navigate(['/knowledge-base']), 3000);
+    //   return;
+    // }
+    
     this.loadArticles();
     const articleId = this.route.snapshot.queryParams['id'];
     if (articleId) this.loadArticleForEdit(articleId);
     document.addEventListener('mousemove', this.onDragMove.bind(this));
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
   }
-
-  canEdit(): boolean {
-    try { const u = JSON.parse(localStorage.getItem('currentUser') || '{}'); this.currentUser = u; } catch (e) {}
-    if (!this.currentUser) return false;
+checkUserPermissions() {
+    try { 
+      const u = JSON.parse(localStorage.getItem('currentUser') || '{}'); 
+      this.currentUser = u; 
+    } catch (e) {}
+    
+    if (!this.currentUser) {
+      this.canCreate = false;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+      return;
+    }
+    
     const role = (this.currentUser.role || '').toLowerCase().trim();
     const userTable = (this.currentUser.user_table || this.currentUser.userTable || '').toLowerCase().trim();
-    if (userTable !== 'users') return false;
-    return role === 'admin' || role === 'head/manager' || role === 'head manager';
+    this.currentUserRole = role;
+    
+    // Must be from 'users' table (admin side)
+    if (userTable !== 'users') {
+      this.canCreate = false;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+      return;
+    }
+    
+    // Admin can do everything
+    if (role === 'admin') {
+      this.canCreate = true;
+      this.canEditAll = true;
+      this.canDeleteAll = true;
+      console.log('✅ Admin - full KB access');
+      return;
+    }
+    
+    // Head/Manager can create, edit all, delete all
+    if (role === 'head/manager' || role === 'head manager') {
+      this.canCreate = true;
+      this.canEditAll = true;
+      this.canDeleteAll = true;
+      console.log('✅ Head/Manager - full KB access');
+      return;
+    }
+    
+    // Supervisor can create, but only edit/delete their own
+    if (role === 'supervisor') {
+      this.canCreate = true;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+      console.log('✅ Supervisor - can create, edit/delete own only');
+      return;
+    }
+    
+    // Check department_roles for management roles
+    const departmentId = this.currentUser?.department_id;
+    if (departmentId) {
+      this.verifyDepartmentRole(departmentId);
+    } else {
+      this.canCreate = false;
+      this.canEditAll = false;
+      this.canDeleteAll = false;
+    }
   }
 
+  // ✅ NEW: Verify role from department_roles table
+  verifyDepartmentRole(departmentId: number) {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const headers = { 'Authorization': `Bearer ${token}` };
+    
+    this.http.get<any[]>(`${environment.apiUrl}/api/department-roles?department_id=${departmentId}`, { headers })
+      .subscribe({
+        next: (roles) => {
+          const roleEntries = (roles || []).filter((r: any) => 
+            Number(r.user_id) === Number(this.currentUser?.id)
+          );
+          
+          const hasHeadManager = roleEntries.some((r: any) => {
+            const roleName = (r.role_name || '').toLowerCase().trim();
+            return roleName === 'head/manager' || roleName === 'head manager';
+          });
+          
+          const hasSupervisor = roleEntries.some((r: any) => {
+            const roleName = (r.role_name || '').toLowerCase().trim();
+            return roleName === 'supervisor';
+          });
+          
+          if (hasHeadManager) {
+            this.canCreate = true;
+            this.canEditAll = true;
+            this.canDeleteAll = true;
+            this.currentUserRole = 'head/manager';
+            console.log('✅ Head/Manager (dept_roles) - full KB access');
+          } else if (hasSupervisor) {
+            this.canCreate = true;
+            this.canEditAll = false;
+            this.canDeleteAll = false;
+            this.currentUserRole = 'supervisor';
+            console.log('✅ Supervisor (dept_roles) - can create, edit/delete own');
+          } else {
+            this.canCreate = false;
+            this.canEditAll = false;
+            this.canDeleteAll = false;
+            console.log('❌ KB read-only access');
+          }
+        },
+        error: () => {
+          this.canCreate = false;
+          this.canEditAll = false;
+          this.canDeleteAll = false;
+        }
+      });
+  }
+   canEditArticle(article: any): boolean {
+    if (this.canEditAll) return true;  // Admin or Head/Manager
+    
+    // Supervisor can only edit their own
+    if (this.canCreate && this.currentUserRole === 'supervisor') {
+      return article.author_name === this.currentUser?.fullname ||
+             article.created_by_name === this.currentUser?.fullname;
+    }
+    
+    return false;
+  }
+
+  // ✅ Check if current user can delete a specific article
+  canDeleteArticle(article: any): boolean {
+    if (this.canDeleteAll) return true;  // Admin or Head/Manager
+    
+    // Supervisor can only delete their own
+    if (this.canCreate && this.currentUserRole === 'supervisor') {
+      return article.author_name === this.currentUser?.fullname ||
+             article.created_by_name === this.currentUser?.fullname;
+    }
+    
+    return false;
+  }
   get previewContent(): SafeHtml { return this.sanitizer.bypassSecurityTrustHtml(this.articleForm.content || '<p>No content yet...</p>'); }
   getCategoryLabel(value: string): string { const cat = this.categories.find(c => c.value === value); return cat ? `${cat.icon} ${cat.label}` : value || 'Uncategorized'; }
 
