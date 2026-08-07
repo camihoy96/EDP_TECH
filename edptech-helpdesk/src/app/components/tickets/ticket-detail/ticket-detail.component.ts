@@ -1516,7 +1516,7 @@ addComment() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
 
-  goBack() {
-    this.router.navigate(['/tickets']);
-  }
+goBack() {
+    this.router.navigate(['/tickets'], { replaceUrl: true });
+}
 }

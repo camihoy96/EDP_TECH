@@ -92,9 +92,9 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="toggleCompactMode()">
         {{ compactMode ? '📐 Compact Off' : '📏 Compact Mode' }}
       </div>
-      <div class="dropdown-item" (click)="toggleDarkMode()">
-        {{ darkMode ? '☀️ Light Mode' : '🌙 Dark Mode' }}
-      </div>
+      <div class="dropdown-item" (click)="showThemeModal = true; activeMenu = null">
+  🎨 Customize Theme
+</div>
     </div>
   </div>
 
@@ -565,6 +565,81 @@ interface ClientTicket {
     </div>
   </div>
 </div>
+<!-- Theme Picker Modal -->
+<div class="modal-overlay" *ngIf="showThemeModal" (click)="showThemeModal = false">
+  <div class="theme-modal" 
+       [style.transform]="'translate(' + themeModalPos.x + 'px, ' + themeModalPos.y + 'px)'"
+       (click)="$event.stopPropagation()">
+    <div class="theme-modal-header" (mousedown)="onThemeHeaderMouseDown($event)">
+      <h3>🎨 Customize Your Theme</h3>
+      <button class="modal-close-btn" (click)="showThemeModal = false">✕</button>
+    </div>
+    <div class="theme-modal-body">
+      <p class="theme-hint">Choose a preset or pick custom colors for your sidebar and menu bar.</p>
+      
+      <!-- Presets -->
+      <div class="theme-section">
+        <label class="theme-label">Presets</label>
+        <div class="preset-grid">
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'default'" 
+               (click)="applyPreset('default')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #0d1b3e, #4f46e5);"></div>
+            <span>Default Navy</span>
+          </div>
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'ocean'" 
+               (click)="applyPreset('ocean')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #0c4a6e, #0891b2);"></div>
+            <span>Ocean Blue</span>
+          </div>
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'forest'" 
+               (click)="applyPreset('forest')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #14532d, #16a34a);"></div>
+            <span>Forest Green</span>
+          </div>
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'sunset'" 
+               (click)="applyPreset('sunset')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #7c2d12, #ea580c);"></div>
+            <span>Sunset Orange</span>
+          </div>
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'midnight'" 
+               (click)="applyPreset('midnight')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #1e1b4b, #312e81);"></div>
+            <span>Midnight Purple</span>
+          </div>
+          <div class="preset-card" [class.active]="themeSettings.activePreset === 'rose'" 
+               (click)="applyPreset('rose')">
+            <div class="preset-preview" style="background: linear-gradient(135deg, #881337, #e11d48);"></div>
+            <span>Rose Red</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Colors -->
+      <div class="theme-section">
+        <label class="theme-label">Custom Colors</label>
+        <div class="color-picker-row">
+          <span>Sidebar:</span>
+          <input type="color" [(ngModel)]="themeSettings.sidebarColor" (change)="applyCustomTheme()">
+          <span class="color-value">{{ themeSettings.sidebarColor }}</span>
+        </div>
+        <div class="color-picker-row">
+          <span>Menu Bar:</span>
+          <input type="color" [(ngModel)]="themeSettings.menuBarColor" (change)="applyCustomTheme()">
+          <span class="color-value">{{ themeSettings.menuBarColor }}</span>
+        </div>
+        <div class="color-picker-row">
+          <span>Accent:</span>
+          <input type="color" [(ngModel)]="themeSettings.accentColor" (change)="applyCustomTheme()">
+          <span class="color-value">{{ themeSettings.accentColor }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="theme-modal-footer">
+      <button class="btn btn-cancel" (click)="resetTheme()">🔄 Reset Default</button>
+      <button class="btn btn-primary" (click)="showThemeModal = false">✅ Done</button>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
     /* ═══════════════════════════════════════════════════
@@ -624,7 +699,7 @@ interface ClientTicket {
        MENU BAR
     ═══════════════════════════════════════════════════ */
     .menu-bar {
-      background: var(--navy);
+       background: var(--theme-menubar, var(--navy));
       display: flex;
       align-items: center;
       padding: 0 8px;
@@ -950,7 +1025,7 @@ interface ClientTicket {
     .sidebar {
       width: 220px;
       min-width: 220px;
-      background: var(--navy);
+      background: var(--theme-sidebar, var(--navy));
       display: flex;
       flex-direction: column;
       overflow-y: auto;
@@ -1029,7 +1104,7 @@ interface ClientTicket {
       color: rgba(255,255,255,0.9);
     }
     .sidebar-link.active {
-      background: var(--indigo);
+     background: var(--theme-accent, var(--indigo));
       color: white;
       font-weight: 600;
       box-shadow: 0 2px 8px rgba(79,70,229,0.4);
@@ -1413,7 +1488,7 @@ interface ClientTicket {
        BOTTOM STATUS BAR
     ═══════════════════════════════════════════════════ */
     .bottom-status-bar {
-      background: var(--navy);
+       background: var(--theme-menubar, var(--navy));
       padding: 4px 12px;
       display: flex;
       justify-content: space-between;
@@ -1638,6 +1713,183 @@ interface ClientTicket {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+  /* ═══════════════════════════════════════════════════
+   COMPACT MODE
+══════════════════════════════════════════════════ */
+body.compact-mode .toolbar-btn {
+  padding: 2px 6px;
+  font-size: 10px;
+  height: 24px;
+}
+
+body.compact-mode .sidebar-link {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+body.compact-mode .widget-header {
+  padding: 4px 8px;
+}
+
+body.compact-mode .widget-content {
+  padding: 4px 6px;
+}
+
+body.compact-mode .activity-item {
+  padding: 3px 4px;
+}
+
+body.compact-mode .sidebar {
+  width: 180px;
+  min-width: 180px;
+}
+
+body.compact-mode .toolbar {
+  min-height: 32px;
+  padding: 2px 8px;
+}
+  /* ═══════════════════════════════════════════════════
+   THEME PICKER MODAL
+══════════════════════════════════════════════════ */
+.theme-modal {
+  background: white;
+  border: 2px solid #808080;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  width: 90%;
+  max-width: 520px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
+
+.theme-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #0a246a;
+  color: white;
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
+
+.theme-modal-header:active {
+  cursor: grabbing;
+}
+
+.theme-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.theme-modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.theme-hint {
+  font-size: 11px;
+  color: #666;
+  margin: 0 0 14px 0;
+}
+
+.theme-section {
+  margin-bottom: 16px;
+}
+
+.theme-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #555;
+  margin-bottom: 8px;
+  letter-spacing: 0.05em;
+}
+
+/* Preset Grid */
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.preset-card {
+  cursor: pointer;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.preset-card:hover {
+  background: #f0f4ff;
+}
+
+.preset-card.active {
+  border-color: #0a246a;
+  background: #e8f0ff;
+}
+
+.preset-preview {
+  width: 100%;
+  height: 40px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+
+.preset-card span {
+  font-size: 10px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Color Picker Rows */
+.color-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.color-picker-row span:first-child {
+  width: 70px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+.color-picker-row input[type="color"] {
+  width: 36px;
+  height: 28px;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 1px;
+}
+
+.color-value {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  color: #888;
+}
+
+/* Theme Modal Footer */
+.theme-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e0e0e0;
+  background: #f8f9fa;
+  flex-shrink: 0;
+}
     /* ═══════════════════════════════════════════════════
        SESSION EXPIRY
     ═══════════════════════════════════════════════════ */
@@ -1774,6 +2026,11 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isTokenValid = false;
   isRefreshing = false;
   chatUnreadCount = 0;
+// Dragging properties for theme modal
+isDraggingTheme = false;
+dragStartXTheme = 0;
+dragStartYTheme = 0;
+themeModalPos = { x: 0, y: 0 };
 private chatCountInterval: any;
   // ✅ New properties for notifications
   ourOrdersUnreadCount: number = 0;
@@ -1811,7 +2068,13 @@ announcements: any[] = [];
     timestamp: number;
     signature: string;
   }>();
-  
+  themeSettings = {
+    sidebarColor: '#0d1b3e',    // Default navy
+    menuBarColor: '#0d1b3e',    // Default navy
+    accentColor: '#4f46e5',     // Default indigo
+    activePreset: 'default'     // default, ocean, forest, sunset, midnight
+  };
+  showThemeModal = false;
   private readonly CACHE_DURATION_MS = 30000;  // 30 seconds
   private readonly STALE_DURATION_MS = 60000;  // 1 minute
   private pendingRequests = new Map<string, Promise<any>>();
@@ -1950,12 +2213,10 @@ announcements: any[] = [];
     return { 'Authorization': `Bearer ${token}` };
   }
 ngOnInit() {
-  // First, verify authentication before loading anything
   this.verifyAuthentication();
   this.loadChatUnreadCount();
   this.loadAnnouncements();
-this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
-  // ✅ Load notification data
+  this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
   setInterval(() => this.loadAnnouncements(), 300000);
@@ -2328,15 +2589,16 @@ closeReportModal() {
         this.clientNotifications = notifs;
       });
 
-    this.authService.currentUser$
+      this.authService.currentUser$
       .pipe(takeUntil(this.destroy$))
       .subscribe(user => {
         if (!user) {
           this.handleUnauthorized('User session ended');
           return;
         }
-         this.routeMask.activate();
+        this.routeMask.activate();
         this.currentUser = user;
+        this.loadThemeSettings();
         this.loadJobOrdersCount();
         this.loadRequisitionsCount();
         this.loadRegistrationKeys();
@@ -2780,6 +3042,87 @@ saveNotificationMapToStorage() {
   localStorage.setItem('clientJobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
 
+// Apply a preset theme
+applyPreset(preset: string) {
+  const presets: any = {
+    default: { sidebarColor: '#0d1b3e', menuBarColor: '#0d1b3e', accentColor: '#4f46e5' },
+    ocean:   { sidebarColor: '#0c4a6e', menuBarColor: '#0c4a6e', accentColor: '#0891b2' },
+    forest:  { sidebarColor: '#14532d', menuBarColor: '#14532d', accentColor: '#16a34a' },
+    sunset:  { sidebarColor: '#7c2d12', menuBarColor: '#7c2d12', accentColor: '#ea580c' },
+    midnight:{ sidebarColor: '#1e1b4b', menuBarColor: '#1e1b4b', accentColor: '#6366f1' },
+    rose:    { sidebarColor: '#881337', menuBarColor: '#881337', accentColor: '#e11d48' }
+  };
+  
+  const selected = presets[preset];
+  this.themeSettings = { ...selected, activePreset: preset };
+  this.applyThemeToDOM();
+  this.saveThemeSettings();
+}
+
+// Apply custom color changes
+applyCustomTheme() {
+  this.themeSettings.activePreset = 'custom';
+  this.applyThemeToDOM();
+  this.saveThemeSettings();
+}
+
+// Apply theme CSS variables to the DOM
+applyThemeToDOM() {
+  const root = document.documentElement;
+  root.style.setProperty('--theme-sidebar', this.themeSettings.sidebarColor);
+  root.style.setProperty('--theme-menubar', this.themeSettings.menuBarColor);
+  root.style.setProperty('--theme-accent', this.themeSettings.accentColor);
+}
+
+// Reset to default
+resetTheme() {
+  this.applyPreset('default');
+}
+
+// Save to localStorage per user
+saveThemeSettings() {
+  const userId = this.currentUser?.id || 'anonymous';
+  localStorage.setItem(`theme_${userId}`, JSON.stringify(this.themeSettings));
+}
+// Load from localStorage
+loadThemeSettings() {
+  const userId = this.currentUser?.id || 'anonymous';
+  console.log('🎨 Loading theme for user:', userId);  // Debug
+  const saved = localStorage.getItem(`theme_${userId}`);
+  if (saved) {
+    try {
+      this.themeSettings = JSON.parse(saved);
+      console.log('✅ Theme loaded:', this.themeSettings.activePreset);
+    } catch { 
+      this.applyPreset('default'); 
+    }
+  }
+  this.applyThemeToDOM();
+}
+// ─── THEME MODAL DRAGGING ───
+onThemeHeaderMouseDown(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  this.isDraggingTheme = true;
+  this.dragStartXTheme = event.clientX - this.themeModalPos.x;
+  this.dragStartYTheme = event.clientY - this.themeModalPos.y;
+  target.style.cursor = 'grabbing';
+  event.preventDefault();
+
+  document.addEventListener('mousemove', this.onThemeMouseMove.bind(this));
+  document.addEventListener('mouseup', this.onThemeMouseUp.bind(this));
+}
+
+onThemeMouseMove(event: MouseEvent) {
+  if (!this.isDraggingTheme) return;
+  this.themeModalPos.x = event.clientX - this.dragStartXTheme;
+  this.themeModalPos.y = event.clientY - this.dragStartYTheme;
+}
+
+onThemeMouseUp() {
+  this.isDraggingTheme = false;
+  document.removeEventListener('mousemove', this.onThemeMouseMove.bind(this));
+  document.removeEventListener('mouseup', this.onThemeMouseUp.bind(this));
+}
 // ✅ Update notification counts
 updateNotificationCounts() {
   // 📤 Our Job Orders: Count orders with status updates

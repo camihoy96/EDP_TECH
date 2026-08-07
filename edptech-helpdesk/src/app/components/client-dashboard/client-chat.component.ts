@@ -147,7 +147,9 @@ interface ChatMessage {
                 </div>
                 
                 <p *ngIf="msg.message">{{ msg.message }}</p>
-                <small>{{ msg.timestamp | date:'shortTime' }}</small>
+                <small>
+  {{ isToday(msg.timestamp) ? (msg.timestamp | date:'shortTime') : (msg.timestamp | date:'MMM d, h:mm a') }}
+</small>
               </div>
             </div>
             <div class="no-messages" *ngIf="messages.length === 0">
@@ -699,7 +701,11 @@ updateUserStatuses() {
       }
     });
   }
-
+isToday(date: Date): boolean {
+  const today = new Date();
+  const msgDate = new Date(date);
+  return today.toDateString() === msgDate.toDateString();
+}   
   filterUsers() {
     const term = this.searchTerm.toLowerCase();
     this.filteredUsers = term

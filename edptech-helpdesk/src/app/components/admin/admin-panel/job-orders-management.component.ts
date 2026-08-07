@@ -1613,7 +1613,27 @@ loadReadOrdersFromStorage() {
     const currentUserId = Number(this.currentUser?.id);
     
     if (this.viewMode === 'our') {
-        // ... existing our view filter (unchanged) ...
+        filtered = filtered.filter(o => {
+            const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
+            const submitterDeptId = Number(o.submitter_dept_id || o.submitted_by_dept_id);
+            const submittedById = Number(o.submitted_by);
+            const orderBranchId = Number(o.branch_id);
+            const orderDeptId = Number(o.department_id);
+            
+            // 1. User created it
+            if (submittedById === currentUserId) return true;
+            
+            // 2. Same department user created it
+            if (submitterBranchId === currentUserBranchId && submitterDeptId === currentUserDeptId) return true;
+            
+            // 3. Forwarded FROM our department
+            if (o.is_forwarded && orderBranchId === currentUserBranchId && orderDeptId === currentUserDeptId) return true;
+            
+            // 4. Forwarded by current user
+            if (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname) return true;
+            
+            return false;
+        });
     } else if (this.viewMode === 'incoming') {
         filtered = filtered.filter(o => {
             const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
@@ -1623,11 +1643,6 @@ loadReadOrdersFromStorage() {
             const orderDeptId = Number(o.department_id);
             const forwardedToBranchId = Number(o.forwarded_to_branch_id);
             const forwardedToDeptId = Number(o.forwarded_to_department_id);
-            
-            // ✅ EXCLUDE unapproved orders from incoming count
-            if (o.status === 'pending' && !o.approved_name && !o.approved_signature) {
-                return false;
-            }
             
             const isForUs = (orderBranchId === currentUserBranchId && orderDeptId === currentUserDeptId);
             const isForwardedToUs = o.is_forwarded && 
@@ -1639,6 +1654,7 @@ loadReadOrdersFromStorage() {
     }
     
     if (status === 'all') return filtered.length;
+    
     return filtered.filter(o => {
         if (o.is_forwarded) {
             return (o.status || 'pending') === status || (o.forwarded_status || '') === status;
@@ -2234,16 +2250,16 @@ confirmForward() {
 saveNotificationMapToStorage() {
   localStorage.setItem('jobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
-  confirmDelete() {
+ confirmDelete() {
     if (!this.confirmTarget) return;
     const jo = this.confirmTarget;
     const orderId = jo.id;
     
+    // ✅ CLEAR CACHE FIRST
+    this.clearCache();
+    
     // Optimistic delete
     this.allOrders = this.allOrders.filter(o => o.id !== orderId);
-    if (this.ordersCache) {
-      this.ordersCache.data = this.ordersCache.data.filter(o => o.id !== orderId);
-    }
     
     // ✅ Force close modal and reset
     this.showConfirmModal = false; 
@@ -2257,16 +2273,18 @@ saveNotificationMapToStorage() {
     this.http.delete(`${environment.apiUrl}/api/admin/job-orders/${orderId}`, { headers: this.getAuthHeaders() }).subscribe({
       next: () => {
         this.showToastMsg('✅ Job Order deleted!', 'success');
-        // ✅ Refresh from server to ensure sync
-        setTimeout(() => this.fetchOrdersInBackground(), 1000);
+        // ✅ Force fresh fetch from server
+        this.clearCache();
+        this.fetchOrdersFromServer();
       },
       error: () => {
-        // Restore on error
-        this.loadAllOrders(true);
+        // Restore on error - clear cache and reload
+        this.clearCache();
+        this.loadAllOrders(false);
         this.showToastMsg('⚠️ Delete failed, restored', 'error');
       }
     });
-  }
+}
 
   cancelConfirm() { 
     this.showConfirmModal = false; 

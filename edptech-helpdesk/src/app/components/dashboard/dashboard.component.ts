@@ -1457,11 +1457,8 @@ get requisitionsNotificationCount(): number {
   }
 
   private initializeComponent(): void {
-    // Now it's safe to load all data since authentication is verified
-    this.routeMask.activate();
-    this.updateDateTime();
+     this.updateDateTime();
     this.clockInterval = setInterval(() => this.updateDateTime(), 1000);
-    
     // Start message count polling
     this.loadUnreadMessagesCount();
     setInterval(() => this.loadUnreadMessagesCount(), 10000);
@@ -1484,6 +1481,7 @@ get requisitionsNotificationCount(): number {
           return;
         }
         this.currentUser = user;
+        this.routeMask.activate();
         this.loadRegistrationKeys();
         this.loadStats();
         this.loadDashboardData();

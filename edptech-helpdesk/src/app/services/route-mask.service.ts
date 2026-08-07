@@ -16,24 +16,32 @@ export class RouteMaskService {
     private location: Location
   ) {}
 
-  activate(): void {
+activate(): void {
     if (this.isActive) return;
     this.isActive = true;
     this.isInitialLoad = true;
-    this.setupRouteMasking();
-  }
-
+    
+    // ✅ Longer delay to ensure AuthGuard completes first
+    setTimeout(() => {
+        this.setupRouteMasking();
+    }, 1000);  // Increased from 500ms to 1000ms
+}
   deactivate(): void {
     this.isActive = false;
   }
 
-  private setupRouteMasking(): void {
+private setupRouteMasking(): void {
     this.router.events.pipe(
       filter((event: Event): event is NavigationEnd => event instanceof NavigationEnd)
     ).subscribe((event: NavigationEnd) => {
       if (!this.isActive) return;
       
       if (event.url === '/login' || event.urlAfterRedirects === '/login') {
+        return;
+      }
+
+      // ✅ Skip masking for edit/detail pages to prevent logout
+      if (event.url.includes('/edit') || event.url.includes('/new')) {
         return;
       }
 
@@ -48,8 +56,7 @@ export class RouteMaskService {
         }, 50);
       }
     });
-  }
-
+}
   navigateTo(route: string, queryParams?: any): void {
     this.navigationInProgress = true;
     

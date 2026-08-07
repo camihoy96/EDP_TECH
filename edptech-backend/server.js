@@ -93,6 +93,12 @@ const upload = multer({
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ✅ Token authentication middleware
 function authenticateToken(req, res, next) {
+    // First check if the main middleware already decoded the token
+    if (req.decodedUser) {
+        req.user = req.decodedUser;
+        return next();
+    }
+    
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     
@@ -101,14 +107,19 @@ function authenticateToken(req, res, next) {
     }
     
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        // Try new secret first, fallback to old
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            decoded = jwt.verify(token, 'secret_key');
+        }
         req.user = decoded;
         next();
     } catch (error) {
         return res.status(403).json({ error: 'Invalid or expired token.' });
     }
 }
-
 // ✅ Optional: Role-based middleware
 function requireRole(...roles) {
     return (req, res, next) => {
@@ -472,12 +483,15 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.post('/api/auth/logout', (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
-    
     console.log('🚪 Logout request received');
-    
     if (token) {
         try {
-            const decoded = jwt.verify(token, JWT_SECRET);
+            let decoded;
+            try {
+                decoded = jwt.verify(token, JWT_SECRET);
+            } catch (e) {
+                decoded = jwt.verify(token, 'secret_key');
+            }
             const username = decoded.username || decoded.id;
             
             // ✅ Remove user from activity tracking
@@ -492,7 +506,6 @@ app.post('/api/auth/logout', (req, res) => {
             // Still try to clear - the token might have expired but we still want to mark offline
         }
     }
-    
     // Always return success
     res.json({ success: true, message: 'Logged out successfully' });
 });
@@ -524,11 +537,8 @@ app.post('/api/users/heartbeat', authenticateToken, (req, res) => {
 // Verify user is in new_user table and is authorized
 app.get('/api/auth/verify', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Check if user exists in new_user table
         const [rows] = await pool.query(
@@ -570,8 +580,12 @@ app.get('/api/auth/verify-admin', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            decoded = jwt.verify(token, 'secret_key');
+        }
         console.log('🔐 verify-admin - Decoded token:', decoded);
         console.log('🔐 userTable from token:', decoded.userTable);
         
@@ -683,7 +697,12 @@ app.get('/api/auth/validate-admin-token', async (req, res) => {
         }
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            decoded = jwt.verify(token, 'secret_key');
+        }
         
         console.log('🔐 validate-admin-token - Decoded:', decoded);
         
@@ -754,7 +773,12 @@ app.get('/api/auth/validate-token', async (req, res) => {
         if (!authHeader) return res.status(401).json({ error: 'No token provided' });
         
         const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            decoded = jwt.verify(token, 'secret_key');
+        }
         
         // Check if user still exists and is valid
         const [rows] = await pool.query(
@@ -2193,10 +2217,8 @@ app.delete('/api/client/tickets/comments/:id', async (req, res) => {
 // In your backend
 app.delete('/api/client/tickets/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         console.log('🔑 Decoded token:', decoded);
         console.log('📋 Ticket ID to delete:', req.params.id);
@@ -2300,14 +2322,8 @@ app.post('/api/assets', async (req, res) => {
 // GET - Get all users for client contact
 app.get('/api/users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         console.log('🔍 Decoded user ID:', decoded.id);
 
         // ✅ Get current user from new_user table (client users)
@@ -2662,29 +2678,36 @@ app.use(async (req, res, next) => {
     }
     
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
+        // ✅ Support both old and new tokens
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET);
+        } catch (e) {
+            decoded = jwt.verify(token, 'secret_key');
+        }
+        
+        // ✅ Set all the properties that endpoints expect
         req.user = decoded;
+        req.decodedUser = decoded;
         req.userId = decoded.id;
+        req.userInfo = {
+            userId: decoded.id,
+            userName: decoded.username,
+            userTable: decoded.userTable || 'users',
+            role: decoded.role
+        };
+        
         console.log('✅ Auth success for:', req.path, 'User:', decoded.id);
     } catch (error) {
         // Silent fail - don't block the request
-        if (error.name !== 'JsonWebTokenError' && error.name !== 'TokenExpiredError') {
-            console.log('⚠️ Auth middleware error:', error.message);
-        }
     }
     next();
 });
 // GET - Get users by branch (for contact/chat)
 app.get('/api/users/branch/:branchId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const { branchId } = req.params;
         const mainBranchIds = [1, 5];
         const isMainBranch = mainBranchIds.includes(parseInt(branchId));
@@ -2794,16 +2817,9 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
 // GET - Get main branch users only
 app.get('/api/users/main-branch', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-
+         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const mainBranchIds = [1, 5];
-
         const [users] = await pool.query(`
             SELECT 
                 u.id,
@@ -3008,12 +3024,8 @@ async function canModifyUser(permission, targetTable, targetId) {
 // ✅ GET - Fetch all users from users table (Team) - Admin
 app.get('/api/admin/users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         
@@ -3047,12 +3059,8 @@ app.get('/api/admin/users', async (req, res) => {
 // ✅ GET - Fetch all users from new_user table (Clients) - Admin
 app.get('/api/admin/new-users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         
@@ -3107,12 +3115,8 @@ app.get('/api/admin/new-users', async (req, res) => {
 // ✅ POST - Lock user - Admin
 app.post('/api/admin/users/:table/:id/lock', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         if (!permission.canManage) return res.status(403).json({ error: 'Access denied.' });
@@ -3142,12 +3146,8 @@ app.post('/api/admin/users/:table/:id/lock', async (req, res) => {
 // ✅ POST - Unlock user - Admin
 app.post('/api/admin/users/:table/:id/unlock', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         if (!permission.canManage) return res.status(403).json({ error: 'Access denied.' });
@@ -3176,12 +3176,8 @@ app.post('/api/admin/users/:table/:id/unlock', async (req, res) => {
 // ✅ DELETE - Delete user - Admin
 app.delete('/api/admin/users/:table/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         if (!permission.canDelete) {
@@ -3209,12 +3205,8 @@ app.delete('/api/admin/users/:table/:id', async (req, res) => {
 // POST - Admin Reset Password
 app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         if (!permission.canEdit) return res.status(403).json({ error: 'Access denied.' });
@@ -3266,12 +3258,8 @@ app.post('/api/admin/reset-password/:table/:id', async (req, res) => {
 // PUT - Update user profile
 app.put('/api/profile/:table/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         const permission = await checkUserPermission(decoded.id);
         if (!permission) return res.status(404).json({ error: 'User not found' });
         if (!permission.canEdit) return res.status(403).json({ error: 'Access denied.' });
@@ -3319,15 +3307,9 @@ app.put('/api/profile/:table/:id', async (req, res) => {
 // GET - Fetch all departments
 app.get('/api/departments', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id;
-        
+        const userId = req.decodedUser.id;
         const { branch_id } = req.query;
         let query = 'SELECT * FROM departments';
         const params = [];
@@ -3342,7 +3324,6 @@ app.get('/api/departments', async (req, res) => {
         const [users] = await pool.query('SELECT role, branch_id FROM new_user WHERE id = ?', [userId]);
         if (users.length > 0) {
             const userRole = (users[0].role || '').toLowerCase();
-            // Non-admin users only see their branch
             if (userRole !== 'admin') {
                 conditions.push('branch_id = ?');
                 params.push(users[0].branch_id);
@@ -3365,13 +3346,37 @@ app.get('/api/departments', async (req, res) => {
 // POST - Create department
 app.post('/api/departments', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        const { name, location, branch_id } = req.body;
+        
+        if (!name) return res.status(400).json({ error: 'Department name is required' });
+        if (!branch_id) return res.status(400).json({ error: 'Branch ID is required' });
+        
+        const [branchCheck] = await pool.query('SELECT id FROM branches WHERE id = ?', [branch_id]);
+        if (branchCheck.length === 0) return res.status(400).json({ error: 'Invalid branch selected' });
+        
+        const [result] = await pool.query(
+            'INSERT INTO departments (name, location, branch_id) VALUES (?, ?, ?)',
+            [name, location || null, branch_id]
+        );
+        
+        res.json({ success: true, id: result.insertId, message: 'Department created' });
+    } catch (error) {
+        console.error('❌ Error creating department:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Create department
+app.post('/api/departments', async (req, res) => {
+    try {
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -3410,37 +3415,21 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // PUT - Update department
 app.put('/api/departments/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const { name, location, branch_id } = req.body;
         const deptId = req.params.id;
         
-        if (!name) {
-            return res.status(400).json({ error: 'Department name is required' });
-        }
-        if (!branch_id) {
-            return res.status(400).json({ error: 'Branch ID is required' });
-        }
+        if (!name) return res.status(400).json({ error: 'Department name is required' });
+        if (!branch_id) return res.status(400).json({ error: 'Branch ID is required' });
         
-        // Check if branch exists
-        const [branchCheck] = await pool.query(
-            'SELECT id FROM branches WHERE id = ?',
-            [branch_id]
-        );
-        if (branchCheck.length === 0) {
-            return res.status(400).json({ error: 'Invalid branch selected' });
-        }
+        const [branchCheck] = await pool.query('SELECT id FROM branches WHERE id = ?', [branch_id]);
+        if (branchCheck.length === 0) return res.status(400).json({ error: 'Invalid branch selected' });
         
         const [result] = await pool.query(
             'UPDATE departments SET name = ?, location = ?, branch_id = ? WHERE id = ?',
@@ -3457,41 +3446,27 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
         res.status(500).json({ error: error.message });
     }
 });
-
 // DELETE - Delete department
 app.delete('/api/departments/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const deptId = req.params.id;
         
-        // Check if department has any roles
         const [rolesCheck] = await pool.query(
-            'SELECT COUNT(*) as count FROM department_roles WHERE department_id = ?',
-            [deptId]
+            'SELECT COUNT(*) as count FROM department_roles WHERE department_id = ?', [deptId]
         );
         
         if (rolesCheck[0].count > 0) {
-            return res.status(400).json({ 
-                error: 'Cannot delete department with existing positions. Delete positions first.' 
-            });
+            return res.status(400).json({ error: 'Cannot delete department with existing positions. Delete positions first.' });
         }
         
-        const [result] = await pool.query(
-            'DELETE FROM departments WHERE id = ?',
-            [deptId]
-        );
+        const [result] = await pool.query('DELETE FROM departments WHERE id = ?', [deptId]);
         
         if (result.affectedRows > 0) {
             res.json({ success: true, message: 'Department deleted' });
@@ -3510,34 +3485,21 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // GET - Fetch department roles (Admin: all, Client: by department_id)
 app.get('/api/department-roles', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (err) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const departmentId = req.query.department_id;
-        
         let query;
         let params = [];
         
         if (departmentId) {
-            // Client-side: get roles for specific department
             query = 'SELECT * FROM department_roles WHERE department_id = ? ORDER BY role_name';
             params = [departmentId];
         } else {
-            // Admin-side: get all roles
             query = 'SELECT * FROM department_roles ORDER BY department_name, role_name';
         }
         
         const [roles] = await pool.query(query, params);
         res.json(roles);
-        
     } catch (error) {
         console.error('❌ Error fetching department roles:', error);
         res.status(500).json({ error: error.message });
@@ -3547,18 +3509,14 @@ app.get('/api/department-roles', async (req, res) => {
 // POST - Create department role
 app.post('/api/department-roles', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const { department_id, department_name, role_name } = req.body;
-        
-        console.log('📝 Creating role:', { department_id, department_name, role_name });
-        
         const [result] = await pool.query(
             'INSERT INTO department_roles (department_id, department_name, role_name) VALUES (?, ?, ?)',
             [department_id, department_name, role_name]
@@ -3574,18 +3532,14 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.statu
 // PUT - Update department role
 app.put('/api/department-roles/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-       const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const { department_id, department_name, role_name } = req.body;
-        
-        console.log('📝 Updating role:', { id: req.params.id, department_id, department_name, role_name });
-        
         await pool.query(
             'UPDATE department_roles SET department_id=?, department_name=?, role_name=? WHERE id=?',
             [department_id, department_name, role_name, req.params.id]
@@ -3601,15 +3555,12 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.statu
 // DELETE - Delete department role
 app.delete('/api/department-roles/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.status(403).json({ error: 'Access denied.' });
-        
-        console.log('🗑️ Deleting role ID:', req.params.id);
+        if (!allowedRoles.includes((req.decodedUser.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         await pool.query('DELETE FROM department_roles WHERE id=?', [req.params.id]);
         res.json({ success: true });
@@ -3618,7 +3569,6 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) return res.statu
         res.status(500).json({ error: error.message });
     }
 });
-
 // ============================================
 // PUBLIC API - Get roles by department (for signup)
 // ============================================
@@ -3692,16 +3642,9 @@ app.get('/api/public/department-roles', async (req, res) => {
 // GET - Reports & Analytics
 app.get('/api/reports', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const period = req.query.period || 'last7days';
-        
         // Build date filter
         let dateFilter = '';
         if (period === 'today') dateFilter = 'DATE(t.created_at) = CURDATE()';
@@ -3922,12 +3865,8 @@ app.use(idempotencyMiddleware);
 // GET - My Job Orders (Client)
 app.get('/api/job-orders/my', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         let userBranchId = null;
         let userDeptId = null;
         let userFullname = null;
@@ -4028,14 +3967,9 @@ app.get('/api/job-orders/my', async (req, res) => {
 // GET - Single Job Order by ID (Client)
 app.get('/api/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const id = req.params.id;
-        
         const [orders] = await pool.query(
             'SELECT * FROM job_orders WHERE id = ? OR job_order_number = ?',
             [isNaN(id) ? 0 : parseInt(id), id]
@@ -4055,10 +3989,8 @@ app.get('/api/job-orders/:id', async (req, res) => {
 // POST - Submit Job Order (Client)
 app.post('/api/job-orders', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -4140,12 +4072,9 @@ app.post('/api/job-orders', async (req, res) => {
 // PUT - Update Job Order (Client)
 app.put('/api/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const id = req.params.id;
         const {
             date, company, ctrl_no, date_needed, department,
@@ -4199,10 +4128,8 @@ app.put('/api/job-orders/:id', async (req, res) => {
 // PUT - Receive Job Order (Client/Recipient)
 app.put('/api/job-orders/:id/receive', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { received_name, received_date, received_signature } = req.body;
         
@@ -4258,12 +4185,7 @@ app.put('/api/job-orders/:id/receive', async (req, res) => {
 // DELETE - Delete Job Order (Client - only own orders)
 app.delete('/api/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const id = req.params.id;
         
         const [existing] = await pool.query(
@@ -4399,10 +4321,8 @@ app.get('/api/admin/job-orders/:id', async (req, res) => {
 // POST - Create new job order (Admin)
 app.post('/api/admin/job-orders', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const {
             date, time, company, ctrl_no, date_needed, department,
             is_charge, is_expense, request_dept, particulars,
@@ -4487,11 +4407,8 @@ app.post('/api/admin/job-orders', async (req, res) => {
 // PUT - Update job order (Admin)
 app.put('/api/admin/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         
@@ -4546,12 +4463,9 @@ app.put('/api/admin/job-orders/:id', async (req, res) => {
 // PUT - Update job order status (Admin) - WITH IDEMPOTENCY CHECK
 app.put('/api/admin/job-orders/:id/status', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const allowedRoles = ['admin', 'Technician', 'Head/Manager', 'head/manager', 'supervisor', 'branch manager'];
         let isEDP = allowedRoles.includes(decoded.role);
         if (!isEDP) {
@@ -4684,11 +4598,8 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
 // PUT - Receive job order (Admin)
 app.put('/api/admin/job-orders/:id/receive', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         const { received_name, received_date, received_signature, status } = req.body;
@@ -4730,10 +4641,8 @@ app.put('/api/admin/job-orders/:id/receive', async (req, res) => {
 // PUT - Forward Job Order (Admin)
 app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name } = req.body;
         
@@ -4759,10 +4668,8 @@ app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
 // PUT - Approve/Receive Job Order with signatures (Admin)
 app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { approved_name, approved_signature, received_name, received_date, received_signature, status } = req.body;
         
@@ -4829,12 +4736,7 @@ app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
 // DELETE - Delete job order (Allow for all authenticated users)
 app.delete('/api/admin/job-orders/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const { id } = req.params;
         
         console.log('🗑️ Deleting job order:', id);
@@ -4859,10 +4761,8 @@ app.delete('/api/admin/job-orders/:id', async (req, res) => {
 // GET - My Requisitions (FIXED)
 app.get('/api/requisitions/my', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         console.log('📋 GET /api/requisitions/my - User:', decoded.id);
         
@@ -4937,15 +4837,8 @@ app.get('/api/requisitions/my', async (req, res) => {
 // GET - All Requisitions (Admin)
 app.get('/api/admin/requisitions', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (jwtError) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         // Get user info from both tables
         const [userInfo] = await pool.query(
@@ -5022,10 +4915,8 @@ params = [decoded.id, userBranchId, userDeptId, userBranchId, userDeptId, userDe
 });
 app.post('/api/admin/requisitions', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const {
             request_from, attn, date, remarks, time, items,
@@ -5088,10 +4979,8 @@ app.post('/api/admin/requisitions', async (req, res) => {
 // PUT - Admin Update/Edit Requisition
 app.put('/api/admin/requisitions/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         const {
@@ -5141,10 +5030,8 @@ app.put('/api/admin/requisitions/:id', async (req, res) => {
 // POST - Client Submit Requisition
 app.post('/api/requisitions', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const {
             request_from, attn, date, time, remarks, items,
@@ -5207,10 +5094,8 @@ app.post('/api/requisitions', async (req, res) => {
 // PUT - Forward Requisition (Admin)
 app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         const { 
@@ -5245,10 +5130,8 @@ app.get('/api/requisitions/:id', async (req, res) => {
     try {
         console.log('🔍 Backend received GET /api/requisitions/:id with params:', req.params);
         
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const id = req.params.id;
         const numericId = parseInt(id);
@@ -5336,10 +5219,8 @@ app.get('/api/requisitions/:id', async (req, res) => {
 // 5. PUT - Admin Status Update (UPDATED to support release AND recipient access)
 app.put('/api/admin/requisitions/:id/status', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         let userBranchId = null;
         let userDeptId = null;
@@ -5492,10 +5373,8 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
 // 6. PUT - Admin Approve (UPDATED to support recipient access)
 app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // ✅ Get user info for recipient check
         let userBranchId = null;
@@ -5574,10 +5453,8 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
 // DELETE - Admin Delete Requisition
 app.delete('/api/admin/requisitions/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         
@@ -5598,10 +5475,8 @@ app.delete('/api/admin/requisitions/:id', async (req, res) => {
 // 7. PUT - Update Requisition (client edit) - GENERIC, comes last
 app.put('/api/requisitions/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const id = req.params.id;
         const numericId = parseInt(id);
@@ -5748,18 +5623,8 @@ app.put('/api/requisitions/:id', async (req, res) => {
 // GET - Specific Users basing on the specific department of specific branch
 app.get('/api/admin/users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        
-        // ✅ Better error handling for JWT
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (jwtError) {
-            console.error('JWT verification failed:', jwtError.message);
-            return res.status(401).json({ error: 'Invalid token' });
-        }
+        // ✅ Use pre-decoded user from middleware
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         // ✅ Add department_id
         const [users] = await pool.query(
@@ -5784,10 +5649,8 @@ app.get('/api/admin/users', async (req, res) => {
 // GET - Users by department (for ATTN dropdown - queries BOTH tables)
 app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { departmentId } = req.params;
         
@@ -5823,11 +5686,8 @@ app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
 // GET - All client users (fallback)
 app.get('/api/client/users', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const [users] = await pool.query(
             `SELECT id, fullname, username, role, branch_id, department_id 
@@ -5846,10 +5706,8 @@ app.get('/api/client/users', async (req, res) => {
 // 8. DELETE - Delete Requisition
 app.delete('/api/requisitions/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const id = req.params.id;
         const [existing] = await pool.query(
@@ -5883,11 +5741,9 @@ app.get('/api/admin/health/ping', async (req, res) => {
 // Database health check
 app.get('/api/admin/health/db-check', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const startTime = Date.now();
         await pool.query('SELECT 1');
         const latency = Date.now() - startTime;
@@ -5908,11 +5764,9 @@ app.get('/api/admin/health/db-check', async (req, res) => {
 // File storage check
 app.get('/api/admin/health/file-check', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const fs = require('fs');
         const path = require('path');
         const testDir = path.join(__dirname, 'uploads');
@@ -5947,10 +5801,8 @@ app.get('/api/admin/health/file-check', async (req, res) => {
 // GET - System Health Status
 app.get('/api/admin/health', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -6094,10 +5946,8 @@ app.get('/api/admin/health', async (req, res) => {
 // POST - Clear System Cache
 app.post('/api/admin/clear-cache', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -6136,10 +5986,8 @@ app.post('/api/admin/clear-cache', async (req, res) => {
 // POST - Restart Services
 app.post('/api/admin/restart', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -6193,10 +6041,8 @@ async function logSystemEvent(level, type, userId, userName, userTable, action, 
 // ✅ NEW: GET - Distinct Locations (fast, direct from DB)
 app.get('/api/computers/locations', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Direct from MySQL - no Python dependency
         const [locations] = await pool.query(
@@ -6220,11 +6066,9 @@ app.get('/api/computers/locations', async (req, res) => {
 // GET - All Computers - OPTIMIZED (fast path for local DB)
 app.get('/api/computers', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         // ✅ Check if Python is available with a quick health check
         let pythonAvailable = false;
         try {
@@ -6290,10 +6134,8 @@ app.get('/api/computers', async (req, res) => {
 // GET - Get all computer IDs that have cleaning records
 app.get('/api/computers/cleaning/all-ids', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const [rows] = await pool.query(
             'SELECT DISTINCT computer_id FROM computer_cleaning_records WHERE computer_id IS NOT NULL'
@@ -6308,11 +6150,9 @@ app.get('/api/computers/cleaning/all-ids', async (req, res) => {
 // GET - Single Computer - OPTIMIZED
 app.get('/api/computers/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         // ✅ Quick health check instead of waiting for timeout
         let pythonAvailable = false;
         try {
@@ -6373,10 +6213,8 @@ app.get('/api/computers/:id', async (req, res) => {
 // POST - Trigger Network Scan
 app.post('/api/computers/scan', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Try to call Python for scan
         try {
@@ -6409,11 +6247,9 @@ app.post('/api/computers/scan', async (req, res) => {
 // GET - Expiring Licenses - OPTIMIZED
 app.get('/api/computers/expiring', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         // ✅ Direct from MySQL (fast - no Python dependency needed for this)
         const [expiring] = await pool.query(
             `SELECT 
@@ -6454,10 +6290,8 @@ app.get('/api/computers/expiring', async (req, res) => {
 // POST - Add Computer (direct to MySQL) - FIXED
 app.post('/api/computers', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         const { 
             computer_name, user_name, location, department, ip_address, mac_address,
@@ -6513,11 +6347,9 @@ app.post('/api/computers', async (req, res) => {
 // PUT - Update Computer
 app.put('/api/computers/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
          const { 
         computer_name, user_name, location, department, ip_address, mac_address,
         os, bit, ram, storage, processor, antivirus,
@@ -6550,10 +6382,8 @@ app.put('/api/computers/:id', async (req, res) => {
 // DELETE - Delete Computer
 app.delete('/api/computers/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         await pool.query('DELETE FROM computer_monitoring WHERE id = ?', [req.params.id]);
         res.json({ success: true, message: 'Computer deleted' });
@@ -6565,11 +6395,9 @@ app.delete('/api/computers/:id', async (req, res) => {
 // GET - Dashboard Statistics - OPTIMIZED (direct from DB, no Python needed)
 app.get('/api/computers/dashboard/stats', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         // ✅ Direct from MySQL - statistics don't need Python
         const [stats] = await pool.query(`
             SELECT 
@@ -6597,11 +6425,9 @@ app.get('/api/computers/dashboard/stats', async (req, res) => {
 // POST - Save Cleaning Record
 app.post('/api/computers/cleaning', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { 
             computer_id, computer_name, location, ip_address, os, bit,
             ram, storage, processor, antivirus, av_last_update,
@@ -6671,11 +6497,9 @@ app.post('/api/computers/cleaning', async (req, res) => {
 // GET - Get cleaning records filtered by month/year
 app.get('/api/computers/cleaning/all-dates', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { month, year } = req.query;
         
         let query = `
@@ -6713,11 +6537,9 @@ app.get('/api/computers/cleaning/all-dates', async (req, res) => {
 // GET - Get all cleaning records (for displaying dates in table)
 app.get('/api/computers/cleaning/all-records', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const [records] = await pool.query(
             'SELECT id, computer_id, computer_name, cleaning_date FROM computer_cleaning_records ORDER BY cleaning_date DESC'
         );
@@ -6731,11 +6553,9 @@ app.get('/api/computers/cleaning/all-records', async (req, res) => {
 // GET - Get all unique computer IDs that have cleaning records
 app.get('/api/computers/cleaning/all-ids', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const [records] = await pool.query(
             'SELECT DISTINCT computer_id FROM computer_cleaning_records'
         );
@@ -6751,11 +6571,9 @@ app.get('/api/computers/cleaning/all-ids', async (req, res) => {
 // GET - Get Cleaning Records for a Specific Computer
 app.get('/api/computers/cleaning/:computerId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { computerId } = req.params;
         const { month, year } = req.query;
         
@@ -6784,11 +6602,9 @@ app.get('/api/computers/cleaning/:computerId', async (req, res) => {
 // DELETE - Delete a Cleaning Record
 app.delete('/api/computers/cleaning/:recordId', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { recordId } = req.params;
         const [result] = await pool.query('DELETE FROM computer_cleaning_records WHERE id = ?', [recordId]);
         
@@ -6851,10 +6667,8 @@ app.get('/api/knowledge-base/:id', async (req, res) => {
 // POST - Create article
 app.post('/api/knowledge-base', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
@@ -6878,11 +6692,8 @@ app.post('/api/knowledge-base', async (req, res) => {
 // PUT - Update article
 app.put('/api/knowledge-base/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const { title, category, summary, content, featured, author_name, status, display_order, tags } = req.body;
         
         await pool.query(
@@ -6905,11 +6716,9 @@ app.put('/api/knowledge-base/:id', async (req, res) => {
 // DELETE - Delete article
 app.delete('/api/knowledge-base/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         await pool.query('DELETE FROM knowledge_base WHERE id = ?', [req.params.id]);
         
         res.json({ success: true });
@@ -7014,10 +6823,8 @@ app.use('/api/computers', (req, res, next) => {
 // GET - All Settings
 app.get('/api/admin/settings', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager',];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7049,10 +6856,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Save Settings
 app.post('/api/admin/settings', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7097,10 +6902,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Upload Logo (using multer)
 app.post('/api/admin/upload-logo', uploadLogo.single('logo'), async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7136,10 +6939,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // DELETE - Remove Logo
 app.delete('/api/admin/remove-logo', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
          const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager',];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7208,10 +7009,8 @@ app.get('/api/public/settings', async (req, res) => {
 // GET - All Branches
 app.get('/api/admin/branches', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7230,10 +7029,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // GET - Single Branch
 app.get('/api/admin/branches/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager', 'Technician'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7257,10 +7054,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Create Branch
 app.post('/api/admin/branches', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
        const allowedRoles = ['admin', 'head/manager', 'head manager',  'branch manager', ];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7302,10 +7097,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // PUT - Update Branch
 app.put('/api/admin/branches/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7359,10 +7152,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // DELETE - Delete Branch
 app.delete('/api/admin/branches/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7510,10 +7301,8 @@ app.get('/api/public/departments/:departmentId/roles', async (req, res) => {
 // GET - Database Info (tables, sizes, etc.)
 app.get('/api/admin/database/info', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7549,10 +7338,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Verify password without generating new token
 app.post('/api/auth/verify-password', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { password } = req.body;
         const username = decoded.username;
@@ -7583,10 +7370,8 @@ app.post('/api/auth/verify-password', async (req, res) => {
 // POST - Optimize specific table
 app.post('/api/admin/database/optimize/:table', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7602,10 +7387,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Repair specific table
 app.post('/api/admin/database/repair/:table', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7621,10 +7404,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Truncate specific table
 app.post('/api/admin/database/truncate/:table', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7640,10 +7421,8 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 // POST - Optimize all tables
 app.post('/api/admin/database/optimize-all', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
 if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
     return res.status(403).json({ error: 'Access denied.' });
@@ -7673,19 +7452,14 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 
 const PYTHON_STREAM = 'http://localhost:5001';
 
-// ── Auth helper (reuses your existing JWT setup) ─────────────────────────
+// ── Auth helper (uses middleware's pre-decoded user) ─────────────────────────
 function verifyToken(req, res) {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader) { res.status(401).json({ error: 'No token provided' }); return null; }
-  try {
-    const token = authHeader.split(' ')[1];
-    return jwt.verify(token, 'JWT_SECRET');
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-    return null;
+  if (!req.decodedUser) { 
+    res.status(401).json({ error: 'Invalid token' }); 
+    return null; 
   }
+  return req.decodedUser;
 }
-
 // ═══════════════════════════════════════════════════════════
 //  CAMERAS  /api/cctv
 // ═══════════════════════════════════════════════════════════
@@ -8111,6 +7885,18 @@ app.post('/api/messages', uploadChat.single('file'), async (req, res) => {
         res.json({ success: false });
     }
 });
+// PUT - Mark a notification as read
+app.put('/api/notifications/:id/read', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const { id } = req.params;
+        await pool.query('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 // DELETE - Delete a specific message
 app.delete('/api/messages/:messageId', async (req, res) => {
     try {
@@ -8223,16 +8009,16 @@ app.get('/api/notifications', async (req, res) => {
     }
 });
 
-// DELETE - Delete notification
+// DELETE - Delete a notification
 app.delete('/api/notifications/:id', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
         const id = req.params.id.replace('srv_', '');
-        await pool.query('DELETE FROM notifications WHERE id = ? AND username = ?', [id, req.decodedUser.username]);
+        await pool.query('DELETE FROM notifications WHERE id = ?', [id]);
         res.json({ success: true });
     } catch (error) {
-        res.json({ success: false });
+        res.status(500).json({ error: error.message });
     }
 });
 // ============ CLIENT NOTIFICATION ROUTES ============
@@ -8240,11 +8026,9 @@ app.delete('/api/notifications/:id', async (req, res) => {
 app.post('/api/client-notifications/requisition', async (req, res) => {
     try {
         const { branch_id, department_id, type, title, message, ticket_number, exclude_user_id } = req.body;
-        
         if (!branch_id || !department_id) {
             return res.status(400).json({ error: 'branch_id and department_id are required' });
         }
-        
         // ✅ Only get users from new_user table (clients) in the specific branch+department
         let newUserQuery = 'SELECT id FROM new_user WHERE branch_id = ? AND department_id = ?';
         let newUserParams = [branch_id, department_id];
@@ -8253,9 +8037,7 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
             newUserQuery += ' AND id != ?';
             newUserParams.push(exclude_user_id);
         }
-        
         const [newUsers] = await pool.query(newUserQuery, newUserParams);
-        
         // Insert notification for each client user
         let insertCount = 0;
         for (const user of newUsers) {
@@ -8267,7 +8049,6 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
             );
             insertCount++;
         }
-        
         console.log('✅ Saved', insertCount, 'client requisition notifications for branch', branch_id, 'dept', department_id);
         res.json({ success: true, count: insertCount });
     } catch (error) {
@@ -8279,11 +8060,9 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
 app.get('/api/client-notifications/:userId', async (req, res) => {
     try {
         const userId = parseInt(req.params.userId);
-        
         // Get user's branch and department
         let userBranchId = null;
         let userDeptId = null;
-        
         const [userInfo] = await pool.query(
             'SELECT branch_id, department_id FROM users WHERE id = ?', [userId]
         );
@@ -8299,7 +8078,6 @@ app.get('/api/client-notifications/:userId', async (req, res) => {
                 userDeptId = newUserInfo[0].department_id;
             }
         }
-        
         // Get notifications for this specific user
         const [notifications] = await pool.query(
             `SELECT * FROM client_notifications 
@@ -8308,7 +8086,6 @@ app.get('/api/client-notifications/:userId', async (req, res) => {
              LIMIT 50`,
             [userId]
         );
-        
         res.json(notifications);
     } catch (error) {
         console.error('GET /api/client-notifications/:userId error:', error);
@@ -8319,10 +8096,8 @@ app.get('/api/client-notifications/:userId', async (req, res) => {
 // POST - Create a new client notification
 app.post('/api/client-notifications', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         const { user_id, type, title, message, ticket_id, ticket_number } = req.body;
         
@@ -8356,11 +8131,9 @@ app.post('/api/client-notifications', async (req, res) => {
 // PUT - Mark notification as read
 app.put('/api/client-notifications/:id/read', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const [result] = await pool.query(
             'UPDATE client_notifications SET is_read = 1 WHERE id = ?',
             [req.params.id]
@@ -8380,11 +8153,9 @@ app.put('/api/client-notifications/:id/read', async (req, res) => {
 // DELETE - Delete a notification
 app.delete('/api/client-notifications/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const id = req.params.id.replace('srv_', ''); // Remove prefix if present
         
         await pool.query('DELETE FROM client_notifications WHERE id = ?', [id]);
@@ -8482,23 +8253,16 @@ async function logSystemEvent(level, type, userId, userName, userTable, action, 
 }
 
 // Middleware to extract user info from JWT token
-app.use((req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    if (authHeader) {
-        try {
-            const token = authHeader.split(' ')[1];
-            if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
-                const decoded = jwt.verify(token, JWT_SECRET);
-                req.userInfo = {
-                    userId: decoded.id,
-                    userName: decoded.username,
-                    userTable: decoded.userTable || 'users',
-                    role: decoded.role
-                };
-            }
-        } catch(e) {
-            // Token invalid - continue without user info
-        }
+app.use('/api', (req, res, next) => {
+    const skipPaths = ['/api/auth/logout', '/api/users/online-status'];
+    if (skipPaths.includes(req.path)) {
+        return next();
+    }
+    
+    // ✅ Use req.decodedUser if available (set by the middleware above)
+    if (req.decodedUser) {
+        const username = req.decodedUser.username || req.decodedUser.id;
+        userActivity.set(username, Date.now());
     }
     next();
 });
@@ -8519,10 +8283,8 @@ function getUserInfo(req) {
 // GET - Fetch system logs
 app.get('/api/admin/logs', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -8602,10 +8364,8 @@ app.get('/api/admin/logs', async (req, res) => {
 // DELETE - Clear all system logs
 app.delete('/api/admin/logs', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -8637,10 +8397,8 @@ app.delete('/api/admin/logs', async (req, res) => {
 // GET - System log statistics
 app.get('/api/admin/logs/stats', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
@@ -8691,21 +8449,10 @@ app.get('/api/admin/logs/stats', async (req, res) => {
 app.get('/api/department-stats', async (req, res) => {
     try {
         // Verify token
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
-        }
-        
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (err) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
-        
-        const userId = decoded.id;
-        
+        if (!req.decodedUser) {
+    return res.status(401).json({ error: 'Invalid token' });
+}
+const userId = req.decodedUser.id;
         // Get user info with department and branch names
         const [users] = await pool.query(
             `SELECT u.id, u.department_id, u.branch_id,
@@ -8928,20 +8675,11 @@ app.get('/api/department-stats', async (req, res) => {
 app.get('/api/system-status', async (req, res) => {
     try {
         // Verify token (but don't require admin - any authenticated user can see status)
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
+         if (!req.decodedUser) {
+            return res.status(401).json({ error: 'Invalid token' });
         }
         
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (err) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
-        
-        const userId = decoded.id;
+        const userId = req.decodedUser.id;
         const today = new Date().toISOString().split('T')[0];
         
         // Check database connection
@@ -9037,20 +8775,11 @@ app.get('/api/system-status', async (req, res) => {
 // POST - Submit Feedback
 app.post('/api/feedback', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
+         if (!req.decodedUser) {
+            return res.status(401).json({ error: 'Invalid token' });
         }
         
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (err) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
-        
-        const userId = decoded.id;
+        const userId = req.decodedUser.id;
         const { rating, category, subject, message, likes, improvements, contactOk } = req.body;
         
         // Validate required fields
@@ -9092,12 +8821,9 @@ app.post('/api/feedback', async (req, res) => {
 // GET - Reports (Branch Manager or Head/Manager only)
 app.get('/api/reports/:type', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id;
+        const userId = req.decodedUser.id;
         const reportType = req.params.type;
         const scope = req.query.scope || 'department';
         
@@ -9426,20 +9152,11 @@ app.get('/api/reports/:type', async (req, res) => {
 // GET - SLA Stats for Dashboard
 app.get('/api/stats', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) {
-            return res.status(401).json({ error: 'No token provided' });
+        if (!req.decodedUser) {
+            return res.status(401).json({ error: 'Invalid token' });
         }
         
-        const token = authHeader.split(' ')[1];
-        let decoded;
-        try {
-            decoded = jwt.verify(token, 'JWT_SECRET');
-        } catch (err) {
-            return res.status(401).json({ error: 'Invalid or expired token' });
-        }
-        
-        const userId = decoded.id;
+        const userId = req.decodedUser.id;
         const today = new Date().toISOString().split('T')[0];
         
         // Get user info to filter by department/branch if needed
@@ -9565,10 +9282,8 @@ app.get('/api/stats', async (req, res) => {
 // GET - Export entire database
 app.get('/api/admin/database/export', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         console.log('💾 Starting database export...');
         
@@ -9703,10 +9418,8 @@ app.get('/api/admin/database/export', async (req, res) => {
 // Optional: Export single table
 app.get('/api/admin/database/export/:table', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const tableName = req.params.table;
         console.log(`💾 Exporting table: ${tableName}`);
@@ -9758,10 +9471,8 @@ app.get('/api/admin/database/export/:table', async (req, res) => {
 // POST - Import/restore database from SQL file
 app.post('/api/admin/database/import', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         // Only admin can restore
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
@@ -9826,10 +9537,8 @@ app.post('/api/admin/database/import', async (req, res) => {
 // POST - Save a ticket notification
 app.post('/api/ticket-notifications', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         const { type, title, message, ticket_id, ticket_number, user_id, user_table } = req.body;
         
@@ -9848,11 +9557,9 @@ app.post('/api/ticket-notifications', async (req, res) => {
 // DELETE - Delete a ticket notification
 app.delete('/api/ticket-notifications/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { id } = req.params;
         await pool.query('DELETE FROM ticket_notifications WHERE id = ?', [id]);
         res.json({ success: true });
@@ -9868,10 +9575,8 @@ app.delete('/api/ticket-notifications/:id', async (req, res) => {
 // PUT - Mark notification as read/cleared for current user
 app.put('/api/ticket-notifications/:id/read', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const { id } = req.params;
         const { cleared } = req.body;
@@ -9891,10 +9596,8 @@ app.put('/api/ticket-notifications/:id/read', async (req, res) => {
 // PUT - Mark all notifications as cleared for current user
 app.put('/api/ticket-notifications/clear-all', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, JWT_SECRET);
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const currentUserId = decoded.id;
         const currentUserTable = decoded.userTable || 'users';
@@ -9929,18 +9632,8 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
 // ✅ KEEP THIS ONE - The proper GET with cleared notification filtering
 app.get('/api/ticket-notifications', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        
-        // ✅ Try new secret first, fallback to old secret
-        let decoded;
-        try {
-            decoded = jwt.verify(token, JWT_SECRET);
-        } catch (e) {
-            // Fallback: try old secret for existing browser sessions
-            decoded = jwt.verify(token, 'secret_key');
-        }
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
         
         const currentUserId = decoded.id;
         const currentUserTable = decoded.userTable || 'users';
@@ -9965,7 +9658,6 @@ app.get('/api/ticket-notifications', async (req, res) => {
         res.json(notifications);
     } catch (error) {
         console.error('Get ticket notifications error:', error.message);
-        // Don't send 500 - just return empty array to stop the spam
         res.json([]);
     }
 });
@@ -9989,11 +9681,9 @@ app.get('/api/announcements', async (req, res) => {
 // POST - Create announcement
 app.post('/api/announcements', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { title, message, priority, expires_at, created_by, created_by_name } = req.body;
         
         console.log('📢 Creating announcement:', { title, priority });
@@ -10014,11 +9704,9 @@ app.post('/api/announcements', async (req, res) => {
 // PUT - Update announcement
 app.put('/api/announcements/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { id } = req.params;
         const { title, message, priority, expires_at } = req.body;
         
@@ -10041,11 +9729,9 @@ app.put('/api/announcements/:id', async (req, res) => {
 // DELETE - Delete announcement
 app.delete('/api/announcements/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         await pool.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
         
         res.json({ success: true });
@@ -10058,9 +9744,9 @@ app.delete('/api/announcements/:id', async (req, res) => {
 // POST - Save announcement notification for client users
 app.post('/api/client-notifications/announcement', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { type, title, message, announcement_id } = req.body;
         
         const [clientUsers] = await pool.query('SELECT id FROM new_user');
@@ -10139,11 +9825,9 @@ app.listen(PORT, () => {
 // PUT - Update New User Profile
 app.put('/api/admin/profile/new_user/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+
         const { id } = req.params;
         const { username, fullname, email, department, role, avatar_color } = req.body;
         
@@ -10182,10 +9866,8 @@ app.put('/api/admin/profile/new_user/:id', async (req, res) => {
 // GET - Get New User Profile
 app.get('/api/admin/profile/new_user/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         const { id } = req.params;
         
@@ -10209,10 +9891,8 @@ app.get('/api/admin/profile/new_user/:id', async (req, res) => {
 // PUT - Update Users Profile
 app.put('/api/admin/profile/users/:id', async (req, res) => {
     try {
-        const authHeader = req.headers['authorization'];
-        if (!authHeader) return res.status(401).json({ error: 'No token provided' });
-        const token = authHeader.split(' ')[1];
-        jwt.verify(token, 'JWT_SECRET');
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+const decoded = req.decodedUser;
         
         const { id } = req.params;
         const { username, fullname, email, department, role, avatar_color } = req.body;

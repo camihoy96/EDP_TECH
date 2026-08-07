@@ -452,6 +452,13 @@ export class NotificationBellComponent implements OnInit, OnDestroy {
 }
 
 ngOnInit() {
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    console.log('🔔 Bell initialized for:', { 
+        id: currentUser.id, 
+        username: currentUser.username, 
+        userTable: currentUser.user_table,
+        storageKey: `edp_notifications_${currentUser.id}`
+    });
     this.notificationService.notifications$.subscribe(notifications => {
         const userId = this.currentUserId;
         const userTable = this.getCurrentUserTable();

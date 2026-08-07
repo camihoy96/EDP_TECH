@@ -1057,10 +1057,15 @@ getDepartmentName(deptId: number): string {
   }
 
  cancel() {
-  if (this.approvalMode) {
+  if (this.approvalMode || this.editMode) {
+    // ✅ Navigate directly to job orders list
     this.router.navigate(['/admin/job-orders'], { replaceUrl: true });
-  } else {
+  } else if (window.history.length > 1) {
+    // ✅ Only go back if there's history
     window.history.back();
+  } else {
+    // ✅ Fallback: navigate to job orders list
+    this.router.navigate(['/admin/job-orders'], { replaceUrl: true });
   }
 }
 }

@@ -1090,9 +1090,17 @@ onDrop(event: DragEvent) {
     });
 }
 }
-  cancel() { this.router.navigate(['/tickets']); }
-
-  get fileNamesList(): string {
+get fileNamesList(): string {
+    if (!this.files || this.files.length === 0) return 'No files attached';
     return this.files.map(f => f.name).join(', ');
-  }
+}
+ cancel() {
+    // Navigate back to the ticket detail
+    const ticketId = this.route.snapshot.paramMap.get('id');
+    if (ticketId) {
+        this.router.navigate(['/tickets', ticketId], { replaceUrl: true });
+    } else {
+        this.router.navigate(['/tickets'], { replaceUrl: true });
+    }
+}
 }

@@ -85,19 +85,19 @@ interface ChatMessage {
       <!-- Support Team Grid -->
       <div class="team-grid">
         <div class="team-card" *ngFor="let user of filteredUsers" [class]="'status-' + user.status">
-          <div class="card-header">
-            <div class="avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
-              <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" [alt]="user.fullname" class="avatar-img">
-              <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
-            </div>
-            <div class="unread-badge" *ngIf="user.unreadCount && user.unreadCount > 0">
-              {{ user.unreadCount > 99 ? '99+' : user.unreadCount }}
-            </div>
-            <div class="status-indicator" [class]="'status-' + user.status">
-              <span class="status-dot"></span>
-              <span class="status-text">{{ getStatusText(user.status) }}</span>
-            </div>
-          </div>
+         <div class="card-header">
+  <div class="avatar-wrapper">
+    <div class="avatar" [style.backgroundColor]="user.avatar_color || '#0a3a8c'">
+      <img *ngIf="user.photo_url" [src]="apiUrl + user.photo_url" [alt]="user.fullname" class="avatar-img">
+      <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
+      <span class="online-dot" [class.offline]="user.status !== 'online'"></span>
+    </div>
+    <span class="status-label" [class]="'status-' + user.status">{{ getStatusText(user.status) }}</span>
+  </div>
+  <div class="unread-badge" *ngIf="user.unreadCount && user.unreadCount > 0">
+    {{ user.unreadCount > 99 ? '99+' : user.unreadCount }}
+  </div>
+</div>
           
           <div class="card-body">
             <h3>{{ user.fullname }}</h3>
@@ -918,6 +918,54 @@ interface ChatMessage {
 .chat-header:active {
   cursor: grabbing !important;
 }
+  .avatar-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: bold;
+  color: white;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.online-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background: #22c55e;
+  border-radius: 50%;
+  border: 2px solid white;
+}
+
+.online-dot.offline {
+  background: #888;
+}
+
+.status-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.status-label.status-online { color: #008800; }
+.status-label.status-offline { color: #888; }
+.status-label.status-lunch { color: #cc6600; }
+.status-label.status-busy { color: #cc6600; }
+.status-label.status-onLeave { color: #cc0000; }
     @keyframes fadeIn {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -966,7 +1014,8 @@ imageModalPos = { x: 0, y: 0 };
   currentUserOriginalId = 0;
   currentUserTable = 'new_user';
   currentUserCompositeId = '';
-
+private onlineUsernames: Set<string> = new Set();
+  private statusPolling: any;
   // Reply functionality
   replyingTo: ChatMessage | null = null;
 
@@ -987,10 +1036,15 @@ imageModalPos = { x: 0, y: 0 };
     private notificationService: NotificationService 
   ) {}
 
-  ngOnInit() {
+   ngOnInit() {
     this.initUserSession();
     this.loadBranches();
     this.loadSupportUsers();
+    
+    // ✅ Add online status polling
+    this.loadOnlineStatus();
+    this.statusPolling = setInterval(() => this.loadOnlineStatus(), 10000);
+    
     this.refreshInterval = setInterval(() => this.loadSupportUsers(), 60000);
     this.pollingInterval = setInterval(() => {
       if (this.showChatModal && this.selectedUser) this.loadMessages();
@@ -1003,8 +1057,48 @@ imageModalPos = { x: 0, y: 0 };
     clearInterval(this.refreshInterval);
     clearInterval(this.pollingInterval);
     clearInterval(this.unreadCountInterval);
+    if (this.statusPolling) clearInterval(this.statusPolling);  // ✅ Add this
   }
-
+  loadOnlineStatus() {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+    
+    this.http.get<any>(`${environment.apiUrl}/api/users/online-status`, { headers: this.getHeaders() })
+      .subscribe({
+        next: (data) => {
+          this.onlineUsernames = new Set(data.online || []);
+          this.updateUserOnlineStatus();
+        },
+        error: () => {
+          // Silently fail
+        }
+      });
+  }
+  updateUserOnlineStatus() {
+    // ✅ Update support users based on actual login status
+    this.supportUsers.forEach(user => {
+      const isActuallyOnline = this.onlineUsernames.has(user.username);
+      
+      // If user is not actually logged in, override to offline
+      if (!isActuallyOnline && user.status === 'online') {
+        user.status = 'offline';
+        user.availabilityMessage = 'Not available (offline)';
+      }
+      
+      // If user IS logged in but was marked offline due to schedule,
+      // don't override - the schedule takes priority
+      if (isActuallyOnline && user.status === 'offline' && 
+          user.availabilityMessage.includes('work hours') === false &&
+          user.availabilityMessage.includes('Schedule') === false &&
+          user.availabilityMessage.includes('day off') === false) {
+        // Only set to online if they weren't set to offline for schedule reasons
+        // The calculateAvailability already handles schedule-based status
+      }
+    });
+    
+    // Refresh the filtered list
+    this.filterUsers();
+  }
   // --- Initialization ---
 
   private initUserSession() {
@@ -1539,21 +1633,15 @@ imageModalPos = { x: 0, y: 0 };
         
         // ✅ CHECK LOGIN/LOGOUT STATUS
         // Check if user has been active recently
-        const lastActivity = user.last_activity;
-        if (lastActivity) {
-            const lastActivityTime = new Date(lastActivity);
-            const minutesSinceActivity = (now.getTime() - lastActivityTime.getTime()) / 60000;
-            const isOnline = minutesSinceActivity < 5; // User is online if active in last 5 minutes
-            
-            if (!isOnline) {
-                console.log(`RESULT: USER OFFLINE (last active ${Math.round(minutesSinceActivity)} minutes ago)`);
-                return {
-                    ...user,
-                    status: 'offline',
-                    availabilityMessage: `Last seen ${this.getTimeAgo(lastActivityTime)}`
-                };
-            }
-        }
+       const isActuallyLoggedIn = this.onlineUsernames.has(user.username);
+if (!isActuallyLoggedIn) {
+    console.log(`RESULT: USER OFFLINE (not logged in)`);
+    return {
+        ...user,
+        status: 'offline',
+        availabilityMessage: 'Not available (offline)'
+    };
+}
         
         // ✅ ON DUTY (Online)
         const endDisplay = this.formatTimeTo12Hour(user.workEnd);

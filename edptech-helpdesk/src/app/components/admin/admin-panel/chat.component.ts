@@ -168,7 +168,9 @@ interface ChatMessage {
                 </div>
                 
                 <p *ngIf="msg.message">{{ msg.message }}</p>
-                <small>{{ msg.timestamp | date:'shortTime' }}</small>
+                <small>
+  {{ isToday(msg.timestamp) ? (msg.timestamp | date:'shortTime') : (msg.timestamp | date:'MMM d, h:mm a') }}
+</small>
               </div>
             </div>
             <div class="no-messages" *ngIf="messages.length === 0">No messages yet. Start the conversation!</div>
@@ -1045,7 +1047,11 @@ selectUser(user: ChatUser) {
     this.showConfirmDialog = false;
     this.confirmCallback = null;
   }
-
+isToday(date: Date): boolean {
+  const today = new Date();
+  const msgDate = new Date(date);
+  return today.toDateString() === msgDate.toDateString();
+}
   // --- Delete Functions ---
   deleteMessage(messageId: number) {
     this.showConfirm('Are you sure you want to delete this message?', () => {

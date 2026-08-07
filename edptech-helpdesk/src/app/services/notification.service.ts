@@ -781,25 +781,33 @@ public addBellNotification(notif: Partial<Notification>): void {
         this.saveNotificationToServer(newNotif);
     }
 }
-
- dismissNotification(id: string): void {
-    const updated = this.notificationsSubject.value.filter(n => n.id !== id);
+dismissNotification(id: string): void {
+    const current = this.notificationsSubject.value;
+    
+    // ✅ Remove from local state
+    const updated = current.filter(n => n.id !== id);
+    
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
     
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (token && id.startsWith('srv_')) {
-        // ✅ Only delete this specific notification
-        fetch(`${environment.apiUrl}/api/notifications/${id}`, { 
+    if (!token) return;
+    
+    // ✅ DELETE from server (not just mark as read - since it's user-specific)
+    if (id.startsWith('srv_')) {
+        const serverId = id.replace('srv_', '');
+        fetch(`${environment.apiUrl}/api/notifications/${serverId}`, { 
             method: 'DELETE', 
             headers: { 'Authorization': `Bearer ${token}` } 
-        }).catch(() => {});
+        }).then(() => {
+            console.log('✅ Server notification deleted:', serverId);
+        }).catch(err => {
+            console.error('❌ Failed to delete notification on server:', err);
+        });
     }
     
-    // ✅ Also handle ticket notifications (ticket_ prefix)
-    if (token && id.startsWith('ticket_')) {
+    if (id.startsWith('ticket_')) {
         const ticketNotifId = id.replace('ticket_', '');
-        // Mark as cleared for current user
         fetch(`${environment.apiUrl}/api/ticket-notifications/${ticketNotifId}/read`, { 
             method: 'PUT',
             headers: { 
@@ -807,7 +815,11 @@ public addBellNotification(notif: Partial<Notification>): void {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ cleared: true })
-        }).catch(() => {});
+        }).then(() => {
+            console.log('✅ Ticket notification cleared on server:', ticketNotifId);
+        }).catch(err => {
+            console.error('❌ Failed to clear ticket notification on server:', err);
+        });
     }
 }
  clearAll(): void {
