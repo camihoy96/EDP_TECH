@@ -279,7 +279,7 @@ import { NotificationService } from '../../services/notification.service';
   </div>
 </div>
 
-     <!-- ✅ Our Job Orders: Show Recipient Info -->
+<!-- ✅ Our Job Orders: Show Recipient Info -->
 <div class="view-section" *ngIf="viewMode === 'our'">
   <h4>📥 Recipient</h4>
   <div class="detail-info-row">
@@ -658,6 +658,30 @@ import { NotificationService } from '../../services/notification.service';
   color: #888;
   display: block;
   font-style: italic;
+}
+  .detail-info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Adds spacing between label and value */
+  padding: 4px 0;
+}
+
+.detail-info-item label {
+  font-weight: 600;
+  color: #555;
+  min-width: 100px; /* Fixed width for alignment */
+}
+
+.detail-info-item span {
+  color: #333;
+  font-weight: 500;
+  flex: 1;
 }
   .time-under-date {
   font-size: 11;

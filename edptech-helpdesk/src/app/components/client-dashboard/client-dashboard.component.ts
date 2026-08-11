@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterOutlet, RouterLink, RouterLinkActive, NavigationEnd } from '@angular/router';
@@ -52,7 +52,7 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="exportMyData()">💾 Export My Data</div>
       <div class="dropdown-item" (click)="printPage()">🖨️ Print Page</div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="logout()">🚪 Logout</div>
+      <div class="dropdown-item" (click)="logout(); $event.stopPropagation()">🚪 Logout</div>
     </div>
   </div>
 
@@ -66,6 +66,9 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="clearFilters()">🔄 Clear All Filters</div>
       <div class="dropdown-divider"></div>
       <div class="dropdown-item" (click)="refreshData()">🔄 Refresh Data</div>
+      <div class="dropdown-item" (click)="showThemeModal = true; activeMenu = null">
+  🎨 Customize Theme
+</div>
     </div>
   </div>
 
@@ -92,9 +95,6 @@ interface ClientTicket {
       <div class="dropdown-item" (click)="toggleCompactMode()">
         {{ compactMode ? '📐 Compact Off' : '📏 Compact Mode' }}
       </div>
-      <div class="dropdown-item" (click)="showThemeModal = true; activeMenu = null">
-  🎨 Customize Theme
-</div>
     </div>
   </div>
 
@@ -637,6 +637,51 @@ interface ClientTicket {
     <div class="theme-modal-footer">
       <button class="btn btn-cancel" (click)="resetTheme()">🔄 Reset Default</button>
       <button class="btn btn-primary" (click)="showThemeModal = false">✅ Done</button>
+    </div>
+  </div>
+</div>
+<!-- Logout Confirmation Modal - Draggable -->
+<div class="modal-overlay" *ngIf="showLogoutConfirm" (click)="cancelLogout()">
+  <div class="logout-confirm-modal" 
+       (click)="$event.stopPropagation()"
+       [style.transform]="'translate(' + logoutModalPosition.x + 'px, ' + logoutModalPosition.y + 'px)'">
+    
+    <div class="logout-modal-header" (mousedown)="onLogoutHeaderMouseDown($event)">
+      <div class="logout-header-content">
+        <span class="logout-icon">🚪</span>
+        <h3>Confirm Logout</h3>
+      </div>
+      <button class="modal-close-btn" (click)="cancelLogout()">✕</button>
+    </div>
+    
+    <div class="logout-modal-body">
+      <div class="logout-warning-icon">⚠️</div>
+      <p class="logout-confirm-text">Are you sure you want to log out?</p>
+      <p class="logout-confirm-sub">You will be redirected to the login page.</p>
+      
+      <div class="logout-session-info" *ngIf="currentUser">
+        <div class="session-detail">
+          <span class="session-label">👤 User:</span>
+          <span class="session-value">{{ currentUser.fullname || currentUser.username }}</span>
+        </div>
+        <div class="session-detail">
+          <span class="session-label">🏢 Branch:</span>
+          <span class="session-value">{{ currentBranch?.name || 'N/A' }}</span>
+        </div>
+        <div class="session-detail">
+          <span class="session-label">⏱️ Session:</span>
+          <span class="session-value">Active since {{ currentDate }}</span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="logout-modal-footer">
+      <button class="btn btn-cancel-logout" (click)="cancelLogout()">
+        ✋ Cancel
+      </button>
+      <button class="btn btn-confirm-logout" (click)="confirmLogout()">
+        🚪 Yes, Logout
+      </button>
     </div>
   </div>
 </div>
@@ -1947,7 +1992,150 @@ body.compact-mode .toolbar {
 .tag-released   { background: var(--green-dim); color: var(--green); }
 .tag-resolved   { background: var(--green-dim); color: var(--green); }
 .tag-closed     { background: #e2e8f0; color: #64748b; }
+/* ═══════════════════════════════════════════════════
+   LOGOUT CONFIRM MODAL
+══════════════════════════════════════════════════ */
+.logout-confirm-modal {
+  background: white;
+  border: 2px solid #808080;
+  box-shadow: 3px 3px 8px rgba(0, 0, 0, 0.4);
+  width: 90%;
+  max-width: 420px;
+  overflow: hidden;
+  animation: modalIn 0.2s ease;
+}
+.logout-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #dc2626;
+  color: white;
+  flex-shrink: 0;
+  cursor: grab;
+  user-select: none;
+}
 
+.logout-modal-header:active {
+  cursor: grabbing;
+}
+
+.logout-header-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logout-icon {
+  font-size: 20px;
+}
+
+.logout-modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.logout-modal-body {
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.logout-warning-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.logout-confirm-text {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px 0;
+}
+
+.logout-confirm-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 20px 0;
+}
+
+.logout-session-info {
+  background: var(--bg);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  text-align: left;
+  border: 1px solid var(--border);
+}
+
+.session-detail {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.session-detail:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.session-label {
+  color: var(--text-mid);
+  font-weight: 500;
+}
+
+.session-value {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.logout-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+  flex-shrink: 0;
+}
+
+.btn-cancel-logout {
+  background: var(--surface);
+  color: var(--text-mid);
+  border: 1px solid var(--border-md);
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.btn-cancel-logout:hover {
+  background: var(--bg);
+}
+
+.btn-confirm-logout {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font);
+  transition: all 0.15s;
+}
+
+.btn-confirm-logout:hover {
+  background: #b91c1c;
+}
+
+.logout-modal-footer .btn {
+  min-width: 100px;
+}
 /* Dot colors for job orders and requisitions */
 .dot-approved   { background: var(--green); }
 .dot-rejected   { background: var(--red); }
@@ -2026,6 +2214,12 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   isTokenValid = false;
   isRefreshing = false;
   chatUnreadCount = 0;
+  showLogoutConfirm = false;
+isDraggingLogout = false;
+dragStartXLogout = 0;
+dragStartYLogout = 0;
+logoutModalPosition = { x: 0, y: 0 };
+private dragTargetLogout: HTMLElement | null = null;
 // Dragging properties for theme modal
 isDraggingTheme = false;
 dragStartXTheme = 0;
@@ -2682,6 +2876,7 @@ private addSeenReqIds(ids: number[]): void {
   cancelLogout() { 
     this.clearLogoutTimers(); 
     this.showLogoutWarning = false; 
+    this.showLogoutConfirm = false;
     this.resetInactivityTimer();
   }
 
@@ -3706,7 +3901,48 @@ viewTicket(id: number) {
   focusSearch() { (document.querySelector('.search-box input') as HTMLInputElement | null)?.focus(); this.activeMenu = null; }
   refreshData() { this.loadMyTickets(); this.activeMenu = null; }
   printPage() { window.print(); this.activeMenu = null; }
-  logout() { this.authService.logout(); }
+logout() {
+  this.activeMenu = null;
+  this.showLogoutConfirm = true;
+}
+// ─── LOGOUT MODAL DRAGGING METHODS ───
+onLogoutHeaderMouseDown(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  if (!target.closest('.logout-modal-header')) return;
+  
+  this.isDraggingLogout = true;
+  this.dragStartXLogout = event.clientX - this.logoutModalPosition.x;
+  this.dragStartYLogout = event.clientY - this.logoutModalPosition.y;
+  this.dragTargetLogout = target;
+  this.dragTargetLogout.style.cursor = 'grabbing';
+  event.preventDefault();
+
+  document.addEventListener('mousemove', this.onLogoutMouseMove.bind(this));
+  document.addEventListener('mouseup', this.onLogoutMouseUp.bind(this));
+}
+
+onLogoutMouseMove(event: MouseEvent) {
+  if (!this.isDraggingLogout) return;
+  this.logoutModalPosition.x = event.clientX - this.dragStartXLogout;
+  this.logoutModalPosition.y = event.clientY - this.dragStartYLogout;
+}
+
+onLogoutMouseUp() {
+  if (this.isDraggingLogout && this.dragTargetLogout) {
+    this.dragTargetLogout.style.cursor = 'grab';
+  }
+  this.isDraggingLogout = false;
+  this.dragTargetLogout = null;
+  document.removeEventListener('mousemove', this.onLogoutMouseMove.bind(this));
+  document.removeEventListener('mouseup', this.onLogoutMouseUp.bind(this));
+}
+
+// Add the confirm/cancel methods
+confirmLogout() {
+  this.showLogoutConfirm = false;
+  this.authService.logout();
+  this.router.navigate(['/login']);
+}
 
   exportMyTickets() {
     const blob = new Blob([JSON.stringify(this.myTickets, null, 2)], { type: 'application/json' });

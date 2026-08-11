@@ -1,43 +1,69 @@
 import { Injectable } from '@angular/core';
-import { CanActivate, ActivatedRouteSnapshot, Router, UrlTree } from '@angular/router';
+import { CanActivate, Router, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { RouteMaskService } from '../services/route-mask.service';
 
-@Injectable({ providedIn: 'root' })
+@Injectable({
+  providedIn: 'root'
+})
 export class RoleGuard implements CanActivate {
-  constructor(private authService: AuthService, private router: Router) {}
+  
+  constructor(
+    private authService: AuthService,
+    private router: Router,
+    private routeMask: RouteMaskService
+  ) {}
 
-  canActivate(route: ActivatedRouteSnapshot): boolean | UrlTree {
-    const requiredRole = route.data['role'];
-    const allowedTable = route.data['allowedTable'];
-    const user = this.authService.getCurrentUser();
-
-    if (!user) {
-      return this.router.createUrlTree(['/login']);
-    }
-
-    // ✅ Use user_table (snake_case) only - that's what the User interface has
-    const userTable = (user as any).user_table || 'new_user';
-
-    // ✅ PREVENT cross-side access based on allowedTable
-    if (allowedTable === 'users' && userTable !== 'users') {
-      console.warn('🚫 Client user attempted to access admin route');
-      return this.router.createUrlTree(['/client/dashboard']);
+  canActivate(
+    route: ActivatedRouteSnapshot,
+    state: RouterStateSnapshot
+  ): boolean | UrlTree {
+    
+    const allowedTable = route.data?.['allowedTable'];
+    
+    // ✅ If no specific table restriction, allow access
+    if (!allowedTable) {
+      console.log('✅ No table restriction, allowing access');
+      return true;
     }
     
-    if (allowedTable === 'new_user' && userTable !== 'new_user') {
-      console.warn('🚫 Admin user attempted to access client route');
+    const currentUser = this.authService.getCurrentUser();
+    
+    if (!currentUser) {
+      console.warn('⚠️ No user found, redirecting to login');
+      this.routeMask.deactivate();
+      return this.router.createUrlTree(['/login']);
+    }
+    
+    // ✅ Check which table the user belongs to
+    // Users from 'users' table have 'id' and 'username' (admin/IT)
+    // Users from 'new_user' table have 'id' and 'username' (client)
+    const userTable = currentUser.user_table ? currentUser.user_table : 
+                     (currentUser.department ? 'users' : 'new_user');
+    
+    console.log(`🔍 User table: ${userTable}, Required: ${allowedTable}`);
+    
+    // ✅ Allow access based on table
+    if (userTable === allowedTable) {
+      console.log('✅ Table matches, allowing access');
+      // Activate route masking for allowed access
+      this.routeMask.activate();
+      return true;
+    }
+    
+    // ❌ Table mismatch - redirect to appropriate dashboard
+    console.warn('❌ Table mismatch, redirecting');
+    this.routeMask.deactivate();
+    
+    if (allowedTable === 'new_user') {
+      // If trying to access admin route, redirect to client dashboard
+      return this.router.createUrlTree(['/client/dashboard']);
+    } else if (allowedTable === 'users') {
+      // If trying to access client route, redirect to admin dashboard
       return this.router.createUrlTree(['/dashboard']);
     }
-
-    // ✅ Check role-based access
-    if (requiredRole) {
-      const roles = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-      
-      if (!roles.includes(user.role)) {
-        return this.router.createUrlTree([userTable === 'new_user' ? '/client/dashboard' : '/dashboard']);
-      }
-    }
-
-    return true;
+    
+    // Fallback to login
+    return this.router.createUrlTree(['/login']);
   }
 }

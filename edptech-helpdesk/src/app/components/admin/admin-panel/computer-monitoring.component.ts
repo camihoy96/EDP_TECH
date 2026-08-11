@@ -211,9 +211,10 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Add/Edit Modal - Original format restored -->
-    <div class="modal-overlay" *ngIf="showModal" (click)="closeModal()">
-      <div class="modal-content" id="editModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['editModal'].x" 
-[style.top.px]="modalPositions['editModal'].y">
+    <div class="modal-overlay" *ngIf="showModal">
+  <div class="modal-content" id="editModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['editModal'].x" 
+       [style.top.px]="modalPositions['editModal'].y">
         <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'editModal')">
           <h3>{{ editingPC ? '✏️ Edit PC' : '➕ Add PC' }}</h3>
           <button class="modal-close" (click)="closeModal()">✕</button>
@@ -452,9 +453,11 @@ import { environment } from '../../../../environments/environment';
       </div>
     </div>
 
-   <!-- Detail Modal -->
-<div class="modal-overlay" *ngIf="showDetailModal" (click)="closeDetailModal()">
-  <div class="modal-content detail-modal" id="detailModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['detailModal'].x" [style.top.px]="modalPositions['detailModal'].y">
+  <!-- Detail Modal -->
+<div class="modal-overlay" *ngIf="showDetailModal">
+  <div class="modal-content detail-modal" id="detailModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['detailModal'].x" 
+       [style.top.px]="modalPositions['detailModal'].y">
     <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'detailModal')">
       <h3>💻 {{ selectedPC?.computer_name }} Details</h3>
       <button class="modal-close" (click)="closeDetailModal()">✕</button>
@@ -484,97 +487,97 @@ import { environment } from '../../../../environments/environment';
       </div>
       
       <!-- License Tab -->
-<div class="detail-grid" *ngIf="detailTab === 'license'">
-  <div class="detail-item full-width"><label>MS License Type:</label><span class="license-badge" [class]="getLicenseClass(selectedPC)">{{ selectedPC.ms_license_type || '—' }}</span></div>
-  <div class="detail-item"><label>License Activation:</label><span>{{ isValidDate(selectedPC.license_activation) ? (selectedPC.license_activation | date:'MMM d, yyyy') : '—' }}</span></div>
-  <div class="detail-item"><label>License Duration:</label><span>{{ selectedPC.license_duration ? selectedPC.license_duration + ' months' : '—' }}</span></div>
-  <div class="detail-item full-width">
-    <label>License Expiry:</label>
-    <span [class.expiring]="isExpiring(selectedPC)" [class.expired]="isExpired(selectedPC)">
-      {{ isValidDate(selectedPC.license_expiry) ? (selectedPC.license_expiry | date:'MMM d, yyyy') : '—' }}
-      <span *ngIf="isExpiring(selectedPC)" class="countdown">🔴 {{ getDaysRemaining(selectedPC) }} days left</span>
-      <span *ngIf="isExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
-    </span>
-  </div>
-  
-  <div class="detail-divider">📦 Microsoft Office</div>
-  
-  <div class="detail-item"><label>Office Status:</label>
-    <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC) && isValidDate(selectedPC.office_activation_date)" 
-          [class.status-offline]="isOfficeExpired(selectedPC)">
-      {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
-    </span>
-  </div>
-  <div class="detail-item"><label>Office Activation Date:</label><span>{{ isValidDate(selectedPC.office_activation_date) ? (selectedPC.office_activation_date | date:'MMM d, yyyy') : '—' }}</span></div>
-  <div class="detail-item"><label>Office Duration:</label><span>{{ selectedPC.office_duration ? selectedPC.office_duration + ' months' : '—' }}</span></div>
-  <div class="detail-item full-width">
-    <label>Office Expiry:</label>
-    <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
-      {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
-      <span *ngIf="isOfficeExpiring(selectedPC)" class="countdown">🔴 {{ getOfficeDaysRemaining(selectedPC) }} days left</span>
-      <span *ngIf="isOfficeExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
-    </span>
-  </div>
-  
-  <div class="detail-divider">🛡️ Antivirus</div>
-  
-  <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
-  <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
-  <div class="detail-item"><label>AV Next Update:</label>
-    <span [class.expiring]="isAVExpiring(selectedPC)" [class.expired]="isAVExpired(selectedPC)">
-      {{ isValidDate(selectedPC.av_next_update) ? (selectedPC.av_next_update | date:'MMM d, yyyy') : '—' }}
-      <span *ngIf="isAVExpiring(selectedPC)" class="countdown">🔴 Due soon</span>
-      <span *ngIf="isAVExpired(selectedPC)" class="countdown expired-text">❌ OVERDUE</span>
-    </span>
-  </div>
-</div>
+      <div class="detail-grid" *ngIf="detailTab === 'license'">
+        <div class="detail-item full-width"><label>MS License Type:</label><span class="license-badge" [class]="getLicenseClass(selectedPC)">{{ selectedPC.ms_license_type || '—' }}</span></div>
+        <div class="detail-item"><label>License Activation:</label><span>{{ isValidDate(selectedPC.license_activation) ? (selectedPC.license_activation | date:'MMM d, yyyy') : '—' }}</span></div>
+        <div class="detail-item"><label>License Duration:</label><span>{{ selectedPC.license_duration ? selectedPC.license_duration + ' months' : '—' }}</span></div>
+        <div class="detail-item full-width">
+          <label>License Expiry:</label>
+          <span [class.expiring]="isExpiring(selectedPC)" [class.expired]="isExpired(selectedPC)">
+            {{ isValidDate(selectedPC.license_expiry) ? (selectedPC.license_expiry | date:'MMM d, yyyy') : '—' }}
+            <span *ngIf="isExpiring(selectedPC)" class="countdown">🔴 {{ getDaysRemaining(selectedPC) }} days left</span>
+            <span *ngIf="isExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
+          </span>
+        </div>
+        
+        <div class="detail-divider">📦 Microsoft Office</div>
+        
+        <div class="detail-item"><label>Office Status:</label>
+          <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC) && isValidDate(selectedPC.office_activation_date)" 
+                [class.status-offline]="isOfficeExpired(selectedPC)">
+            {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
+          </span>
+        </div>
+        <div class="detail-item"><label>Office Activation Date:</label><span>{{ isValidDate(selectedPC.office_activation_date) ? (selectedPC.office_activation_date | date:'MMM d, yyyy') : '—' }}</span></div>
+        <div class="detail-item"><label>Office Duration:</label><span>{{ selectedPC.office_duration ? selectedPC.office_duration + ' months' : '—' }}</span></div>
+        <div class="detail-item full-width">
+          <label>Office Expiry:</label>
+          <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
+            {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
+            <span *ngIf="isOfficeExpiring(selectedPC)" class="countdown">🔴 {{ getOfficeDaysRemaining(selectedPC) }} days left</span>
+            <span *ngIf="isOfficeExpired(selectedPC)" class="countdown expired-text">❌ EXPIRED</span>
+          </span>
+        </div>
+        
+        <div class="detail-divider">🛡️ Antivirus</div>
+        
+        <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
+        <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
+        <div class="detail-item"><label>AV Next Update:</label>
+          <span [class.expiring]="isAVExpiring(selectedPC)" [class.expired]="isAVExpired(selectedPC)">
+            {{ isValidDate(selectedPC.av_next_update) ? (selectedPC.av_next_update | date:'MMM d, yyyy') : '—' }}
+            <span *ngIf="isAVExpiring(selectedPC)" class="countdown">🔴 Due soon</span>
+            <span *ngIf="isAVExpired(selectedPC)" class="countdown expired-text">❌ OVERDUE</span>
+          </span>
+        </div>
+      </div>
       
-     <!-- Cleaning Tab -->
-<div *ngIf="detailTab === 'cleaning'">
-  <div class="cleaning-summary" *ngIf="selectedPC">
-    <div class="cleaning-stat">
-      <span class="cleaning-stat-label">Last Cleaning:</span>
-      <span class="cleaning-stat-value">{{ getLastCleaningDate(selectedPC.id) ? (getLastCleaningDate(selectedPC.id) | date:'MMM d, yyyy') : 'No records' }}</span>
+      <!-- Cleaning Tab -->
+      <div *ngIf="detailTab === 'cleaning'">
+        <div class="cleaning-summary" *ngIf="selectedPC">
+          <div class="cleaning-stat">
+            <span class="cleaning-stat-label">Last Cleaning:</span>
+            <span class="cleaning-stat-value">{{ getLastCleaningDate(selectedPC.id) ? (getLastCleaningDate(selectedPC.id) | date:'MMM d, yyyy') : 'No records' }}</span>
+          </div>
+          <button class="btn btn-primary" (click)="openHistoryFromDetail(selectedPC)" style="margin-top: 8px;">
+            📋 View Full History
+          </button>
+        </div>
+        
+        <div class="detail-grid" *ngIf="selectedPC">
+          <div class="detail-item"><label>OS:</label><span>{{ selectedPC.os || '—' }} ({{ selectedPC.bit || '64' }}bit)</span></div>
+          <div class="detail-item"><label>RAM:</label><span>{{ selectedPC.ram || '—' }}</span></div>
+          <div class="detail-item"><label>Storage:</label><span>{{ selectedPC.storage || '—' }}</span></div>
+          <div class="detail-item"><label>Processor:</label><span>{{ selectedPC.processor || '—' }}</span></div>
+          <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
+          <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
+          <div class="detail-item"><label>Office Status:</label>
+            <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC)" [class.status-offline]="isOfficeExpired(selectedPC)">
+              {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
+            </span>
+          </div>
+          <div class="detail-item"><label>Office Expiry:</label>
+            <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
+              {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
-    <!-- ✅ FIX: Save reference before closing detail modal -->
-    <button class="btn btn-primary" (click)="openHistoryFromDetail(selectedPC)" style="margin-top: 8px;">
-      📋 View Full History
-    </button>
-  </div>
-  
-  <!-- Quick view of last cleaning record details -->
-  <div class="detail-grid" *ngIf="selectedPC">
-    <div class="detail-item"><label>OS:</label><span>{{ selectedPC.os || '—' }} ({{ selectedPC.bit || '64' }}bit)</span></div>
-    <div class="detail-item"><label>RAM:</label><span>{{ selectedPC.ram || '—' }}</span></div>
-    <div class="detail-item"><label>Storage:</label><span>{{ selectedPC.storage || '—' }}</span></div>
-    <div class="detail-item"><label>Processor:</label><span>{{ selectedPC.processor || '—' }}</span></div>
-    <div class="detail-item"><label>Antivirus:</label><span>{{ selectedPC.antivirus || '—' }}</span></div>
-    <div class="detail-item"><label>AV Last Update:</label><span>{{ isValidDate(selectedPC.av_last_update) ? (selectedPC.av_last_update | date:'MMM d, yyyy') : '—' }}</span></div>
-    <div class="detail-item"><label>Office Status:</label>
-      <span class="status-badge" [class.status-online]="!isOfficeExpired(selectedPC)" [class.status-offline]="isOfficeExpired(selectedPC)">
-        {{ isValidDate(selectedPC.office_activation_date) ? (isOfficeExpired(selectedPC) ? 'Expired' : 'Activated') : 'N/A' }}
-      </span>
+    <div class="modal-footer">
+      <button class="btn" (click)="closeDetailModal()">Close</button>
+      <button class="btn btn-av" (click)="updateAntivirus(selectedPC); closeDetailModal()">🛡️ Update AV</button>
+      <button class="btn btn-primary" (click)="closeDetailModal(); editPC(selectedPC)">✏️ Edit</button>
+      <button class="btn" (click)="closeDetailModal(); openCleaningModal(selectedPC)">🧹 New Cleaning</button>
     </div>
-    <div class="detail-item"><label>Office Expiry:</label>
-      <span [class.expiring]="isOfficeExpiring(selectedPC)" [class.expired]="isOfficeExpired(selectedPC)">
-        {{ isValidDate(selectedPC.office_expiry) ? (selectedPC.office_expiry | date:'MMM d, yyyy') : '—' }}
-      </span>
-    </div>
-  </div>
-</div>
-    </div>
-   <div class="modal-footer">
-  <button class="btn" (click)="closeDetailModal()">Close</button>
-  <button class="btn btn-av" (click)="updateAntivirus(selectedPC); closeDetailModal()">🛡️ Update AV</button>
-  <button class="btn btn-primary" (click)="closeDetailModal(); editPC(selectedPC)">✏️ Edit</button>
-  <button class="btn" (click)="closeDetailModal(); openCleaningModal(selectedPC)">🧹 New Cleaning</button>
-</div>
   </div>
 </div>
 
     <!-- Cleaning Record Modal -->
-    <div class="modal-overlay" *ngIf="showCleaningModal" (click)="closeCleaningModal()">
-      <div class="modal-content" id="cleaningModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['cleaningModal'].x" [style.top.px]="modalPositions['cleaningModal'].y">
+    <div class="modal-overlay" *ngIf="showCleaningModal">
+  <div class="modal-content" id="cleaningModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['cleaningModal'].x" 
+       [style.top.px]="modalPositions['cleaningModal'].y">
         <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'cleaningModal')">
           <h3>🧹 {{ cleaningTarget ? 'Cleaning Record: ' + cleaningTarget.computer_name : 'New Cleaning Record' }}</h3>
           <button class="modal-close" (click)="closeCleaningModal()">✕</button>
@@ -714,8 +717,10 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Cleaning History Modal -->
-    <div class="modal-overlay" *ngIf="showCleaningHistory" (click)="closeCleaningHistory()">
-      <div class="modal-content" id="cleaningHistoryModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['cleaningHistoryModal'].x" [style.top.px]="modalPositions['cleaningHistoryModal'].y">
+    <div class="modal-overlay" *ngIf="showCleaningHistory">
+  <div class="modal-content" id="cleaningHistoryModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['cleaningHistoryModal'].x" 
+       [style.top.px]="modalPositions['cleaningHistoryModal'].y">
         <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'cleaningHistoryModal')">
           <h3>🧹 Cleaning History: {{ cleaningHistoryTarget?.computer_name }}</h3>
           <button class="modal-close" (click)="closeCleaningHistory()">✕</button>
@@ -789,8 +794,10 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- License Check Modal -->
-    <div class="modal-overlay" *ngIf="showLicenseModal" (click)="closeLicenseModal()">
-      <div class="modal-content" id="licenseModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['licenseModal'].x" [style.top.px]="modalPositions['licenseModal'].y">
+    <div class="modal-overlay" *ngIf="showLicenseModal">
+  <div class="modal-content" id="licenseModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['licenseModal'].x" 
+       [style.top.px]="modalPositions['licenseModal'].y">
         <div class="modal-header modal-drag-handle" [class.license-expiring]="isExpiring(selectedPC)" [class.license-expired]="isExpired(selectedPC)" (mousedown)="startDrag($event, 'licenseModal')">
           <h3>🔍 License Status: {{ selectedPC?.computer_name }}</h3>
           <button class="modal-close" (click)="closeLicenseModal()">✕</button>
@@ -815,8 +822,10 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div class="modal-overlay" *ngIf="showDeleteModal" (click)="cancelDelete()">
-      <div class="modal-content confirm-modal" id="deleteModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['deleteModal'].x" [style.top.px]="modalPositions['deleteModal'].y">
+    <div class="modal-overlay" *ngIf="showDeleteModal">
+  <div class="modal-content confirm-modal" id="deleteModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['deleteModal'].x" 
+       [style.top.px]="modalPositions['deleteModal'].y">
         <div class="modal-header modal-drag-handle" style="background: #cc0000;" (mousedown)="startDrag($event, 'deleteModal')">
           <h3>🗑️ Delete Computer</h3>
           <button class="modal-close" (click)="cancelDelete()">✕</button>
@@ -835,8 +844,10 @@ import { environment } from '../../../../environments/environment';
       </div>
     </div>
      <!-- Delete Cleaning Record Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showDeleteCleaningModal" (click)="cancelDeleteCleaning()">
-  <div class="modal-content confirm-modal" id="deleteCleaningModal" (click)="$event.stopPropagation()" [style.left.px]="modalPositions['deleteCleaningModal'].x" [style.top.px]="modalPositions['deleteCleaningModal'].y">
+<div class="modal-overlay" *ngIf="showDeleteCleaningModal">
+  <div class="modal-content confirm-modal" id="deleteCleaningModal" (click)="$event.stopPropagation()" 
+       [style.left.px]="modalPositions['deleteCleaningModal'].x" 
+       [style.top.px]="modalPositions['deleteCleaningModal'].y">
     <div class="modal-header modal-drag-handle" style="background: #cc0000;" (mousedown)="startDrag($event, 'deleteCleaningModal')">
       <h3>🗑️ Delete Cleaning Record</h3>
       <button class="modal-close" (click)="cancelDeleteCleaning()">✕</button>
