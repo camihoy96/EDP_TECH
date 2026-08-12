@@ -274,39 +274,54 @@ import { environment } from '../../../../environments/environment';
             </div>
           </div>
 
-          <div class="form-row">
-            <div class="form-group half">
-              <label>RAM:</label>
-              <select [(ngModel)]="formData.ram" class="form-input">
-                <option value="">— Select RAM —</option>
-                <option value="2 GB">2 GB</option>
-                <option value="4 GB">4 GB</option>
-                <option value="6 GB">6 GB</option>
-                <option value="8 GB">8 GB</option>
-                <option value="12 GB">12 GB</option>
-                <option value="16 GB">16 GB</option>
-                <option value="32 GB">32 GB</option>
-                <option value="64 GB">64 GB</option>
-              </select>
-            </div>
-            <div class="form-group half">
-              <label>Storage:</label>
-              <select [(ngModel)]="formData.storage" class="form-input">
-                <option value="">— Select Storage —</option>
-                <option value="128 GB SSD">128 GB SSD</option>
-                <option value="256 GB SSD">256 GB SSD</option>
-                <option value="512 GB SSD">512 GB SSD</option>
-                <option value="1 TB SSD">1 TB SSD</option>
-                <option value="2 TB SSD">2 TB SSD</option>
-                <option value="500 GB HDD">500 GB HDD</option>
-                <option value="1 TB HDD">1 TB HDD</option>
-                <option value="2 TB HDD">2 TB HDD</option>
-                <option value="256 GB SSD + 1 TB HDD">256 GB SSD + 1 TB HDD</option>
-                <option value="512 GB SSD + 1 TB HDD">512 GB SSD + 1 TB HDD</option>
-              </select>
-            </div>
-          </div>
-
+    <div class="form-row">
+  <div class="form-group half">
+    <label>RAM:</label>
+    <select [(ngModel)]="formData.ram" class="form-input">
+      <option value="">— Select RAM —</option>
+      <option value="2 GB">2 GB</option>
+      <option value="4 GB">4 GB</option>
+      <option value="6 GB">6 GB</option>
+      <option value="8 GB">8 GB</option>
+      <option value="12 GB">12 GB</option>
+      <option value="16 GB">16 GB</option>
+      <option value="32 GB">32 GB</option>
+      <option value="64 GB">64 GB</option>
+    </select>
+  </div>
+  <div class="form-group half">
+  <label>Storage:</label>
+  <div class="storage-add-row">
+    <select [(ngModel)]="selectedStorageToAdd" class="form-input storage-dropdown">
+      <option value="">— Select Storage —</option>
+      <optgroup label="NVMe SSD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+      <optgroup label="SATA SSD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('SSD') && !opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+      <optgroup label="HDD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('HDD') && !opt.includes('SSD') && !opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+    </select>
+    <button class="btn btn-primary storage-add-btn" (click)="addStorage()" [disabled]="!selectedStorageToAdd" title="Add Storage">+</button>
+  </div>
+  <!-- Selected storages -->
+  <div class="selected-storages" *ngIf="selectedStorages.length > 0">
+    <span class="storage-tag" *ngFor="let s of selectedStorages; let i = index">
+      💾 {{ s }}
+      <button class="storage-remove" (click)="removeStorage(i)">×</button>
+    </span>
+  </div>
+  <small class="hint-text" *ngIf="selectedStorages.length === 0">Add one or more storage devices</small>
+</div>
+</div>
           <div class="form-group">
             <label>Processor:</label>
             <input type="text" [(ngModel)]="formData.processor" class="form-input" placeholder="e.g., Intel Core i5-12400, AMD Ryzen 5">
@@ -613,37 +628,52 @@ import { environment } from '../../../../environments/environment';
               </select>
             </div>
           </div>
-          <div class="form-row">
-            <div class="form-group half">
-              <label>RAM:</label>
-              <select [(ngModel)]="cleaningForm.ram" class="form-input">
-                <option value="">— Select RAM —</option>
-                <option value="2 GB">2 GB</option>
-                <option value="4 GB">4 GB</option>
-                <option value="6 GB">6 GB</option>
-                <option value="8 GB">8 GB</option>
-                <option value="12 GB">12 GB</option>
-                <option value="16 GB">16 GB</option>
-                <option value="32 GB">32 GB</option>
-                <option value="64 GB">64 GB</option>
-              </select>
-            </div>
-            <div class="form-group half">
-              <label>Storage:</label>
-              <select [(ngModel)]="cleaningForm.storage" class="form-input">
-                <option value="">— Select Storage —</option>
-                <option value="128 GB SSD">128 GB SSD</option>
-                <option value="256 GB SSD">256 GB SSD</option>
-                <option value="512 GB SSD">512 GB SSD</option>
-                <option value="1 TB SSD">1 TB SSD</option>
-                <option value="2 TB SSD">2 TB SSD</option>
-                <option value="500 GB HDD">500 GB HDD</option>
-                <option value="1 TB HDD">1 TB HDD</option>
-                <option value="2 TB HDD">2 TB HDD</option>
-                <option value="256 GB SSD + 1 TB HDD">256 GB SSD + 1 TB HDD</option>
-                <option value="512 GB SSD + 1 TB HDD">512 GB SSD + 1 TB HDD</option>
-              </select>
-            </div>
+        <div class="form-row">
+  <div class="form-group half">
+    <label>RAM:</label>
+    <select [(ngModel)]="cleaningForm.ram" class="form-input">
+      <option value="">— Select RAM —</option>
+      <option value="2 GB">2 GB</option>
+      <option value="4 GB">4 GB</option>
+      <option value="6 GB">6 GB</option>
+      <option value="8 GB">8 GB</option>
+      <option value="12 GB">12 GB</option>
+      <option value="16 GB">16 GB</option>
+      <option value="32 GB">32 GB</option>
+      <option value="64 GB">64 GB</option>
+    </select>
+  </div>
+  <div class="form-group half">
+  <label>Storage:</label>
+  <div class="storage-add-row">
+    <select [(ngModel)]="selectedCleaningStorageToAdd" class="form-input storage-dropdown">
+      <option value="">— Select Storage —</option>
+      <optgroup label="NVMe SSD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+      <optgroup label="SATA SSD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('SSD') && !opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+      <optgroup label="HDD">
+        <ng-container *ngFor="let opt of storageOptions">
+          <option *ngIf="opt.includes('HDD') && !opt.includes('SSD') && !opt.includes('NVMe')" [value]="opt">{{ opt }}</option>
+        </ng-container>
+      </optgroup>
+    </select>
+    <button class="btn btn-primary storage-add-btn" (click)="addCleaningStorage()" [disabled]="!selectedCleaningStorageToAdd" title="Add Storage">+</button>
+  </div>
+  <div class="selected-storages" *ngIf="selectedCleaningStorages.length > 0">
+    <span class="storage-tag" *ngFor="let s of selectedCleaningStorages; let i = index">
+      💾 {{ s }}
+      <button class="storage-remove" (click)="removeCleaningStorage(i)">×</button>
+    </span>
+  </div>
+  <small class="hint-text" *ngIf="selectedCleaningStorages.length === 0">Add one or more storage devices</small>
+</div>
             <!-- ✅ ADD PROCESSOR FIELD -->
 <div class="form-group">
   <label>Processor:</label>
@@ -1184,6 +1214,104 @@ import { environment } from '../../../../environments/environment';
 .confirm-detail small {
   color: #888;
 }
+  .storage-multi-select {
+  border: 1px solid #c0c0c0;
+  background: #fafafa;
+  padding: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.storage-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+.storage-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 10px;
+  color: #333;
+  border-radius: 2px;
+}
+
+.storage-checkbox:hover {
+  background: #e8f0fe;
+}
+
+.storage-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: #0a246a;
+  flex-shrink: 0;
+}
+
+.storage-checkbox span {
+  flex: 1;
+  line-height: 1.3;
+}
+
+.selected-storages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.storage-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid #c8e6c9;
+}
+
+.storage-remove {
+  background: none;
+  border: none;
+  color: #cc0000;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.storage-remove:hover {
+  color: #ff0000;
+}
+  .storage-add-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.storage-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+
+.storage-add-btn {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.storage-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
   `]
 })
 export class ComputerMonitoringComponent implements OnInit, OnDestroy {
@@ -1237,7 +1365,23 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   private dragTarget: string | null = null;
   private dragOffsetX = 0;
   private dragOffsetY = 0;
+storageOptions = [
+  // NVMe SSDs
+  '128 GB NVMe SSD', '256 GB NVMe SSD', '512 GB NVMe SSD', 
+  '1 TB NVMe SSD', '2 TB NVMe SSD',
   
+  // SATA SSDs
+  '128 GB SSD', '256 GB SSD', '512 GB SSD', 
+  '1 TB SSD', '2 TB SSD',
+  
+  // HDDs
+  '160 GB HDD', '250 GB HDD', '320 GB HDD', 
+  '500 GB HDD', '1 TB HDD', '2 TB HDD'
+];
+selectedStorageToAdd: string = '';
+selectedCleaningStorageToAdd: string = '';
+selectedStorages: string[] = [];
+selectedCleaningStorages: string[] = [];
   formData: any = this.getEmptyFormData();
   cleaningForm: any = this.getEmptyCleaningForm();
   
@@ -1248,7 +1392,7 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
     {label:'Windows 11',options:['Windows 11 Home','Windows 11 Pro','Windows 11 Enterprise']},
     {label:'Windows Server',options:['Windows Server 2012', 'Windows Server 2016','Windows Server 2019','Windows Server 2022']},
     {label:'Office',options:['Office 365 Business','Office 365 Enterprise','Microsoft 365 Business','Microsoft 365 Enterprise']},
-    {label:'Other',options:['OEM License','Retail License','Volume License','None / Unlicensed']}
+    {label:'Other',options:['OEM License','Retail License', 'Microsoft Office 2010', 'Microsoft Office 2019', 'Microsoft Office 2021','Volume License','None / Unlicensed']}
   ];
 
   constructor(private http: HttpClient) {}
@@ -1304,7 +1448,33 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
     this.isDragging = false;
     this.dragTarget = null;
   }
+  
+addStorage() {
+  if (this.selectedStorageToAdd && this.selectedStorageToAdd.trim()) {
+    this.selectedStorages.push(this.selectedStorageToAdd.trim());
+    this.formData.storage = this.selectedStorages.join(', ');
+    this.selectedStorageToAdd = ''; // Reset dropdown
+  }
+}
 
+removeStorage(index: number) {
+  this.selectedStorages.splice(index, 1);
+  this.formData.storage = this.selectedStorages.join(', ');
+}
+
+// ✅ ADD STORAGE - Cleaning form
+addCleaningStorage() {
+  if (this.selectedCleaningStorageToAdd && this.selectedCleaningStorageToAdd.trim()) {
+    this.selectedCleaningStorages.push(this.selectedCleaningStorageToAdd.trim());
+    this.cleaningForm.storage = this.selectedCleaningStorages.join(', ');
+    this.selectedCleaningStorageToAdd = ''; // Reset dropdown
+  }
+}
+
+removeCleaningStorage(index: number) {
+  this.selectedCleaningStorages.splice(index, 1);
+  this.cleaningForm.storage = this.selectedCleaningStorages.join(', ');
+}
   private generateNotifications() {
     this.notifications = [];
     this.pcs.forEach(pc => {
@@ -1440,20 +1610,25 @@ openCleaningModal(pc?: any) {
   this.cleaningTarget = pc || null;
   this.cleaningForm = this.getEmptyCleaningForm();
   
+  // ✅ Reset cleaning storages when no PC selected
+  if (!pc) {
+    this.selectedCleaningStorages = [];
+  }
+  
   if (pc) {
     const latestPC = this.pcs.find(p => p.id === pc.id) || pc;
-    
-    // ✅ Debug log
-    console.log('Opening cleaning modal, PC data:', {
-      name: latestPC.computer_name,
-      av_last_update: latestPC.av_last_update,
-      office_activation_date: latestPC.office_activation_date,
-      office_expiry: latestPC.office_expiry
-    });
     
     const osValue = latestPC.os || pc.os || '';
     if (osValue && !this.osList.includes(osValue)) {
       this.osList.push(osValue);
+    }
+    
+    // ✅ Populate cleaning storages
+    if (latestPC.storage) {
+      this.selectedCleaningStorages = latestPC.storage.split(',').map((s: string) => s.trim());
+      this.cleaningForm.storage = latestPC.storage;
+    } else {
+      this.selectedCleaningStorages = [];
     }
     
     this.cleaningForm = {
@@ -1473,13 +1648,6 @@ openCleaningModal(pc?: any) {
       notes: '',
       cleaning_date: new Date().toISOString().split('T')[0]
     };
-    
-    // ✅ Debug log
-    console.log('Cleaning form data after loading:', {
-      av_last_update: this.cleaningForm.av_last_update,
-      office_activation_date: this.cleaningForm.office_activation_date,
-      office_expiry: this.cleaningForm.office_expiry
-    });
   }
   
   this.centerModal('cleaningModal');
@@ -2486,6 +2654,7 @@ private centerModal(modalId: string) {
   addPC() {
   this.editingPC = null; this.originalIpAddress = ''; this.ipDuplicateError = '';
   this.formData = this.getEmptyFormData();
+  this.selectedStorages = [];
   this.centerModal('editModal'); // ✅ Center the modal
   this.showModal = true;
 }
@@ -2502,7 +2671,12 @@ private centerModal(modalId: string) {
   if (latestPC.os && !this.osList.includes(latestPC.os)) {
     this.osList.push(latestPC.os);
   }
-  
+  // ✅ Populate selected storages from existing data
+if (latestPC.storage) {
+  this.selectedStorages = latestPC.storage.split(',').map((s: string) => s.trim());
+} else {
+  this.selectedStorages = [];
+}
   // ✅ Use latestPC which has the most current data
   this.formData = {
     computer_name: latestPC.computer_name || '',

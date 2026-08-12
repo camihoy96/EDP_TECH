@@ -235,10 +235,35 @@ import { NotificationService } from '../../services/notification.service';
 </td>
             </tr>
             <tr *ngIf="filteredOrders.length === 0">
-              <td [attr.colspan]="8" class="empty-row">No job orders found</td>
-            </tr>
+  <td [attr.colspan]="8" class="empty-row">
+  </td>
+</tr>
           </tbody>
         </table>
+         <div *ngIf="filteredOrders.length === 0" class="table-empty-container">
+    <!-- No orders at all -->
+    <ng-container *ngIf="allOrders.length === 0">
+      <div class="empty-state">
+        <div class="empty-icon">📋</div>
+        <h3>No Job Orders Found</h3>
+        <p>You haven't created any job order requests yet.</p>
+        <button class="classic-btn primary" routerLink="/client/job-orders/new">
+          <span>➕</span> Create Your First Job Order
+        </button>
+      </div>
+    </ng-container>
+    <!-- Has orders but none match filters -->
+    <ng-container *ngIf="allOrders.length > 0">
+      <div class="empty-state">
+        <div class="empty-icon">🔍</div>
+        <h3>No Matching Job Orders</h3>
+        <p>No job orders found for the current filter criteria.</p>
+        <button class="classic-btn" (click)="resetFilters()">
+          <span>🔄</span> Clear Filters
+        </button>
+      </div>
+    </ng-container>
+  </div>
       </div>
     </div>
 
@@ -609,8 +634,44 @@ import { NotificationService } from '../../services/notification.service';
     .delete-btn:hover { background: #ffecec; border-color: #cc0000; color: #cc0000; }
     .attn-cell { max-width: 120px; }
     .attn-info { display: flex; flex-direction: column; gap: 1px; align-items: center; }
-    .empty-row { text-align: center; padding: 30px; color: #888; }
-    
+    .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #333;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 16px 0;
+  font-size: 12px;
+  color: #888;
+  max-width: 400px;
+  line-height: 1.4;
+}
+
+.empty-state .classic-btn {
+  margin-top: 4px;
+}
+    .empty-row { 
+  text-align: center; 
+  padding: 0; 
+  color: #888; 
+}
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
     .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); width: 100%; max-width: 420px; }
@@ -1048,7 +1109,15 @@ loadUserRoles() {
         }
     });
 }
-
+resetFilters() {
+  this.searchTerm = '';
+  this.activeTab = 'all';
+  this.filters = {
+    branchId: '',
+    requestFromDept: ''
+  };
+  this.applyFilters();
+}
 // Add this method to get the role for an ATTN name
 getAttnRole(attnName: string): string {
     if (!attnName) return '';
