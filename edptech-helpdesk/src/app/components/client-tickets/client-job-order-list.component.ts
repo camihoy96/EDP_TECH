@@ -1741,10 +1741,19 @@ applyFilters() {
     this.showConfirmModal = true;
   }
 
- canDelete(jo: any): boolean {
+canDelete(jo: any): boolean {
   const role = (this.currentUser?.role || '').toLowerCase();
   const allowedRoles = ['admin', 'head/manager', 'supervisor', 'branch manager'];
-  return allowedRoles.includes(role);
+  
+  // ✅ Check if user has the right role
+  if (!allowedRoles.includes(role)) {
+    return false;
+  }
+  
+  // ✅ Only allow deletion when status is 'pending' (For Approval or Pending)
+  // Once received, assigned, forwarded, done, or rejected - no more deletion
+  return jo.status === 'pending' || 
+         (jo.is_forwarded && jo.forwarded_status === 'pending');
 }
 loadFilterBranches() {
   // ✅ Load branches
