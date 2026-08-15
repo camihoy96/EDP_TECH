@@ -379,6 +379,7 @@ private loadNotificationsFromServer(): void {
         if (!Array.isArray(data)) { console.log('📭 Server returned no notifications array'); return; }
         console.log('📥 Server notifications received:', data.length);
         
+        // ✅ Get current notifications from BehaviorSubject (has read states from localStorage)
         const current = this.notificationsSubject.value;
         const currentMap = new Map(current.map(n => [n.id, n]));
         const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
@@ -389,11 +390,10 @@ private loadNotificationsFromServer(): void {
             const existing = currentMap.get(srvId);
             
             if (existing) {
-                // ✅ Keep existing read state (don't overwrite with server)
+                // ✅ CRITICAL: Keep existing read state (don't overwrite with server)
                 serverNotifications.push(existing);
             } else {
-                // New notification from server
-                // ✅ Check if it was created after "mark all read" timestamp
+                // New notification from server - check allReadTimestamp
                 let isRead = n.is_read === 1;
                 if (allReadTimestamp) {
                     const createdAt = new Date(n.created_at).getTime();
@@ -416,7 +416,7 @@ private loadNotificationsFromServer(): void {
                     targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
                     countInBadge: true,
                     timestamp: new Date(n.created_at),
-                    read: isRead,  // ✅ Respect the all-read timestamp
+                    read: isRead,
                 });
             }
             
@@ -995,6 +995,8 @@ private loadTicketNotificationsFromServer(): void {
         
         console.log('📥 Server ticket notifications received:', data.length);
         
+        const current = this.notificationsSubject.value;
+        const currentMap = new Map(current.map(n => [n.id, n]));
         const newNotifications: Notification[] = [];
         
         data.forEach(n => {
@@ -1004,6 +1006,13 @@ private loadTicketNotificationsFromServer(): void {
             }
             
             const tId = 'ticket_' + n.id;
+            
+            // ✅ CRITICAL: Check if already exists locally (preserve read state)
+            const existing = currentMap.get(tId);
+            if (existing) {
+                newNotifications.push(existing);
+                return;
+            }
             
             if (this.recentlyCreatedActions.has(`status-${n.ticket_id}-${n.type || 'info'}`)) {
                 return;
@@ -1030,11 +1039,11 @@ private loadTicketNotificationsFromServer(): void {
                 targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : (n.user_id === null && n.user_table === null ? null : undefined),
                 countInBadge: true,
                 timestamp: new Date(n.created_at),
-                read: isRead,  // ✅ Respect the all-read timestamp
+                read: isRead,
             });
         });
         
-        const current = this.notificationsSubject.value;
+        // ✅ Keep other local notifications (non-server ones)
         const localOnly = current.filter(n => 
             !n.id.startsWith('ticket_') && !n.id.startsWith('srv_')
         );

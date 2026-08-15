@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -189,8 +189,8 @@ import { environment } from '../../../../environments/environment';
       <!-- DEPARTMENT FORM MODAL (Branch is read-only) -->
       <!-- ============================================ -->
       <div class="modal-overlay" *ngIf="showDeptForm" (click)="closeDeptForm()">
-        <div class="modal-card" (click)="$event.stopPropagation()">
-          <div class="modal-top">
+  <div class="modal-card" id="deptFormModal" (click)="$event.stopPropagation()">
+    <div class="modal-top modal-drag-handle" (mousedown)="startDrag($event, 'deptFormModal')" style="cursor: grab;">
             <span class="modal-tag">{{ editingDept ? 'Edit' : 'New' }}</span>
             <span class="modal-branch" *ngIf="selectedBranchId">
               <span class="branch-tag">{{ getBranchName(selectedBranchId) }}</span>
@@ -251,14 +251,12 @@ import { environment } from '../../../../environments/environment';
           </div>
         </div>
       </div>
-
       <!-- ============================================ -->
       <!-- ROLE / POSITION FORM MODAL (Simplified) -->
       <!-- ============================================ -->
-     <!-- ROLE / POSITION FORM MODAL (Simplified) -->
 <div class="modal-overlay" *ngIf="showRoleForm" (click)="closeRoleForm()">
-  <div class="modal-card" (click)="$event.stopPropagation()">
-    <div class="modal-top">
+  <div class="modal-card" id="roleFormModal" (click)="$event.stopPropagation()">
+    <div class="modal-top modal-drag-handle" (mousedown)="startDrag($event, 'roleFormModal')" style="cursor: grab;">
       <span class="modal-tag">{{ editingRole ? 'Edit' : 'New' }}</span>
       <span class="modal-branch" *ngIf="selectedBranchId">
         <span class="branch-tag">{{ getBranchName(selectedBranchId) }}</span>
@@ -315,8 +313,8 @@ import { environment } from '../../../../environments/environment';
       <!-- DELETE CONFIRMATION MODAL -->
       <!-- ============================================ -->
       <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
-        <div class="modal-card delete-card" (click)="$event.stopPropagation()">
-          <div class="modal-top">
+  <div class="modal-card delete-card" id="deleteConfirmModal" (click)="$event.stopPropagation()">
+    <div class="modal-top modal-drag-handle" (mousedown)="startDrag($event, 'deleteConfirmModal')" style="cursor: grab;">
             <span class="modal-tag danger">Remove</span>
             <button class="modal-close" (click)="cancelDelete()" aria-label="Close">
               <svg viewBox="0 0 24 24" width="15" height="15" fill="none"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -865,7 +863,17 @@ import { environment } from '../../../../environments/environment';
       text-transform: lowercase;
       margin-left: 2px;
     }
+    .modal-drag-handle {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
 
+.modal-drag-handle:active {
+  cursor: grabbing;
+}
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes slideIn { from { transform: translateY(-12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
@@ -891,7 +899,7 @@ import { environment } from '../../../../environments/environment';
     }
   `]
 })
-export class DepartmentsComponent implements OnInit {
+export class DepartmentsComponent implements OnInit, OnDestroy {
   // Data
   branches: any[] = [];
   departments: any[] = [];
@@ -905,7 +913,11 @@ export class DepartmentsComponent implements OnInit {
   deptForm = { name: '', location: '', branch_id: '' };
   saving = false;
   deptError = '';
-
+private isDragging = false;
+private dragOffsetX = 0;
+private dragOffsetY = 0;
+private currentDragModal: HTMLElement | null = null;
+private modalPositions: { [key: string]: { x: number; y: number } } = {};
   // Role Form
   showRoleForm = false;
   editingRole: any = null;
@@ -932,8 +944,10 @@ export class DepartmentsComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    this.loadBranches();
-  }
+  this.loadBranches();
+  document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
 
   private getAuthHeaders(): HttpHeaders {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -1008,6 +1022,61 @@ export class DepartmentsComponent implements OnInit {
   loadData() {
     this.loadBranches();
   }
+
+// ============================================
+// DRAG MODAL METHODS
+// ============================================
+startDrag(event: MouseEvent, modalId: string) {
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  this.isDragging = true;
+  this.currentDragModal = modal;
+  
+  const rect = modal.getBoundingClientRect();
+  this.dragOffsetX = event.clientX - rect.left;
+  this.dragOffsetY = event.clientY - rect.top;
+  
+  modal.style.cursor = 'grabbing';
+  modal.style.transition = 'none';
+  modal.style.position = 'fixed';
+  modal.style.left = rect.left + 'px';
+  modal.style.top = rect.top + 'px';
+  modal.style.transform = 'none';
+  modal.style.margin = '0';
+  
+  event.preventDefault();
+}
+
+onDragMove(event: MouseEvent) {
+  if (!this.isDragging || !this.currentDragModal) return;
+  
+  const x = event.clientX - this.dragOffsetX;
+  const y = event.clientY - this.dragOffsetY;
+  
+  this.currentDragModal.style.left = x + 'px';
+  this.currentDragModal.style.top = y + 'px';
+}
+
+onDragEnd() {
+  if (this.currentDragModal) {
+    this.currentDragModal.style.cursor = '';
+    this.currentDragModal.style.transition = '';
+  }
+  this.isDragging = false;
+  this.currentDragModal = null;
+}
+
+centerModal(modalId: string) {
+  const modal = document.getElementById(modalId);
+  if (modal) {
+    modal.style.position = '';
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.transform = '';
+    modal.style.margin = '';
+  }
+}
 
   // ============================================
   // BRANCH FILTER
@@ -1090,33 +1159,36 @@ get canEdit(): boolean {
   }
 
   openCreateDeptForm() {
-    this.editingDept = null;
-    this.deptForm = { 
-      name: '', 
-      location: '', 
-      branch_id: this.selectedBranchId || '' 
-    };
-    this.deptError = '';
-    this.showDeptForm = true;
-  }
+  this.editingDept = null;
+  this.deptForm = { 
+    name: '', 
+    location: '', 
+    branch_id: this.selectedBranchId || '' 
+  };
+  this.deptError = '';
+  this.showDeptForm = true;
+  setTimeout(() => this.centerModal('deptFormModal'), 0);
+}
 
-  openEditDeptForm(dept: any) {
-    this.editingDept = dept;
-    this.deptForm = {
-      name: dept.name || '',
-      location: dept.location || '',
-      branch_id: dept.branch_id || ''
-    };
-    this.deptError = '';
-    this.showDeptForm = true;
-  }
+ openEditDeptForm(dept: any) {
+  this.editingDept = dept;
+  this.deptForm = {
+    name: dept.name || '',
+    location: dept.location || '',
+    branch_id: dept.branch_id || ''
+  };
+  this.deptError = '';
+  this.showDeptForm = true;
+  setTimeout(() => this.centerModal('deptFormModal'), 0);
+}
 
-  closeDeptForm() {
-    this.showDeptForm = false;
-    this.editingDept = null;
-    this.deptError = '';
-    this.saving = false;
-  }
+ closeDeptForm() {
+  this.showDeptForm = false;
+  this.editingDept = null;
+  this.deptError = '';
+  this.saving = false;
+  this.centerModal('deptFormModal');
+}
 
   saveDepartment() {
     if (!this.deptForm.name.trim() || !this.selectedBranchId || this.saving) return;
@@ -1151,32 +1223,35 @@ get canEdit(): boolean {
   // ============================================
   // ROLE/POSITION METHODS
   // ============================================
-  openCreateRoleForm(deptId?: number) {
-    this.editingRole = null;
-    this.roleForm = {
-      department_id: deptId ? String(deptId) : '',
-      role_name: ''
-    };
-    this.roleError = '';
-    this.showRoleForm = true;
-  }
+ openCreateRoleForm(deptId?: number) {
+  this.editingRole = null;
+  this.roleForm = {
+    department_id: deptId ? String(deptId) : '',
+    role_name: ''
+  };
+  this.roleError = '';
+  this.showRoleForm = true;
+  setTimeout(() => this.centerModal('roleFormModal'), 0);
+}
 
-  openEditRoleForm(role: any) {
-    this.editingRole = role;
-    this.roleForm = {
-      department_id: String(role.department_id || ''),
-      role_name: role.role_name || ''
-    };
-    this.roleError = '';
-    this.showRoleForm = true;
-  }
+openEditRoleForm(role: any) {
+  this.editingRole = role;
+  this.roleForm = {
+    department_id: String(role.department_id || ''),
+    role_name: role.role_name || ''
+  };
+  this.roleError = '';
+  this.showRoleForm = true;
+  setTimeout(() => this.centerModal('roleFormModal'), 0);
+}
 
   closeRoleForm() {
-    this.showRoleForm = false;
-    this.editingRole = null;
-    this.roleError = '';
-    this.savingRole = false;
-  }
+  this.showRoleForm = false;
+  this.editingRole = null;
+  this.roleError = '';
+  this.savingRole = false;
+  this.centerModal('roleFormModal');
+}
 
   saveRole() {
     if (!this.roleForm.department_id || !this.roleForm.role_name || this.savingRole) return;
@@ -1217,20 +1292,22 @@ get canEdit(): boolean {
   // ============================================
   // DELETE METHODS
   // ============================================
-  confirmDeleteDept(dept: any) {
-    this.deleteTarget = { type: 'department', data: dept };
-    this.showDeleteConfirm = true;
-  }
+ confirmDeleteDept(dept: any) {
+  this.deleteTarget = { type: 'department', data: dept };
+  this.showDeleteConfirm = true;
+  setTimeout(() => this.centerModal('deleteConfirmModal'), 0);
+}
+confirmDeleteRole(role: any) {
+  this.deleteTarget = { type: 'role', data: role };
+  this.showDeleteConfirm = true;
+  setTimeout(() => this.centerModal('deleteConfirmModal'), 0);
+}
 
-  confirmDeleteRole(role: any) {
-    this.deleteTarget = { type: 'role', data: role };
-    this.showDeleteConfirm = true;
-  }
-
-  cancelDelete() {
-    this.showDeleteConfirm = false;
-    this.deleteTarget = null;
-  }
+ cancelDelete() {
+  this.showDeleteConfirm = false;
+  this.deleteTarget = null;
+  this.centerModal('deleteConfirmModal');
+}
 
   confirmDelete() {
     if (!this.deleteTarget) return;
@@ -1280,4 +1357,9 @@ get canEdit(): boolean {
       this.toastMessage = '';
     }, 3000);
   }
+  ngOnDestroy() {
+  document.removeEventListener('mousemove', this.onDragMove.bind(this));
+  document.removeEventListener('mouseup', this.onDragEnd.bind(this));
+  if (this.toastTimer) clearTimeout(this.toastTimer);
+}
 }

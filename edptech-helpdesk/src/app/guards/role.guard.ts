@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { CanActivate, Router, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { RouteMaskService } from '../services/route-mask.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,8 +9,7 @@ export class RoleGuard implements CanActivate {
   
   constructor(
     private authService: AuthService,
-    private router: Router,
-    private routeMask: RouteMaskService
+    private router: Router
   ) {}
 
   canActivate(
@@ -31,7 +29,6 @@ export class RoleGuard implements CanActivate {
     
     if (!currentUser) {
       console.warn('⚠️ No user found, redirecting to login');
-      this.routeMask.deactivate();
       return this.router.createUrlTree(['/login']);
     }
     
@@ -47,13 +44,11 @@ export class RoleGuard implements CanActivate {
     if (userTable === allowedTable) {
       console.log('✅ Table matches, allowing access');
       // Activate route masking for allowed access
-      this.routeMask.activate();
       return true;
     }
     
     // ❌ Table mismatch - redirect to appropriate dashboard
     console.warn('❌ Table mismatch, redirecting');
-    this.routeMask.deactivate();
     
     if (allowedTable === 'new_user') {
       // If trying to access admin route, redirect to client dashboard

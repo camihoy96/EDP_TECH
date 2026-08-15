@@ -15,7 +15,6 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ClientCalendarModalComponent } from '../client-calendar-modal/client-calendar-modal.component';
 import { ClientReportsModalComponent } from '../client-reports/client-reports-modal.component';
-import { RouteMaskService } from '../../services/route-mask.service';
 interface ClientTicket {
   id: number;
   ticket_number: string;
@@ -2203,8 +2202,8 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   messageNotificationCount = 0;
   private messageCountInterval: any;
   private inactivityTimer: any;
-  private readonly INACTIVITY_TIMEOUT = 10 * 60 * 1000;
-  private readonly SESSION_TIMEOUT = 30 * 60 * 1000;
+  private readonly INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000;  // 3 hours
+  private readonly SESSION_TIMEOUT = 3 * 60 * 60 * 1000 + 60 * 1000;  // 3 hours + 1 minute (buffer)
   private readonly WARNING_BEFORE = 60;
   private readonly MAX_FAILED_ATTEMPTS = 5;
   private readonly LOCKOUT_DURATION = 15 * 60 * 1000;
@@ -2278,7 +2277,6 @@ announcements: any[] = [];
     private ticketService: TicketService,
     private router: Router,
     private http: HttpClient,
-    private routeMask: RouteMaskService,
     private clientNotificationService: ClientNotificationService,
     private sanitizer: DomSanitizer
   ) {}
@@ -2695,7 +2693,7 @@ closeReportModal() {
     });
   }
 
-  private startSecurityTimers(): void {
+private startSecurityTimers(): void {
     this.sessionCheckInterval = setInterval(() => {
       this.checkSessionValidity();
     }, 60000);
@@ -2704,9 +2702,9 @@ closeReportModal() {
       this.validateToken();
     }, 300000);
 
+    // ✅ Make sure this is called
     this.resetInactivityTimer();
-  }
-
+}
   private checkSessionValidity(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) {
@@ -2790,7 +2788,6 @@ closeReportModal() {
           this.handleUnauthorized('User session ended');
           return;
         }
-        this.routeMask.activate();
         this.currentUser = user;
         this.loadThemeSettings();
         this.loadJobOrdersCount();
@@ -2810,6 +2807,7 @@ closeReportModal() {
     if (saved !== null) { this.sidebarHidden = saved === 'true'; }
 
     this.loadSystemSettings();
+    this.startSecurityTimers();
   }
 get requisitionsNotificationCount(): number {
   return this._requisitionsNotificationCount;
@@ -2838,33 +2836,48 @@ private addSeenReqIds(ids: number[]): void {
   // INACTIVITY & AUTO LOGOUT
   // =============================================
 
-  private resetInactivityTimer(): void {
+ private resetInactivityTimer(): void {
+    // Clear existing timers
     if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
     if (this.logoutWarningTimer) clearTimeout(this.logoutWarningTimer);
+    if (this.logoutCountdownInterval) clearInterval(this.logoutCountdownInterval);
     
+    // Reset warning state
+    this.showLogoutWarning = false;
+    this.logoutCountdown = this.WARNING_BEFORE;
+    
+    console.log('⏱️ Inactivity timer reset - will warn in', 
+      Math.round((this.INACTIVITY_TIMEOUT - (this.WARNING_BEFORE * 1000)) / 1000), 'seconds');
+    
+    // Set timer to show warning
     this.inactivityTimer = setTimeout(() => {
+      console.log('⚠️ Inactivity warning triggered!');
       this.showLogoutWarning = true;
       this.startLogoutCountdown();
     }, this.INACTIVITY_TIMEOUT - (this.WARNING_BEFORE * 1000));
-  }
+    
+    // Set timer for full session timeout
+    this.logoutWarningTimer = setTimeout(() => {
+      console.log('⏰ Session timeout - logging out');
+      this.performLogout();
+    }, this.INACTIVITY_TIMEOUT);
+}
 
-  private startLogoutCountdown(): void {
+private startLogoutCountdown(): void {
     this.logoutCountdown = this.WARNING_BEFORE;
+    
+    // Clear any existing countdown
+    if (this.logoutCountdownInterval) clearInterval(this.logoutCountdownInterval);
     
     this.logoutCountdownInterval = setInterval(() => {
       this.logoutCountdown--;
+      console.log('⏳ Logout countdown:', this.logoutCountdown);
       if (this.logoutCountdown <= 0) {
         this.performLogout();
       }
     }, 1000);
-
-    this.logoutWarningTimer = setTimeout(() => {
-      this.performLogout();
-    }, this.WARNING_BEFORE * 1000);
-  }
-
+}
  performLogout() {
-  this.routeMask.deactivate();
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();
@@ -2873,18 +2886,27 @@ private addSeenReqIds(ids: number[]): void {
     sessionStorage.setItem('logoutMessage', 'Your session has expired due to inactivity. Please login again.');
     this.router.navigate(['/login']);
 }
-  cancelLogout() { 
+ cancelLogout() { 
     this.clearLogoutTimers(); 
     this.showLogoutWarning = false; 
     this.showLogoutConfirm = false;
+    this.logoutCountdown = this.WARNING_BEFORE;
     this.resetInactivityTimer();
-  }
-
-  clearLogoutTimers() { 
-    if (this.logoutWarningTimer) clearTimeout(this.logoutWarningTimer); 
-    if (this.logoutCountdownInterval) clearInterval(this.logoutCountdownInterval); 
-  }
-
+}
+clearLogoutTimers() { 
+    if (this.logoutWarningTimer) {
+      clearTimeout(this.logoutWarningTimer);
+      this.logoutWarningTimer = null;
+    }
+    if (this.logoutCountdownInterval) {
+      clearInterval(this.logoutCountdownInterval);
+      this.logoutCountdownInterval = null;
+    }
+    if (this.inactivityTimer) {
+      clearTimeout(this.inactivityTimer);
+      this.inactivityTimer = null;
+    }
+}
   // =============================================
   // LOAD SYSTEM SETTINGS
   // =============================================

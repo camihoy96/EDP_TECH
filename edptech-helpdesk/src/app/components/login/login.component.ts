@@ -2,7 +2,6 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { Location } from '@angular/common';
 import { HttpClient } from '@angular/common/http'; 
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
@@ -842,13 +841,11 @@ export class LoginComponent implements OnInit, OnDestroy {
   constructor(
     private authService: AuthService, 
     private router: Router, 
-    private location: Location,  
-     private clientNotificationService: ClientNotificationService,
+    private clientNotificationService: ClientNotificationService,
     private http: HttpClient
   ) {}
 
   ngOnInit() {
-     this.location.replaceState('/login');
     this.updateTime();
     this.clockInterval = setInterval(() => this.updateTime(), 1000);
     this.tickerInterval = setInterval(() => {

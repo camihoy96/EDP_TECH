@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
 import { CanActivate, Router, ActivatedRouteSnapshot, RouterStateSnapshot, UrlTree } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { RouteMaskService } from '../services/route-mask.service';
 
 @Injectable({
   providedIn: 'root'
@@ -10,8 +9,7 @@ export class AuthGuard implements CanActivate {
   
   constructor(
     private authService: AuthService,
-    private router: Router,
-    private routeMask: RouteMaskService
+    private router: Router
   ) {}
 
   canActivate(
@@ -23,14 +21,11 @@ export class AuthGuard implements CanActivate {
     
     // ✅ Allow login page
     if (state.url.includes('/login')) {
-      // Deactivate route masking on login page
-      this.routeMask.deactivate();
       return true;
     }
     
     // ✅ Allow signup and auth callback
     if (state.url.includes('/signup') || state.url.includes('/auth/callback')) {
-      this.routeMask.deactivate();
       return true;
     }
     
@@ -43,8 +38,6 @@ export class AuthGuard implements CanActivate {
     // ✅ No token = redirect to login
     if (!token || !userStr) {
       console.warn('⚠️ No session found');
-      // Deactivate route masking
-      this.routeMask.deactivate();
       return this.router.createUrlTree(['/login'], {
         queryParams: { returnUrl: state.url, reason: 'no_session' }
       });
@@ -59,30 +52,17 @@ export class AuthGuard implements CanActivate {
         localStorage.removeItem('currentUser');
         sessionStorage.removeItem('token');
         sessionStorage.removeItem('currentUser');
-        // Deactivate route masking
-        this.routeMask.deactivate();
         return this.router.createUrlTree(['/login'], {
           queryParams: { reason: 'token_expired' }
         });
       }
       
-      // ✅ Token looks valid - Activate route masking and ALLOW ACCESS
+      // ✅ Token looks valid - ALLOW ACCESS
       console.log('✅ Token valid, allowing access');
-      
-      // ✅ Activate route masking for authenticated users
-      // Only activate if we're not already on login/signup pages
-      if (!state.url.includes('/login') && 
-          !state.url.includes('/signup') && 
-          !state.url.includes('/auth/callback')) {
-        this.routeMask.activate();
-      }
-      
       return true;
       
     } catch (e) {
       console.error('❌ Token parse error:', e);
-      // Deactivate route masking on error
-      this.routeMask.deactivate();
       return this.router.createUrlTree(['/login'], {
         queryParams: { reason: 'invalid_token' }
       });

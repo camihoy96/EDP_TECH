@@ -250,7 +250,11 @@ import { Subscription } from 'rxjs';
 
 <!-- Reject button - only show when request has been approved (approved_name is filled) -->
 <button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">❌</button>
-      <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
+      <button class="action-btn process-btn" 
+  *ngIf="viewMode === 'incoming' && !req.is_forwarded && req.status === 'approved' && isHeadOrSupervisor() && req.branch_id === currentUser?.branch_id && req.department_id === currentUser?.department_id" 
+  (click)="processRequisition(req)" 
+  title="Process">⚙️</button>
+<!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
       <button class="action-btn process-btn" 
         *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
         (click)="processRequisition(req)" 

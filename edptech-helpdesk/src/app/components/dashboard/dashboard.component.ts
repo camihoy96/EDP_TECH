@@ -13,7 +13,7 @@ import { takeUntil } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
 import { ReportModalComponent } from './report-modal.component';
-import { RouteMaskService } from '../../services/route-mask.service';
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -713,6 +713,28 @@ import { RouteMaskService } from '../../services/route-mask.service';
     </div>
   </div>
 </div>
+<!-- Logout Confirmation Modal -->
+<div class="modal-overlay" *ngIf="showLogoutConfirmModal" (click)="cancelLogoutConfirm()">
+  <div class="logout-confirm-modal" id="logoutConfirmModal" (click)="$event.stopPropagation()">
+    <div class="logout-confirm-header modal-header-handle" (mousedown)="startDrag($event, 'logoutConfirmModal')">
+      <span class="logout-confirm-icon">🚪</span>
+      <h3>Confirm Logout</h3>
+      <button type="button" (click)="cancelLogoutConfirm()" class="modal-close-btn">✕</button>
+    </div>
+    <div class="logout-confirm-body">
+      <p>Are you sure you want to log out of the EDPTech Helpdesk system?</p>
+      <p class="logout-confirm-sub">Any unsaved changes will be lost.</p>
+    </div>
+    <div class="logout-confirm-footer">
+      <button class="btn btn-cancel" (click)="cancelLogoutConfirm()">
+        ✋ Cancel
+      </button>
+      <button class="btn btn-danger" (click)="confirmLogout()">
+        🚪 Logout
+      </button>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
     .app-container{height:100vh;display:flex;flex-direction:column;background:#ece9d8;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:12px;overflow:hidden}
@@ -979,7 +1001,81 @@ import { RouteMaskService } from '../../services/route-mask.service';
     .sidebar-link {
   position: relative;
 }
+.logout-confirm-modal {
+  background: #fff;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  animation: modalSlideIn 0.3s ease;
+  border: 1px solid #a0a0a0;
+}
 
+.logout-confirm-header {
+  background: #cc0000;
+  color: #fff;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.logout-confirm-header h3 {
+  margin: 0;
+  font-size: 15px;
+  flex: 1;
+}
+
+.logout-confirm-icon {
+  font-size: 22px;
+}
+
+.logout-confirm-body {
+  padding: 20px;
+  text-align: center;
+}
+
+.logout-confirm-body p {
+  font-size: 13px;
+  color: #333;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}
+
+.logout-confirm-sub {
+  font-size: 11px !important;
+  color: #888 !important;
+  font-style: italic;
+}
+
+.logout-confirm-footer {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.logout-confirm-footer .btn {
+  padding: 8px 20px;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 0;
+  min-width: 100px;
+}
+
+.btn-danger {
+  background: #cc0000;
+  border: 1px solid #cc0000;
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #aa0000;
+}
 .sidebar-notif-badge {
   position: absolute;
   top: 2px;
@@ -1099,6 +1195,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   incomingOrdersUnreadCount: number = 0;
   totalUnreadCount: number = 0;
   unreadMessagesCount = 0;
+  showLogoutConfirmModal = false;
   // Dragging properties
 private isDragging = false;
 private dragOffsetX = 0;
@@ -1118,7 +1215,6 @@ private get seenReqNotificationIds(): Set<number> {
   constructor(
     private authService: AuthService,
     public router: Router,
-    private routeMask: RouteMaskService,
     private ticketService: TicketService,
     private notificationService: NotificationService,
     private http: HttpClient
@@ -1298,6 +1394,7 @@ onEscKey(event: KeyboardEvent) {
     if (this.showBackupModal && !this.backupInProgress) this.cancelBackup();
     if (this.showClearCacheModal && !this.cacheClearing) this.closeClearCacheModal();
     if (this.showLogoutWarning) this.cancelLogout();
+    if (this.showLogoutConfirmModal) this.cancelLogoutConfirm();
   }
 }
  // =============================================
@@ -1481,7 +1578,6 @@ get requisitionsNotificationCount(): number {
           return;
         }
         this.currentUser = user;
-        this.routeMask.activate();
         this.loadRegistrationKeys();
         this.loadStats();
         this.loadDashboardData();
@@ -1604,7 +1700,6 @@ resetInactivityTimer() {
     }, this.INACTIVITY_TIMEOUT - 60000);
   }
    performLogout() {
-    this.routeMask.deactivate();
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();
@@ -2122,7 +2217,7 @@ get isProfileRoute(): boolean {
   return this.router.url === '/profile';
 }
 goToKnowledgeBase() { 
-    this.routeMask.navigateTo('/knowledge-base');
+    this.router.navigate(['/knowledge-base']);
 }
 
   refreshData() {
@@ -2991,9 +3086,26 @@ goToSupport() {
 }
 
   exit() {
-    if (confirm('Are you sure you want to exit?')) { this.logout(); }
-    this.activeMenu = null;
-  }
+  // Show confirmation modal instead of native confirm
+  this.showLogoutConfirmModal = true;
+  this.activeMenu = null;
+}
+  logout() {
+  // Show confirmation modal instead of logging out directly
+  this.showLogoutConfirmModal = true;
+  this.activeMenu = null;
+}
 
-  logout() { this.authService.logout(); }
+// ✅ Cancel logout confirmation
+cancelLogoutConfirm() {
+  this.showLogoutConfirmModal = false;
+}
+
+// ✅ Confirm and proceed with logout
+confirmLogout() {
+  this.showLogoutConfirmModal = false;
+  this.clearLogoutTimers();
+  this.clearAllSessionData();
+  this.authService.logout();
+}
 }
