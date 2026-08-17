@@ -243,14 +243,13 @@ constructor(
     private clientNotificationService: ClientNotificationService
 ) {}
 
-  ngOnInit() {
-    this.checkUserPermissions();
-    this.loadAnnouncements();
-    this.startPolling(); // ✅ Start auto-refresh
-    document.addEventListener('mousemove', this.onDragMove.bind(this));
-    document.addEventListener('mouseup', this.onDragEnd.bind(this));
-  }
-
+ ngOnInit() {
+  this.checkUserPermissions();
+  this.loadAnnouncements();
+  this.startPolling(); // ✅ Start auto-refresh
+  document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
   ngOnDestroy() {
     this.stopPolling(); // ✅ Clean up
     document.removeEventListener('mousemove', this.onDragMove.bind(this));
@@ -448,34 +447,34 @@ constructor(
     return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
   }
 
-  loadAnnouncements() {
-    this.http.get<any[]>(`${this.apiUrl}/api/announcements`, { headers: this.getHeaders() }).subscribe({
-      next: (data) => {
-        const tagMap: { [key: string]: string } = {
-          'normal': 'INFO', 'important': 'MAINT', 'urgent': 'URGENT'
-        };
-        const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
-        
-        // Track known IDs
-        this.lastKnownIds = new Set((data || []).map(a => a.id));
-        
-        this.announcements = (data || []).map(a => ({
-          id: a.id,
-          title: a.title || 'No Title',
-          content: a.message || a.content || 'No Content',
-          message: a.message || '',
-          tag: tagMap[a.priority] || a.priority || 'INFO',
-          priority: a.priority || 'normal',
-          date: a.created_at || a.date || '',
-          created_at: a.created_at || '',
-          created_by_name: a.created_by_name || '',
-          expires_at: a.expires_at || '',
-          isRead: readIds.includes(a.id)
-        }));
-      },
-      error: (err) => console.error('Failed to load announcements:', err)
-    });
-  }
+ loadAnnouncements() {
+  this.http.get<any[]>(`${this.apiUrl}/api/announcements`, { headers: this.getHeaders() }).subscribe({
+    next: (data) => {
+      const tagMap: { [key: string]: string } = {
+        'normal': 'INFO', 'important': 'MAINT', 'urgent': 'URGENT'
+      };
+      const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
+      
+      // Track known IDs
+      this.lastKnownIds = new Set((data || []).map(a => a.id));
+      
+      this.announcements = (data || []).map(a => ({
+        id: a.id,
+        title: a.title || 'No Title',
+        content: a.message || a.content || 'No Content',
+        message: a.message || '',
+        tag: tagMap[a.priority] || a.priority || 'INFO',
+        priority: a.priority || 'normal',
+        date: a.created_at || a.date || '',
+        created_at: a.created_at || '',
+        created_by_name: a.created_by_name || '',
+        expires_at: a.expires_at || '',
+        isRead: readIds.includes(a.id)  // ✅ Use isRead, not isNew
+      }));
+    },
+    error: (err) => console.error('Failed to load announcements:', err)
+  });
+}
 
   get unreadCount(): number { return this.announcements.filter(a => !a.isRead).length; }
   get urgentCount(): number { return this.announcements.filter(a => a.tag === 'URGENT').length; }

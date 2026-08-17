@@ -58,8 +58,6 @@ interface ClientTicket {
   <div class="menu-item" [class.open]="activeMenu === 'edit'" (click)="toggleMenu('edit')">
     Edit
     <div class="dropdown" *ngIf="activeMenu === 'edit'">
-      <div class="dropdown-item" (click)="focusSearch()">🔍 Search Tickets</div>
-      <div class="dropdown-item" (click)="searchAll()">🔎 Advanced Search</div>
       <div class="dropdown-divider"></div>
       <div class="dropdown-item" (click)="clearSearch()">🗑️ Clear Search</div>
       <div class="dropdown-item" (click)="clearFilters()">🔄 Clear All Filters</div>
@@ -173,28 +171,49 @@ interface ClientTicket {
   
   <div class="toolbar-separator"></div>
 
-  <button class="toolbar-btn" [class.active-btn]="isDashboardRoute" (click)="goToDashboard()">
-    <span class="tbtn-icon">🏠</span> Dashboard
-  </button>
+ <button class="toolbar-btn" [class.active-btn]="isDashboardRoute" (click)="goToDashboard()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="3" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  Dashboard
+</button>
   <button class="toolbar-btn" [class.active-btn]="isProfileRoute" (click)="goToProfile()">
-    <span class="tbtn-icon">👤</span> Profile
-  </button>
-  <button class="toolbar-btn" [class.active-btn]="isTicketListRoute" (click)="setView('all'); markAllTicketsRead()">
-  <span class="tbtn-icon">🎫</span>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="7" r="4"/>
+    <path d="M5.5 21a8.38 8.38 0 0 1 13 0"/>
+  </svg>
+  Profile
+</button>
+<button class="toolbar-btn" [class.active-btn]="isTicketListRoute" (click)="setView('all'); markAllTicketsRead()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M3 9h18M3 15h18M9 3v18"/>
+  </svg>
   {{ isEDPUser() ? 'All Tickets' : 'My Tickets' }}
   <span class="tbadge" *ngIf="getNotificationCount() > 0">{{ getNotificationCount() }}</span>
 </button>
-  <button class="toolbar-btn primary-btn" (click)="newTicket()" *ngIf="!isEDPUser()">
-  <span class="tbtn-icon">＋</span> New Ticket
+ <button class="toolbar-btn primary-btn" (click)="newTicket()" *ngIf="!isEDPUser()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M12 5v14M5 12h14"/>
+  </svg>
+  New Ticket
 </button>
   <button class="toolbar-btn" [class.active-btn]="isContactRoute" (click)="goToContact()">
-  <span class="tbtn-icon">📞</span>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
   {{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}
   <span class="tbadge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
 </button>
+
 <button class="toolbar-btn" [class.active-btn]="isChatRoute" (click)="goToChat()" *ngIf="isEDPUser()">
-    <span class="tbtn-icon">💬</span> Chat
-    <span class="tbadge" *ngIf="chatUnreadCount > 0">{{ chatUnreadCount > 99 ? '99+' : chatUnreadCount }}</span>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  Chat
+  <span class="tbadge" *ngIf="chatUnreadCount > 0">{{ chatUnreadCount > 99 ? '99+' : chatUnreadCount }}</span>
 </button>
   <div class="toolbar-separator"></div>
 
@@ -212,7 +231,16 @@ interface ClientTicket {
 
  <!-- Refresh Button -->
 <button class="toolbar-btn refresh-btn" (click)="refreshAll()" title="Refresh Data" [disabled]="isRefreshing">
-  <span class="tbtn-icon">{{ isRefreshing ? '⏳' : '🔄' }}</span>
+  <svg *ngIf="!isRefreshing" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 2v6h-6"/>
+    <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+    <path d="M3 22v-6h6"/>
+    <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+  </svg>
+  <svg *ngIf="isRefreshing" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="12" r="10" opacity="0.3"/>
+    <path d="M22 12a10 10 0 0 1-10 10"/>
+  </svg>
   {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
 </button>
 
@@ -262,53 +290,74 @@ interface ClientTicket {
 
           <div class="sidebar-section-label">WORKSPACE</div>
           <div class="sidebar-menu">
-            <a routerLink="/client/dashboard" routerLinkActive="active"
-               [routerLinkActiveOptions]="{exact:true}" class="sidebar-link">
-              <span class="nav-icon">🏠</span>
-              <span class="nav-label">Dashboard</span>
-            </a>
+           <a routerLink="/client/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="sidebar-link">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <rect x="3" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  <span class="nav-label">Dashboard</span>
+</a>
 
-            <a routerLink="/client/tickets" routerLinkActive="active"
-            [routerLinkActiveOptions]="{exact:true}" class="sidebar-link" (click)="markAllTicketsRead()">
-            <span class="nav-icon">🎫</span>
-            <span class="nav-label">{{ isEDPUser() ? 'All Tickets' : 'My Tickets' }}</span>
-            <span class="nav-badge" *ngIf="getNotificationCount() > 0">{{ getNotificationCount() }}</span>
-          </a>
+         <a routerLink="/client/tickets" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" class="sidebar-link" (click)="markAllTicketsRead()">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M3 9h18M3 15h18M9 3v18"/>
+  </svg>
+  <span class="nav-label">{{ isEDPUser() ? 'All Tickets' : 'My Tickets' }}</span>
+  <span class="nav-badge" *ngIf="getNotificationCount() > 0">{{ getNotificationCount() }}</span>
+</a>
 
-            <a routerLink="/client/tickets/new" routerLinkActive="active" class="sidebar-link" *ngIf="!isEDPUser()">
-          <span class="nav-icon">➕</span>
-          <span class="nav-label">New Ticket</span>
-        </a>
+    <a routerLink="/client/tickets/new" routerLinkActive="active" class="sidebar-link" *ngIf="!isEDPUser()">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M12 5v14M5 12h14"/>
+  </svg>
+  <span class="nav-label">New Ticket</span>
+</a>
 
-           <a routerLink="/client/job-orders" routerLinkActive="active" class="sidebar-link" (click)="markJobOrdersAsRead()">
-  <span class="nav-icon">✍️</span>
+     <a routerLink="/client/job-orders" routerLinkActive="active" class="sidebar-link" (click)="markJobOrdersAsRead()">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 11l3 3L22 4"/>
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+  </svg>
   <span class="nav-label">Job Orders</span>
   <span class="nav-badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
 </a>
 
-           <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📩</span>
+    <a routerLink="/client/request" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/>
+    <path d="M3 8l9 5 9-5M12 13v8"/>
+  </svg>
   <span class="nav-label">Requests</span>
   <span class="nav-badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
 </a>
             <div class="sidebar-divider"></div>
             <div class="sidebar-section-label">RESOURCES</div>
 
-            <a routerLink="/client/knowledge-base" routerLinkActive="active" class="sidebar-link">
-              <span class="nav-icon">📚</span>
-              <span class="nav-label">Knowledge Base</span>
-            </a>
-
-            <a routerLink="/client/sla-info" routerLinkActive="active" class="sidebar-link">
-              <span class="nav-icon">📋</span>
-              <span class="nav-label">SLA Info</span>
-            </a>
-
-           <a routerLink="/client/contact" routerLinkActive="active" class="sidebar-link">
-          <span class="nav-icon">📞</span>
-          <span class="nav-label">{{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}</span>
-          <span class="nav-badge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
-        </a>
+           <a routerLink="/client/knowledge-base" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+  <span class="nav-label">Knowledge Base</span>
+</a>
+        <a routerLink="/client/sla-info" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="8" y1="13" x2="16" y2="13"/>
+    <line x1="8" y1="17" x2="16" y2="17"/>
+  </svg>
+  <span class="nav-label">SLA Info</span>
+</a>
+  <a routerLink="/client/contact" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+  <span class="nav-label">{{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}</span>
+  <span class="nav-badge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
+</a>
           </div>
 
           <div class="sidebar-footer">
@@ -326,7 +375,11 @@ interface ClientTicket {
   <!-- Recent Tickets Widget -->
   <div class="widget">
     <div class="widget-header">
-      <span class="widget-icon">🎫</span>
+      <span class="widget-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M3 9h18M3 15h18M9 3v18"/>
+  </svg>
+</span>
       <span class="widget-title">Recent Tickets</span>
       <span class="widget-count">{{ myTickets.length }}</span>
     </div>
@@ -351,7 +404,12 @@ interface ClientTicket {
   <!-- ✅ Job Orders Widget -->
   <div class="widget">
     <div class="widget-header">
-      <span class="widget-icon">📋</span>
+     <span class="widget-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 11l3 3L22 4"/>
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+  </svg>
+</span>
       <span class="widget-title">Recent Job Orders</span>
       <span class="widget-count">{{ allOrders.length }}</span>
     </div>
@@ -379,7 +437,12 @@ interface ClientTicket {
   <!-- ✅ Requisitions Widget -->
   <div class="widget">
     <div class="widget-header">
-      <span class="widget-icon">📩</span>
+     <span class="widget-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/>
+    <path d="M3 8l9 5 9-5M12 13v8"/>
+  </svg>
+</span>
       <span class="widget-title">Recent Requests</span>
       <span class="widget-count">{{ allRequisitions.length }}</span>
     </div>
@@ -406,7 +469,14 @@ interface ClientTicket {
   <!-- Status Breakdown Widget -->
   <div class="widget">
     <div class="widget-header">
-      <span class="widget-icon">📊</span>
+     <span class="widget-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <path d="M3 3v18h18"/>
+    <rect x="7" y="12" width="3" height="6" rx="0.5"/>
+    <rect x="12" y="8" width="3" height="10" rx="0.5"/>
+    <rect x="17" y="4" width="3" height="14" rx="0.5"/>
+  </svg>
+</span>
       <span class="widget-title">Status Breakdown</span>
     </div>
     <div class="widget-content">
@@ -428,7 +498,11 @@ interface ClientTicket {
   <!-- Announcements Widget -->
   <div class="widget">
     <div class="widget-header">
-      <span class="widget-icon">📢</span>
+     <span class="widget-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 11l18-8-8 18-3-7-7-3z"/>
+  </svg>
+</span>
       <span class="widget-title">Announcements</span>
       <span class="widget-badge" *ngIf="unreadAnnouncementsCount > 0">
         {{ unreadAnnouncementsCount }} new
@@ -436,11 +510,11 @@ interface ClientTicket {
     </div>
     <div class="widget-content">
       <div class="announce-list">
-        <div class="announce-item" *ngFor="let a of announcements">
-          <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
-          <span class="announce-text">{{ a.text }}</span>
-          <span class="new-dot" *ngIf="a.isNew">●</span>
-        </div>
+       <div class="announce-item" *ngFor="let a of announcements" (click)="markAnnouncementAsRead(a.id)">
+  <span class="announce-badge" [class]="'ab-' + a.type">{{ a.type | uppercase }}</span>
+  <span class="announce-text">{{ a.text }}</span>
+  <span class="new-dot" *ngIf="a.isNew">●</span>
+</div>
         <div class="announce-empty" *ngIf="announcements.length === 0">
           <span>No active announcements</span>
         </div>
@@ -1153,7 +1227,7 @@ interface ClientTicket {
       font-weight: 600;
       box-shadow: 0 2px 8px rgba(79,70,229,0.4);
     }
-    .nav-icon { font-size: 14px; flex-shrink: 0; }
+    .nav-icon { font-size: 16px; flex-shrink: 0; }
     .nav-label { flex: 1; color: #ffffff; }
     .nav-badge {
       background: var(--coral);
@@ -1164,7 +1238,6 @@ interface ClientTicket {
       font-weight: 700;
       flex-shrink: 0;
     }
-
     .sidebar-divider { height: 1px; background: rgba(255,255,255,0.07); margin: 8px 8px; }
 
     .sidebar-footer {
@@ -2411,10 +2484,24 @@ ngOnInit() {
   this.chatCountInterval = setInterval(() => this.loadChatUnreadCount(), 10000);
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
+  
+  // ✅ Reload announcements every 5 minutes
   setInterval(() => this.loadAnnouncements(), 300000);
+  
+  // ✅ ADD THIS: Reload announcements when navigating back to dashboard
   this.router.events.subscribe((event: any) => {
     if (event.url && event.url.includes('/client/request')) {
       this.markRequisitionNotificationsAsRead();
+    }
+    
+    // ✅ Reload announcements when navigating to dashboard
+    if (event.url && (event.url === '/client/dashboard' || event.url === '/client')) {
+      this.loadAnnouncements();
+    }
+    
+    // ✅ Also reload when navigating to announcements page (to sync)
+    if (event.url && event.url.includes('/client/announcements')) {
+      // Don't reload here, just let the announcements page handle it
     }
   });
 }
@@ -3873,7 +3960,22 @@ loadAnnouncements() {
   if (!token) return;
   
   const headers = { 'Authorization': `Bearer ${token}` };
-  const readIds = JSON.parse(localStorage.getItem('read_announcements') || '[]');
+  
+  // ✅ Use the same key as the announcements page
+  // Try multiple possible keys for backwards compatibility
+  let readIds: any[] = [];
+  try {
+    const readData = localStorage.getItem('read_announcements');
+    if (readData) {
+      const parsed = JSON.parse(readData);
+      // Handle both array and object formats
+      readIds = Array.isArray(parsed) ? parsed : 
+                parsed.ids ? parsed.ids : 
+                parsed.readIds ? parsed.readIds : [];
+    }
+  } catch (e) {
+    readIds = [];
+  }
   
   this.http.get<any[]>(`${environment.apiUrl}/api/announcements`, { headers }).subscribe({
     next: (data) => {
@@ -3885,14 +3987,41 @@ loadAnnouncements() {
         })
         .slice(0, 4)
         .map((a: any) => ({
-          id: a.id,  // ✅ Make sure ID is included
+          id: a.id,
           type: (a.priority || a.tag || 'info').toLowerCase(),
           text: a.title,
           isNew: !readIds.includes(a.id)  // ✅ Check against read IDs
         }));
+      
+      console.log('📢 Announcements loaded:', this.announcements.length, 
+                  'Unread:', this.announcements.filter(a => a.isNew).length);
     },
     error: (err) => console.error('Error loading announcements:', err)
   });
+}
+// Add this method to mark announcements as read when clicked
+markAnnouncementAsRead(id: number) {
+  let readIds: any[] = [];
+  try {
+    const readData = localStorage.getItem('read_announcements');
+    if (readData) {
+      const parsed = JSON.parse(readData);
+      readIds = Array.isArray(parsed) ? parsed : parsed.ids || parsed.readIds || [];
+    }
+  } catch (e) {
+    readIds = [];
+  }
+  
+  if (!readIds.includes(id)) {
+    readIds.push(id);
+    localStorage.setItem('read_announcements', JSON.stringify(readIds));
+    
+    // Update local state
+    const announcement = this.announcements.find(a => a.id === id);
+    if (announcement) {
+      announcement.isNew = false;
+    }
+  }
 }
 get unreadAnnouncementsCount(): number {
   return this.announcements.filter(a => a.isNew).length;

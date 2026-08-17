@@ -26,7 +26,10 @@ import { ReportModalComponent } from './report-modal.component';
         <div class="menu-item" (click)="toggleMenu('file')">
   File
   <div class="dropdown" *ngIf="activeMenu === 'file'">
-    <div class="dropdown-item" (click)="newTicket()">📄 New Ticket</div>
+    <div class="dropdown-item" (click)="newTicket()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  New Ticket
+</div>
     <div class="dropdown-item" (click)="goToTickets()">🎫 View All Tickets</div>
     <div class="dropdown-item" (click)="goToKnowledgeBase()">📚 Knowledge Base</div>
     <div class="dropdown-divider"></div>
@@ -117,25 +120,57 @@ import { ReportModalComponent } from './report-modal.component';
         <div class="toolbar-separator"></div>
         <div class="toolbar-separator"></div>
         <button class="toolbar-btn" (click)="goToDashboard()">
-          <span>🏠</span> Dashboard
-        </button>
-        <button class="toolbar-btn" [class.active-btn]="isProfileRoute" (click)="goToProfile()">
-          <span>👨🏻‍💼</span> Profile
-        </button>
-        <button class="toolbar-btn" routerLinkActive="active" (click)="goToTickets()">
-  <span>🎫</span> All Tickets
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  Dashboard
+</button>
+       <button class="toolbar-btn" [class.active-btn]="isProfileRoute" (click)="goToProfile()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+    <circle cx="12" cy="7" r="4"/>
+    <path d="M5.5 21a8.38 8.38 0 0 1 13 0"/>
+  </svg>
+  Profile
+</button>
+      <!-- All Tickets -->
+<button class="toolbar-btn" routerLinkActive="active" (click)="goToTickets()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9h18M3 15h18M9 3v18"/>
+  </svg>
+  All Tickets
   <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
 </button>
+
+<!-- Chat -->
 <button class="toolbar-btn" (click)="goToChat()">
-  <span>💬</span> Chat
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  Chat
   <span class="badge" *ngIf="unreadMessagesCount > 0">{{ unreadMessagesCount }}</span>
 </button>
+
+<!-- Manage Users -->
 <button class="toolbar-btn" routerLinkActive="active" (click)="goToUsers()">
-          <span>📚</span> Manage Users
-        </button>
-        <button class="toolbar-btn" (click)="goToKnowledgeBase()">
-          <span>📚</span> Knowledge Base
-        </button>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75M22 21v-2a4 4 0 0 0-3-3.87"/>
+  </svg>
+  Manage Users
+</button>
+
+<!-- Knowledge Base -->
+<button class="toolbar-btn" (click)="goToKnowledgeBase()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+  Knowledge Base
+</button>
         <div class="toolbar-separator"></div>
         
         <app-ai-assistant 
@@ -175,30 +210,62 @@ import { ReportModalComponent } from './report-modal.component';
 </div>
   <div class="sidebar-menu">
     <a routerLink="/dashboard" routerLinkActive="active" class="sidebar-link">
-      <span class="nav-icon">🏠</span> Dashboard
-    </a>
-    <a routerLink="/tickets" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">🎫</span> All Tickets
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="3" y="3" width="7" height="7" rx="1"/>
+    <rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/>
+    <rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+  Dashboard
+</a>
+   <!-- All Tickets -->
+<a routerLink="/tickets" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 9h18M3 15h18M9 3v18"/>
+  </svg>
+  All Tickets
   <span class="badge" *ngIf="newTicketsCount > 0">{{ newTicketsCount }}</span>
 </a>
+
+<!-- Manage Job Orders -->
 <a routerLink="/admin/job-orders" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📋</span>Manage Job Orders
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M9 11l3 3L22 4"/>
+    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+  </svg>
+  Manage Job Orders
   <span class="badge" *ngIf="pendingJobOrdersCount > 0">{{ pendingJobOrdersCount }}</span>
 </a>
+
+<!-- Manage Requisitions -->
 <a routerLink="/admin/requisitions" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📩</span>Manage Requisitions
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/>
+    <path d="M3 8l9 5 9-5M12 13v8"/>
+  </svg>
+  Manage Requisitions
   <span class="badge" *ngIf="requisitionsNotificationCount > 0">{{ requisitionsNotificationCount }}</span>
 </a>
     <!-- Knowledge Base Section -->
     <div class="sidebar-divider"></div>
     <a routerLink="/knowledge-base" routerLinkActive="active" class="sidebar-link">
-      <span class="nav-icon">📚</span> Knowledge Base
-    </a>
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+  Knowledge Base
+</a>
     
     <!-- Reports Section -->
     <div class="sidebar-divider"></div>
-    <a routerLink="/admin/reports" routerLinkActive="active" class="sidebar-link">
-  <span class="nav-icon">📊</span> Reports
+   <a routerLink="/admin/reports" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 3v18h18"/>
+    <rect x="7" y="12" width="3" height="6" rx="0.5"/>
+    <rect x="12" y="8" width="3" height="10" rx="0.5"/>
+    <rect x="17" y="4" width="3" height="14" rx="0.5"/>
+  </svg>
+  Reports
 </a>
     
     <!-- Admin/Management Section (only visible to admins and agents) -->
@@ -206,32 +273,48 @@ import { ReportModalComponent } from './report-modal.component';
   <div class="sidebar-divider"></div>
   <div class="sidebar-section-title">Management</div>
 
-  <a *ngIf="currentUser?.user_table === 'users'" 
-   routerLink="/admin/users-management" 
-   routerLinkActive="active" 
-   class="sidebar-link">
-  <span class="nav-icon">👥</span> User Management
+  <a *ngIf="currentUser?.user_table === 'users'" routerLink="/admin/users-management" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M2 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v2"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75M22 21v-2a4 4 0 0 0-3-3.87"/>
+  </svg>
+  User Management
 </a>
 
   <a routerLink="/admin/registration-keys" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">🔑</span> Registration Keys
-  </a>
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="7.5" cy="15.5" r="5.5"/>
+    <path d="M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/>
+  </svg>
+  Registration Keys
+</a>
 
-  <a routerLink="/admin/departments" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">🏢</span>Org Directory
-  </a>
+ <a routerLink="/admin/departments" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6M9 10h.01M15 10h.01"/>
+  </svg>
+  Org Directory
+</a>
 
  <a routerLink="/admin/computer-monitoring" routerLinkActive="active" class="sidebar-link" style="position: relative;">
-  <span class="nav-icon">💻</span> Computer Monitoring
-  <span *ngIf="computerMonitoringNotifCount > 0" 
-        class="sidebar-notif-badge" 
-        [title]="computerMonitoringNotifCount + ' active alert(s)'">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="2" y="3" width="20" height="14" rx="2"/>
+    <line x1="8" y1="21" x2="16" y2="21"/>
+    <line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+  Computer Monitoring
+  <span *ngIf="computerMonitoringNotifCount > 0" class="sidebar-notif-badge">
     {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
   </span>
 </a>
+
   <a routerLink="/admin/announcements" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">📢</span>Manage Announcements
-  </a>
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M3 11l18-8-8 18-3-7-7-3z"/>
+  </svg>
+  Manage Announcements
+</a>
 </ng-container>
 
 <!-- System Section (admin, head/manager, supervisor) -->
@@ -240,20 +323,36 @@ import { ReportModalComponent } from './report-modal.component';
   <div class="sidebar-section-title">System</div>
   
   <a routerLink="/admin/settings" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">⚙️</span> System Settings
-  </a>
-  
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  System Settings
+</a>
+
   <a routerLink="/admin/database" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
-    <span class="nav-icon">🗄️</span> Database
-  </a>
-  
-  <a routerLink="/admin/logs" routerLinkActive="active" class="sidebar-link">
-    <span class="nav-icon">📋</span> System Logs
-  </a>
-  
-  <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
-    <span class="nav-icon">🩺</span> System Health
-  </a>
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+  </svg>
+  Database
+</a>
+ <a routerLink="/admin/logs" routerLinkActive="active" class="sidebar-link">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="8" y1="13" x2="16" y2="13"/>
+    <line x1="8" y1="17" x2="16" y2="17"/>
+  </svg>
+  System Logs
+</a>
+ <a routerLink="/admin/system-health" routerLinkActive="active" class="sidebar-link" *ngIf="isAdminUser()">
+  <svg class="nav-icon-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+  </svg>
+  System Health
+</a>
 </ng-container>
   </div>
   
@@ -1093,7 +1192,11 @@ import { ReportModalComponent } from './report-modal.component';
   animation: pulse-badge 2s infinite;
   z-index: 10;
 }
-
+.nav-icon-svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
 @keyframes pulse-badge {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.1); }

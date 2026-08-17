@@ -244,6 +244,26 @@ import { ClientNotificationService } from '../../../services/client-notification
             </tr>
           </tbody>
         </table>
+        <div *ngIf="filteredOrders.length === 0" class="empty-state">
+    <!-- No orders at all -->
+    <ng-container *ngIf="allOrders.length === 0">
+      <div class="empty-icon">📋</div>
+      <h3>No Job Orders Found</h3>
+      <p>There are no job orders yet.</p>
+      <button class="classic-btn primary" (click)="newJobOrder()">
+        <span>➕</span> Create First Job Order
+      </button>
+    </ng-container>
+
+    <!-- Has orders but none match filters -->
+    <ng-container *ngIf="allOrders.length > 0">
+      <div class="empty-icon">🔍</div>
+      <h3>No Matching Job Orders</h3>
+      <p>No job orders found for the current view and filters.</p>
+      <button class="classic-btn" (click)="resetFilters()">
+        <span>🔄</span> Clear Filters
+      </button>
+    </ng-container>
       </div>
     </div>
     <!-- Detail Modal -->
@@ -827,6 +847,41 @@ import { ClientNotificationService } from '../../../services/client-notification
   font-size: 12px;
   padding: 3px 12px;
 }
+  .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  background: white;
+  min-height: 300px;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.empty-state h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+.empty-state p {
+  margin: 0 0 20px 0;
+  font-size: 13px;
+  color: #888;
+  max-width: 400px;
+  line-height: 1.5;
+}
+
+.empty-state .classic-btn {
+  margin-top: 4px;
+}
     .detail-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 14px; }
     .detail-item { padding: 6px 8px; background: #f9f9f9; border-radius: 4px; }
     .detail-item label { display: block; font-size: 12px; font-weight: 600; color: #555; text-transform: uppercase; }
@@ -1318,6 +1373,16 @@ loadReadOrdersFromStorage() {
     }
   }
  
+  resetFilters() {
+  this.searchTerm = '';
+  this.activeTab = 'all';
+  this.filters = {
+    branchId: '',
+    requestFromDept: ''
+  };
+  this.filteredFilterDepartments = [];
+  this.applyFilters();
+}
  // ✅ Get all orders for "Our Job Orders" view (without filters)
   getAllOurOrders(): any[] {
     const currentUserBranchId = Number(this.currentUser?.branch_id);
