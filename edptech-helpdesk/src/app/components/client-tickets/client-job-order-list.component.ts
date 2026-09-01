@@ -194,37 +194,50 @@ import { NotificationService } from '../../services/notification.service';
   </div>
 </td>
 <td (click)="$event.stopPropagation()">
-<!-- ✅ Edit button - for pending orders in both views -->
-<button class="action-btn edit-btn" 
-        *ngIf="(jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending')) && canEditOrder(jo)" 
-        (click)="editOrder(jo)" title="Edit">✏️</button>
+  <!-- ✅ Edit button - for pending orders in both views -->
+  <button class="action-btn edit-btn" 
+          *ngIf="(jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending')) && canEditOrder(jo)" 
+          (click)="editOrder(jo)" title="Edit">✏️</button>
+  
   <button class="action-btn view-btn" (click)="viewDetail(jo)" title="View">👁️</button>
   <button class="action-btn print-btn" (click)="printOrder(jo)" title="Print">🖨️</button>
   
   <!-- ✅ Receive button - ONLY in J.O. Request Management -->
   <button class="action-btn accept-btn" 
-          *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
-          (click)="receiveOrder(jo)" title="Receive">📥</button>
-<!-- ✅ Forward button - ONLY when status is approved (received) -->
-<button class="action-btn forward-btn" 
-        *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
-        (click)="forwardOrder(jo)" title="Forward">➡️</button>
+        *ngIf="viewMode === 'incoming' && (
+          (jo.is_forwarded && jo.forwarded_status === 'pending') ||
+          (!jo.is_forwarded && jo.status === 'pending')
+        )" 
+        (click)="receiveOrder(jo)" title="Receive">📥</button>
+  <!-- ✅ Forward button - ONLY when status is approved (received) -->
+  <button class="action-btn forward-btn" 
+          *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
+          (click)="forwardOrder(jo)" title="Forward">➡️</button>
 
-  <!-- ✅ Assign / Reassign button - FIXED -->
-<!-- ✅ Reassign button - for supervisor/head/manager only when already assigned -->
-<button class="action-btn assign-btn" 
+  <!-- ✅ NEW: Assign button - Show when approved/received but NOT yet assigned -->
+  <button class="action-btn assign-btn" 
+        *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
+          (jo.is_forwarded && jo.forwarded_status === 'forwarded') ||
+          (!jo.is_forwarded && jo.status === 'approved')
+        )" 
+        (click)="assignOrder(jo)" 
+        title="Assign">👤</button>
+
+  <!-- ✅ Reassign button - for supervisor/head/manager only when already assigned -->
+ <button class="action-btn assign-btn" 
         *ngIf="canReassign() && viewMode === 'incoming' && (
-          jo.status === 'assigned' || 
-          (jo.is_forwarded && jo.forwarded_status === 'assigned')
+          (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
+          (!jo.is_forwarded && jo.status === 'assigned')
         )" 
         (click)="assignOrder(jo)" 
         title="Reassign">🔄</button>
-  
-  <!-- ✅ Done button - ONLY in J.O. Request Management -->
+  <!-- ✅ Done button - ONLY show when assigned -->
  <button class="action-btn done-btn" 
-        *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (jo.status === 'assigned' || (jo.is_forwarded && jo.forwarded_status === 'assigned'))" 
+        *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
+          (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
+          (!jo.is_forwarded && jo.status === 'assigned')
+        )" 
         (click)="markAsDone(jo)" title="Mark as Done">✅</button>
-  
   <!-- ✅ Reject button - ONLY in J.O. Request Management -->
   <button class="action-btn reject-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 

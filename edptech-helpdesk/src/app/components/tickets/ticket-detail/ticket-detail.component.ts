@@ -14,7 +14,7 @@ import { ClientNotificationService } from '../../../services/client-notification
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="ticket-detail-view" *ngIf="ticket">
+  <div class="ticket-detail-view" *ngIf="ticket">
       
       <!-- Header -->
       <div class="retro-header">
@@ -35,7 +35,7 @@ import { ClientNotificationService } from '../../../services/client-notification
           <div class="detail-card">
             <h3 class="ticket-title">{{ ticket.title }}</h3>
             
-            <<div class="info-grid">
+            <div class="info-grid">
   <div class="info-item">
     <span class="info-label">Created By</span>
     <span class="info-value">{{ ticket.created_by_name || ticket.creator_name || 'Unknown' }}</span>
@@ -383,6 +383,35 @@ import { ClientNotificationService } from '../../../services/client-notification
     </div>
   </div>
 </div>
+<!-- Notification Modal -->
+<div class="modal-overlay" *ngIf="showNotificationModal" (click)="closeNotificationModal()">
+  <div class="modal-window" (click)="$event.stopPropagation()">
+    <div class="modal-titlebar" [class]="notificationType">
+      <span>{{ notificationType === 'error' ? '❌' : 'ℹ️' }} {{ notificationTitle }}</span>
+      <button type="button" (click)="closeNotificationModal()" class="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="warning-content">
+        <span class="warning-icon">{{ notificationType === 'error' ? '⚠️' : 'ℹ️' }}</span>
+        <div class="warning-message">
+          <p>{{ notificationMessage }}</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="retro-btn primary" (click)="closeNotificationModal()">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Loading State -->
+<div class="loading-state" *ngIf="!ticket && loading">
+  <p>Loading ticket...</p>
+</div>
+<!-- Error State -->
+<div class="error-state" *ngIf="!ticket && error">
+  <p>{{ error }}</p>
+  <button class="retro-btn" (click)="goBack()">Go Back</button>
+</div>
   `,
   styles: [`
     :host { display: block; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
@@ -525,7 +554,18 @@ import { ClientNotificationService } from '../../../services/client-notification
   flex-direction: column;
   gap: 3px;
 }
-
+.modal-titlebar.error {
+  background: linear-gradient(180deg, #cc0000 0%, #880000 100%);
+}
+.modal-titlebar.warning {
+  background: linear-gradient(180deg, #cc6600 0%, #884400 100%);
+}
+.modal-titlebar.success {
+  background: linear-gradient(180deg, #008800 0%, #006600 100%);
+}
+.modal-titlebar.info {
+  background: linear-gradient(180deg, #0a3a8c 0%, #0a246a 100%);
+}
 .file-row {
   display: flex;
   align-items: center;
@@ -752,8 +792,9 @@ import { ClientNotificationService } from '../../../services/client-notification
   color: #888;
   margin-top: 4px;
 }
-  .modal-titlebar.success {
-  background: linear-gradient(180deg, #008800 0%, #006600 100%) color: rgba(0, 0, 0, 0.4);;
+.modal-titlebar.success {
+  background: linear-gradient(180deg, #008800 0%, #006600 100%);
+  color: rgba(0, 0, 0, 0.4);
 }
   .warning-message{ color: rgba(2, 2, 2, 0.99);}
   .comment-avatar {
@@ -789,7 +830,26 @@ import { ClientNotificationService } from '../../../services/client-notification
 .agent-checkbox.checked {
   color: #0a3a8c;
 }
+.loading-state, .error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+  background: #d4d0c8;
+  min-height: 300px;
+}
 
+.loading-state p, .error-state p {
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.error-state {
+  color: #cc0000;
+}
 .selected-count {
   font-weight: bold;
   color: #0a3a8c;
@@ -835,6 +895,10 @@ export class TicketDetailComponent implements OnInit {
   apiUrl = environment.apiUrl;
   newComment = '';
   editStatus = '';
+  showNotificationModal = false;
+notificationTitle = '';
+notificationMessage = '';
+notificationType: 'success' | 'error' | 'warning' | 'info' = 'error';
   editAssignedTo: any = '';
   safeDescription: SafeHtml = '';
   showImageViewer = false;
@@ -843,25 +907,39 @@ export class TicketDetailComponent implements OnInit {
   showAssignModal = false;
   availableAgents: any[] = [];
   selectedAgentIds: number[] = []; 
+  loading = false;
+error = '';
+ constructor(
+  private route: ActivatedRoute,
+  private router: Router,
+  private ticketService: TicketService,
+  private authService: AuthService,
+  private sanitizer: DomSanitizer,
+  private http: HttpClient,
+  private notificationService: NotificationService,
+  private clientNotificationService: ClientNotificationService
+) {
+  console.log('🔍 TicketDetailComponent constructor called');
+  console.log('🔍 Route params at constructor:', this.route.snapshot.paramMap);
+}
+ngOnInit() {
+  console.log('🔄 TicketDetailComponent ngOnInit called');
+  console.log('📋 Current route:', this.route.snapshot);
+  console.log('📋 Route params:', this.route.snapshot.paramMap);
+  console.log('📋 Ticket ID from params:', this.route.snapshot.paramMap.get('id'));
+  console.log('📋 Full URL:', window.location.href);
   
-  constructor(
-    private route: ActivatedRoute,
-    private router: Router,
-    private ticketService: TicketService,
-    private authService: AuthService,
-    private sanitizer: DomSanitizer,
-    private http: HttpClient,
-    private notificationService: NotificationService,
-     private clientNotificationService: ClientNotificationService
-  ) {}
-
-  ngOnInit() {
   this.authService.currentUser$.subscribe(user => {
     this.currentUser = user;
+    console.log('👤 Current user loaded:', this.currentUser?.fullname);
   });
   
   const id = Number(this.route.snapshot.paramMap.get('id'));
+  console.log('📋 Parsed ID (number):', id);
+  console.log('📋 Is ID valid?', !isNaN(id) && id > 0);
+  
   if (id) {
+    console.log('✅ ID is valid, loading ticket...');
     this.loadTicket(id);
     
     // Subscribe to real-time updates for this ticket
@@ -869,13 +947,19 @@ export class TicketDetailComponent implements OnInit {
       if (this.ticket) {
         const updated = tickets.find(t => t.id === this.ticket.id);
         if (updated && JSON.stringify(updated) !== JSON.stringify(this.ticket)) {
+          console.log('🔄 Ticket updated in real-time:', updated.ticket_number);
           this.ticket = updated;
           this.editStatus = updated.status;
         }
       }
     });
+  } else {
+    console.error('❌ No valid ID found in route parameters!');
+    this.error = 'No ticket ID provided.';
+    this.loading = false;
   }
 }
+
 openAssignModal() {
     // Pre-select all currently assigned users
     if (this.ticket?.assigned_users && Array.isArray(this.ticket.assigned_users) && this.ticket.assigned_users.length > 0) {
@@ -1289,31 +1373,82 @@ closeAssignModal() {
 extractedFiles: string[] = [];
 
 loadTicket(id: number) {
-    this.ticketService.getTicket(id).subscribe(ticket => {
-        this.ticket = ticket;
-        this.editStatus = ticket.status;
-        this.editAssignedTo = ticket.assigned_to || '';
-        
-        // Pre-load agent names for all assigned users
-        const assignedUsers = (ticket as any).assigned_users;
-        if (assignedUsers && Array.isArray(assignedUsers)) {
-            assignedUsers.forEach((user: any) => {
-                // ✅ Extract ID from object or use plain number
-                const userId = typeof user === 'object' ? user.id : user;
-                this.fetchAgentName(userId);
-            });
-        }
-        
-        if (ticket.description) {
-            this.safeDescription = this.sanitizer.bypassSecurityTrustHtml(ticket.description);
-            this.extractImages(ticket.description);
-            this.extractFiles(ticket.description);
-        }
-        this.loadComments(id);
-        this.loadAttachments(id);
-    });
+  this.loading = true;
+  this.error = '';
+  console.log('🎫 Loading ticket with ID:', id);
+  
+  // ✅ Check if ID is valid before making the API call
+  if (!id || id <= 0) {
+    console.error('❌ Invalid ticket ID:', id);
+    this.loading = false;
+    this.error = 'Invalid ticket ID. Please go back and try again.';
+    this.showErrorModal('Invalid Ticket ID', 'The ticket ID is invalid. Please go back to the ticket list and try again.');
+    return;
+  }
+  
+  this.ticketService.getTicket(id).subscribe({
+    next: (ticket) => {
+      console.log('✅ Ticket loaded successfully:', ticket?.ticket_number);
+      console.log('📋 Ticket data:', ticket);
+      
+      // ✅ Check if ticket exists
+      if (!ticket) {
+        this.loading = false;
+        this.error = 'Ticket not found.';
+        this.showErrorModal('Ticket Not Found', 'The ticket you are looking for does not exist or may have been deleted.');
+        return;
+      }
+      
+      this.ticket = ticket;
+      this.loading = false;
+      this.editStatus = ticket.status;
+      this.editAssignedTo = ticket.assigned_to || '';
+      
+      // Pre-load agent names for all assigned users
+      const assignedUsers = (ticket as any).assigned_users;
+      if (assignedUsers && Array.isArray(assignedUsers)) {
+        assignedUsers.forEach((user: any) => {
+          const userId = typeof user === 'object' ? user.id : user;
+          this.fetchAgentName(userId);
+        });
+      }
+      
+      if (ticket.description) {
+        this.safeDescription = this.sanitizer.bypassSecurityTrustHtml(ticket.description);
+        this.extractImages(ticket.description);
+        this.extractFiles(ticket.description);
+      }
+      this.loadComments(id);
+      this.loadAttachments(id);
+    },
+    error: (err) => {
+      console.error('❌ Failed to load ticket:', err);
+      this.loading = false;
+      this.error = 'Ticket not found or has been deleted.';
+      // ✅ Show error in modal
+      this.showErrorModal('Error Loading Ticket', err.error?.message || 'Ticket not found or has been deleted. Please go back and try again.');
+    }
+  });
 }
 
+showErrorModal(titleOrMessage: string, message?: string) {
+  // If only one parameter is passed, use it as the message
+  if (!message) {
+    this.notificationTitle = 'Error';
+    this.notificationMessage = titleOrMessage;
+  } else {
+    this.notificationTitle = titleOrMessage;
+    this.notificationMessage = message;
+  }
+  
+  this.updateSuccessMessage = this.notificationTitle;
+  this.showNotificationModal = true;
+  this.notificationType = 'error';
+}
+
+closeNotificationModal() {
+  this.showNotificationModal = false;
+}
 extractImages(html: string) {
   const imgRegex = /<img[^>]+src="([^">]+)"/g;
   let match;
@@ -1473,10 +1608,6 @@ showSuccessModal(message: string) {
 
 closeSuccessModal() {
   this.showUpdateSuccess = false;
-}
-
-showErrorModal(message: string) {
-  alert(message); // Or use a proper error modal
 }
 
 addComment() {

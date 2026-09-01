@@ -23,9 +23,15 @@ const OFFLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 // Middleware
 app.use(cors({
     origin: [
-        'http://localhost:4000', 
-        'http://192.168.10.250:4000', 
-        'http://127.0.0.1:4000'
+        'http://localhost:8082',       // ✅ IIS - local
+        'http://192.168.0.10:8082',    // ✅ IIS - network
+        'http://127.0.0.1:8082',       // ✅ IIS - loopback
+        'http://localhost:4000',       // ✅ Dev server
+        'http://192.168.0.10:4000',    // ✅ Dev server (network)
+        'http://127.0.0.1:4000',       // ✅ Dev server (loopback)
+        'http://localhost:4200',       // ✅ Angular dev server
+        'http://192.168.0.10:4200',    // ✅ Angular dev server (network)
+        'http://127.0.0.1:4200'        // ✅ Angular dev server (loopback)
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -40,7 +46,7 @@ const pool = mysql.createPool({
     database: process.env.DB_NAME,
      dateStrings: true,    // ✅ CRITICAL: Return dates as strings
     timezone: '+08:00', 
-    port: process.env.DB_PORT || 3307,
+    port: process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0
@@ -1063,7 +1069,44 @@ app.post('/api/profile/:table/:id/change-password', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-// ============ TICKET ROUTES ============
+// ✅ Helper function to check if a department is EDP/IT - STRICT MATCH
+function isEDPITDepartmentStrict(departmentName, departmentId) {
+    // First check by ID (most reliable)
+    if (departmentId) {
+        const edpItDeptIds = [1, 14, 23]; // EDP/IT department IDs from your DB
+        if (edpItDeptIds.includes(Number(departmentId))) {
+            return true;
+        }
+    }
+    
+    // Then check by name - STRICT matching
+    if (departmentName) {
+        const name = departmentName.toLowerCase().trim();
+        
+        // Exact matches only
+        const exactMatches = ['edp', 'it', 'edp/it', 'it/edp', 'information technology'];
+        if (exactMatches.includes(name)) {
+            return true;
+        }
+        
+        // Check if it starts with "edp" or "it " (with space)
+        if (name.startsWith('edp') || name.startsWith('it ')) {
+            return true;
+        }
+        
+        // Check for "IT" or "EDP" as a separate word
+        const words = name.split(/[\s\/\-]+/);
+        for (const word of words) {
+            const cleanWord = word.trim();
+            if (cleanWord === 'edp' || cleanWord === 'it') {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
 app.get('/api/tickets/my', async (req, res) => {
     try {
         const userId = parseInt(req.query.userId);
@@ -1071,7 +1114,7 @@ app.get('/api/tickets/my', async (req, res) => {
         const branchId = parseInt(req.query.branchId) || null;
         const userRole = req.query.role || 'user';
         const userDepartmentId = parseInt(req.query.departmentId) || null;
-        const includeAssignedUsers = req.query.includeAssignedUsers === 'true'; // ✅ NEW
+        const includeAssignedUsers = req.query.includeAssignedUsers === 'true';
         
         console.log('═══════════════════════════════════════');
         console.log('📋 /api/tickets/my REQUEST:');
@@ -1096,7 +1139,7 @@ app.get('/api/tickets/my', async (req, res) => {
                    a.fullname as agent_name
         `;
         
-        // ✅ Only include assigned_users details if requested
+        // Only include assigned_users details if requested
         if (includeAssignedUsers) {
             query += `,
                    (
@@ -1139,23 +1182,41 @@ app.get('/api/tickets/my', async (req, res) => {
         
         const values = [];
         
-        // ✅ FIX: Check userTable instead of userRole
+        // FIX: Check userTable instead of userRole
         if (userTable === 'users') {
             console.log('📌 EDP/IT STAFF - tickets sent to EDP/IT departments');
             
-            if (branchId === 1 || branchId === 5) {
-                query += ` AND t.department_id IN (
-                    SELECT id FROM departments 
-                    WHERE branch_id IN (1, 5)
-                    AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
-                )`;
+            // ✅ Get the user's department to check if they are EDP/IT
+            let userDeptId = userDepartmentId;
+            let isEDPIT = false;
+            
+            if (userDeptId) {
+                const [deptCheck] = await pool.query(
+                    'SELECT id, name, branch_id FROM departments WHERE id = ?',
+                    [userDeptId]
+                );
+                if (deptCheck.length > 0) {
+                    // ✅ Use strict EDP/IT check
+                    isEDPIT = isEDPITDepartmentStrict(deptCheck[0].name, deptCheck[0].id);
+                }
+            }
+            
+            if (isEDPIT) {
+                // User is EDP/IT - show tickets to their department
+                if (branchId === 1 || branchId === 5) {
+                    query += ` AND t.department_id IN (
+                        SELECT id FROM departments 
+                        WHERE branch_id IN (1, 5)
+                        AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT')
+                    )`;
+                } else {
+                    query += ` AND t.department_id = ?`;
+                    values.push(userDeptId);
+                }
             } else {
-                query += ` AND t.department_id IN (
-                    SELECT id FROM departments 
-                    WHERE branch_id = ?
-                    AND (name = 'EDP/IT' OR name = 'EDP' OR name = 'IT' OR name LIKE '%EDP%' OR name LIKE '%IT%')
-                )`;
-                values.push(branchId);
+                // User is NOT EDP/IT - only show their own tickets
+                query += ' AND t.created_by = ?';
+                values.push(userId);
             }
         } else {
             console.log('📌 CLIENT - own tickets only');
@@ -1170,52 +1231,50 @@ app.get('/api/tickets/my', async (req, res) => {
         
         const [tickets] = await pool.query(query, values);
         
-        // ✅ FIXED: Parse assigned_users with while-loop for double-stringified JSON
-const parsedTickets = tickets.map(ticket => {
-    let assignedUsers = [];
-    
-    if (ticket.assigned_users) {
-        try {
-            let raw = ticket.assigned_users;
+        // Parse assigned_users with while-loop for double-stringified JSON
+        const parsedTickets = tickets.map(ticket => {
+            let assignedUsers = [];
             
-            // Handle double-stringified JSON
-            let attempts = 0;
-            while (typeof raw === 'string' && attempts < 3) {
+            if (ticket.assigned_users) {
                 try {
-                    raw = JSON.parse(raw);
-                    attempts++;
+                    let raw = ticket.assigned_users;
+                    
+                    let attempts = 0;
+                    while (typeof raw === 'string' && attempts < 3) {
+                        try {
+                            raw = JSON.parse(raw);
+                            attempts++;
+                        } catch (e) {
+                            break;
+                        }
+                    }
+                    
+                    if (Array.isArray(raw)) {
+                        assignedUsers = raw.filter(u => u !== null).map(u => {
+                            if (typeof u === 'object' && u.id) {
+                                return { id: u.id, fullname: u.fullname || null };
+                            }
+                            const uid = typeof u === 'object' ? u.id : u;
+                            return { id: uid, fullname: null };
+                        });
+                    }
                 } catch (e) {
-                    break;
+                    assignedUsers = [];
                 }
             }
             
-            if (Array.isArray(raw)) {
-                assignedUsers = raw.filter(u => u !== null).map(u => {
-                    if (typeof u === 'object' && u.id) {
-                        return { id: u.id, fullname: u.fullname || null };
-                    }
-                    const uid = typeof u === 'object' ? u.id : u;
-                    return { id: uid, fullname: null };
-                });
+            if (assignedUsers.length === 0 && ticket.assigned_to) {
+                assignedUsers = [{
+                    id: ticket.assigned_to,
+                    fullname: ticket.agent_name || null
+                }];
             }
-        } catch (e) {
-            assignedUsers = [];
-        }
-    }
-    
-    // Fallback to assigned_to if no assigned_users
-    if (assignedUsers.length === 0 && ticket.assigned_to) {
-        assignedUsers = [{
-            id: ticket.assigned_to,
-            fullname: ticket.agent_name || null
-        }];
-    }
-    
-    return {
-        ...ticket,
-        assigned_users: assignedUsers
-    };
-});
+            
+            return {
+                ...ticket,
+                assigned_users: assignedUsers
+            };
+        });
         
         console.log(`✅ Found ${parsedTickets.length} tickets`);
         res.json(parsedTickets);
@@ -1230,11 +1289,12 @@ app.get('/api/client/test', (req, res) => {
     console.log('✅ Test endpoint reached!');
     res.json({ message: 'Backend is working!', query: req.query });
 });
+// ============ CLIENT TICKET ROUTES ============
+
 /**
  * GET /api/client/tickets
  * Client-specific ticket endpoint
  */
-
 app.get('/api/client/tickets', async (req, res) => {
     try {
         const userId = parseInt(req.query.userId);
@@ -1277,40 +1337,46 @@ app.get('/api/client/tickets', async (req, res) => {
         userDeptId = userDeptId || user.department_id;
         userBranchId = userBranchId || user.branch_id;
         
-        // Check if EDP/IT
+        console.log('👤 User info:', { 
+            id: user.id, 
+            department_id: userDeptId, 
+            branch_id: userBranchId,
+            department: user.department
+        });
+        
+        // ✅ Check if user is EDP/IT - using STRICT matching
         if (userDeptId) {
             const [deptCheck] = await pool.query(
                 'SELECT id, name, branch_id FROM departments WHERE id = ?',
                 [userDeptId]
             );
             if (deptCheck.length > 0) {
-                const nameLower = (deptCheck[0].name || '').toLowerCase();
-                isEDPIT = nameLower === 'edp/it' || nameLower === 'edp' || nameLower === 'it' ||
-                          nameLower.includes('edp') || nameLower.includes('it');
+                isEDPIT = isEDPITDepartmentStrict(deptCheck[0].name, deptCheck[0].id);
+                console.log('🔍 Department check:', deptCheck[0].name, 'isEDPIT:', isEDPIT);
             }
         }
         
-    // ✅ SIMPLE QUERY - with fallback for branch_name
-let query = `
-    SELECT t.*, 
-           t.created_by_name,
-           COALESCE(u.department, nu.department, '') as creator_department,
-           cb.name as creator_branch_name,
-           d.name as department_name,
-           COALESCE(b.name, tb.name) as branch_name,
-           COALESCE(b.company_name, tb.company_name) as company_name,
-           COALESCE(a.fullname, na.fullname) as agent_name
-    FROM tickets t
-    LEFT JOIN departments d ON t.department_id = d.id
-    LEFT JOIN branches b ON d.branch_id = b.id
-    LEFT JOIN branches tb ON t.branch_id = tb.id
-    LEFT JOIN users a ON t.assigned_to = a.id
-    LEFT JOIN new_user na ON t.assigned_to = na.id
-    LEFT JOIN users u ON t.created_by = u.id
-    LEFT JOIN new_user nu ON t.created_by = nu.id
-    LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
-    WHERE 1=1
-`;
+        // SIMPLE QUERY - with fallback for branch_name
+        let query = `
+            SELECT t.*, 
+                   t.created_by_name,
+                   COALESCE(u.department, nu.department, '') as creator_department,
+                   cb.name as creator_branch_name,
+                   d.name as department_name,
+                   COALESCE(b.name, tb.name) as branch_name,
+                   COALESCE(b.company_name, tb.company_name) as company_name,
+                   COALESCE(a.fullname, na.fullname) as agent_name
+            FROM tickets t
+            LEFT JOIN departments d ON t.department_id = d.id
+            LEFT JOIN branches b ON d.branch_id = b.id
+            LEFT JOIN branches tb ON t.branch_id = tb.id
+            LEFT JOIN users a ON t.assigned_to = a.id
+            LEFT JOIN new_user na ON t.assigned_to = na.id
+            LEFT JOIN users u ON t.created_by = u.id
+            LEFT JOIN new_user nu ON t.created_by = nu.id
+            LEFT JOIN branches cb ON (u.branch_id = cb.id OR nu.branch_id = cb.id)
+            WHERE 1=1
+        `;
         
         const values = [];
         const mainBranchIds = [1, 5];
@@ -1320,70 +1386,77 @@ let query = `
                 // User IS in main branch - show all tickets to their department
                 query += ' AND t.department_id = ?';
                 values.push(userDeptId);
+                console.log('📌 Main branch EDP/IT - showing tickets for department:', userDeptId);
             } else {
-                // User is in OTHER branch - show:
-                // 1. Tickets sent to their own department, OR
-                // 2. Tickets THEY created (includes tickets sent to Main branch)
+                // ✅ User is in OTHER branch EDP/IT
+                // Show: 1. Tickets sent to their EDP/IT department, OR 2. Tickets THEY created
+                // This includes tickets created by the EDP user AND tickets from other departments sent to EDP/IT
                 query += ' AND (t.department_id = ? OR t.created_by = ?)';
                 values.push(userDeptId, userId);
+                console.log('📌 Other branch EDP/IT - showing tickets for department:', userDeptId, 'or created by user:', userId);
             }
         } else {
+            // Regular user - only show their own tickets
             query += ' AND t.created_by = ?';
             values.push(userId);
+            console.log('📌 Regular user - showing own tickets only:', userId);
         }
         
         query += ' ORDER BY t.created_at DESC';
+        
+        console.log('🔍 SQL:', query);
+        console.log('📌 Values:', values);
         
         const [tickets] = await pool.query(query, values);
         
         console.log('📊 Found ' + tickets.length + ' tickets');
         
-        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
-const parsedTickets = tickets.map(ticket => {
-    let assignedUsers = [];
-    
-    if (ticket.assigned_users) {
-        try {
-            let raw = ticket.assigned_users;
+        // Parse assigned_users - handle double-stringified JSON
+        const parsedTickets = tickets.map(ticket => {
+            let assignedUsers = [];
             
-            // Handle double-stringified JSON by parsing until we get an array
-            let attempts = 0;
-            while (typeof raw === 'string' && attempts < 3) {
+            if (ticket.assigned_users) {
                 try {
-                    raw = JSON.parse(raw);
-                    attempts++;
+                    let raw = ticket.assigned_users;
+                    
+                    // Handle double-stringified JSON by parsing until we get an array
+                    let attempts = 0;
+                    while (typeof raw === 'string' && attempts < 3) {
+                        try {
+                            raw = JSON.parse(raw);
+                            attempts++;
+                        } catch (e) {
+                            break;
+                        }
+                    }
+                    
+                    if (Array.isArray(raw)) {
+                        assignedUsers = raw.filter(u => u !== null).map(u => {
+                            if (typeof u === 'object' && u.id) {
+                                return {
+                                    id: u.id,
+                                    fullname: u.fullname || ticket.agent_name || null
+                                };
+                            }
+                            const uid = typeof u === 'object' ? u.id : u;
+                            return { id: uid, fullname: ticket.agent_name || null };
+                        });
+                    }
                 } catch (e) {
-                    break;
+                    assignedUsers = [];
                 }
             }
             
-            if (Array.isArray(raw)) {
-                assignedUsers = raw.filter(u => u !== null).map(u => {
-                    if (typeof u === 'object' && u.id) {
-                        return {
-                            id: u.id,
-                            fullname: u.fullname || ticket.agent_name || null
-                        };
-                    }
-                    const uid = typeof u === 'object' ? u.id : u;
-                    return { id: uid, fullname: ticket.agent_name || null };
-                });
+            // Fallback to assigned_to if no assigned_users
+            if (assignedUsers.length === 0 && ticket.assigned_to) {
+                assignedUsers = [{
+                    id: ticket.assigned_to,
+                    fullname: ticket.agent_name || null
+                }];
             }
-        } catch (e) {
-            assignedUsers = [];
-        }
-    }
-    
-    // Fallback to assigned_to if no assigned_users
-    if (assignedUsers.length === 0 && ticket.assigned_to) {
-        assignedUsers = [{
-            id: ticket.assigned_to,
-            fullname: ticket.agent_name || null
-        }];
-    }
-    
-    return { ...ticket, assigned_users: assignedUsers };
-});
+            
+            return { ...ticket, assigned_users: assignedUsers };
+        });
         
         res.json(parsedTickets);
         
@@ -1704,6 +1777,7 @@ app.post('/api/tickets', async (req, res) => {
         console.log('🎫 Generated ticket number:', ticket_number);
         console.log('🏢 Branch ID:', branchId);
         
+        // ✅ FIX: Don't set id manually - let MySQL auto-increment handle it
         const [result] = await pool.query(`
             INSERT INTO tickets (ticket_number, title, description, priority, location, department_id, branch_id, created_by, created_by_name, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
@@ -3866,7 +3940,7 @@ app.use(idempotencyMiddleware);
 app.get('/api/job-orders/my', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-const decoded = req.decodedUser;
+        const decoded = req.decodedUser;
         let userBranchId = null;
         let userDeptId = null;
         let userFullname = null;
@@ -3910,8 +3984,9 @@ const decoded = req.decodedUser;
         });
         
         // ✅ FIXED: Include creator info via JOIN with users/new_user tables
+        // Added DISTINCT to prevent duplicates
         const [allOrders] = await pool.query(
-            `SELECT 
+            `SELECT DISTINCT
                 jo.*,
                 -- ✅ Creator info (IMPORTANT for frontend filtering)
                 COALESCE(u.branch_id, nu.branch_id) as creator_branch_id,
@@ -4653,7 +4728,8 @@ app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
                 forwarded_to_department_id = ?,
                 forwarded_by_name = ?,
                 forwarded_date = CURDATE(),
-                status = 'forwarded'
+                status = 'forwarded',
+                forwarded_status = 'forwarded'
             WHERE id = ?
         `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, req.params.id]);
         
@@ -4796,7 +4872,7 @@ app.get('/api/requisitions/my', async (req, res) => {
         // 3. Requisitions sent TO my branch+department (for "Request Management")
         // 4. Requisitions forwarded TO my branch+department
         const [reqs] = await pool.query(
-            `SELECT r.*, 
+            `SELECT DISTINCT r.*, 
                     COALESCE(u.department_id, nu.department_id) as creator_dept_id,
                     COALESCE(u.branch_id, nu.branch_id) as creator_branch_id
              FROM requisitions r
@@ -5905,7 +5981,7 @@ app.get('/api/admin/health', async (req, res) => {
             memory_used_mb: parseFloat(memoryUsedMB),
             memory_total_mb: parseFloat(memoryTotalMB),
             api_port: PORT,  // This is the 'PORT' variable you already have
-            db_port: pool.pool?.config?.connectionConfig?.port || process.env.DB_PORT || 3307,
+            db_port: pool.pool?.config?.connectionConfig?.port || process.env.DB_PORT || 3306,
             // Disk
             disk_usage: diskUsage.used !== 'N/A' ? `${diskUsage.used} / ${diskUsage.total}` : 'N/A',
             disk_percent: diskUsage.percent,
@@ -6821,21 +6897,22 @@ app.use('/api/computers', (req, res, next) => {
 // ============================================
 
 // GET - All Settings
+// GET - All Settings
 app.get('/api/admin/settings', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager',];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const [rows] = await pool.query('SELECT settings_key, settings_value FROM system_settings');
         
         const settings = {};
         rows.forEach(row => {
-            if (row.settings_key === 'logo') {
-                // Don't try to JSON parse the logo - it's stored as a plain string
+            if (row.settings_key === 'logo' || row.settings_key === 'ai_avatar') {
+                // Store as plain string
                 settings[row.settings_key] = row.settings_value;
             } else {
                 try {
@@ -6846,28 +6923,53 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             }
         });
         
+        // ✅ CRITICAL FIX: Merge ai_avatar into ai object
+        if (!settings.ai) {
+            settings.ai = {
+                name: 'St4Nger AI',
+                greeting: "Hello! I'm your St4Nger AI. How can I help you today?",
+                avatar: null
+            };
+        }
+        
+        // ✅ If ai_avatar exists and ai.avatar is null/empty, use ai_avatar
+        if (settings.ai_avatar && (!settings.ai.avatar || settings.ai.avatar === null)) {
+            settings.ai.avatar = settings.ai_avatar;
+        }
+        
+        // ✅ If ai.avatar exists, make sure ai_avatar also has it (for backward compatibility)
+        if (settings.ai.avatar && settings.ai.avatar !== null) {
+            settings.ai_avatar = settings.ai.avatar;
+        }
+        
+        console.log('✅ Settings loaded with AI:', {
+            ai_name: settings.ai.name,
+            ai_has_avatar: !!settings.ai.avatar,
+            ai_avatar_length: settings.ai.avatar ? settings.ai.avatar.length : 0
+        });
+        
         res.json(settings);
     } catch (error) {
         console.error('GET /api/admin/settings error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
+// POST - Save Settings
 // POST - Save Settings
 app.post('/api/admin/settings', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         const settings = req.body;
         const userId = decoded.id;
         
-        // Save each settings category (excluding logo)
-        const categories = ['general', 'notification', 'security', 'monitoring', 'appearance', 'backup'];
+        // Save each settings category
+        const categories = ['general', 'notification', 'security', 'monitoring', 'appearance', 'backup', 'ai'];
         
         for (const category of categories) {
             if (settings[category]) {
@@ -6881,13 +6983,24 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             }
         }
         
-        // Save logo separately - store as plain string, not JSON
+        // Save logo separately
         if (settings.logo) {
             await pool.query(
                 `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
                  VALUES ('logo', ?, ?) 
                  ON DUPLICATE KEY UPDATE settings_value = VALUES(settings_value), updated_by = VALUES(updated_by)`,
-                [settings.logo, userId]  // Store as-is, don't JSON.stringify
+                [settings.logo, userId]
+            );
+        }
+        
+        // ✅ Save AI avatar separately ONLY if it's not already in ai object
+        // This ensures both keys are in sync
+        if (settings.ai && settings.ai.avatar) {
+            await pool.query(
+                `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
+                 VALUES ('ai_avatar', ?, ?) 
+                 ON DUPLICATE KEY UPDATE settings_value = VALUES(settings_value), updated_by = VALUES(updated_by)`,
+                [settings.ai.avatar, userId]
             );
         }
         
@@ -6898,25 +7011,22 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
         res.status(500).json({ error: error.message });
     }
 });
-
 // POST - Upload Logo (using multer)
 app.post('/api/admin/upload-logo', uploadLogo.single('logo'), async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
         if (!req.file) {
             return res.status(400).json({ error: 'No image file provided' });
         }
         
-        // Get the relative path for storage
         const logoUrl = '/uploads/logos/' + req.file.filename;
         
-        // Store file path in database
         await pool.query(
             `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
              VALUES ('logo', ?, ?) 
@@ -6925,33 +7035,29 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
         );
         
         console.log('✅ Logo uploaded by user:', decoded.id, 'File:', req.file.filename);
-        res.json({ 
-            success: true, 
-            logoUrl: logoUrl, 
-            message: 'Logo uploaded successfully' 
-        });
+        res.json({ success: true, logoUrl: logoUrl, message: 'Logo uploaded successfully' });
     } catch (error) {
         console.error('POST /api/admin/upload-logo error:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
+
+
 // DELETE - Remove Logo
 app.delete('/api/admin/remove-logo', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-         const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager',];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
         
-        // Get current logo path from database
         const [rows] = await pool.query(
             "SELECT settings_value FROM system_settings WHERE settings_key = 'logo'"
         );
         
-        // Delete the physical file if it exists
         if (rows.length > 0 && rows[0].settings_value) {
             const filepath = path.join(__dirname, rows[0].settings_value);
             if (fs.existsSync(filepath)) {
@@ -6960,7 +7066,6 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             }
         }
         
-        // Remove logo from system_settings
         await pool.query(
             `UPDATE system_settings SET settings_value = NULL, updated_by = ? WHERE settings_key = 'logo'`,
             [decoded.id]
@@ -6978,14 +7083,12 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
 app.get('/api/public/settings', async (req, res) => {
     try {
         const [rows] = await pool.query(
-            "SELECT settings_key, settings_value FROM system_settings WHERE settings_key IN ('general', 'appearance', 'logo')"
+            "SELECT settings_key, settings_value FROM system_settings WHERE settings_key IN ('general', 'appearance', 'logo', 'ai', 'ai_avatar')"
         );
         
         const settings = {};
         rows.forEach(row => {
-            if (row.settings_key === 'logo') {
-                // Logo is stored as a plain string (file path)
-                // Don't try to JSON parse it
+            if (row.settings_key === 'logo' || row.settings_key === 'ai_avatar') {
                 settings[row.settings_key] = row.settings_value;
             } else {
                 try {
@@ -6995,6 +7098,11 @@ app.get('/api/public/settings', async (req, res) => {
                 }
             }
         });
+        
+        // ✅ Merge ai_avatar into ai object
+        if (settings.ai && settings.ai_avatar && !settings.ai.avatar) {
+            settings.ai.avatar = settings.ai_avatar;
+        }
         
         res.json(settings);
     } catch (error) {
@@ -8205,6 +8313,24 @@ app.post('/api/client-notifications/branch', async (req, res) => {
         res.json({ success: true, notified: allEdpIds.length });
     } catch (error) {
         console.error('Error saving branch notification:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// PUT - Mark all notifications as read for a user
+app.put('/api/client-notifications/mark-all-read/:userId', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const userId = parseInt(req.params.userId);
+        
+        await pool.query(
+            'UPDATE client_notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+            [userId]
+        );
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error marking all notifications as read:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -9928,6 +10054,120 @@ const decoded = req.decodedUser;
         res.status(500).json({ error: error.message });
     }
 });
+// ============================================
+// AI SETTINGS ENDPOINTS
+// ============================================
+
+// GET - Get AI settings
+app.get('/api/admin/ai-settings', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const [rows] = await pool.query(
+            'SELECT * FROM system_settings WHERE setting_key = ?',
+            ['ai_settings']
+        );
+        
+        if (rows.length > 0) {
+            res.json({ success: true, settings: JSON.parse(rows[0].setting_value) });
+        } else {
+            res.json({ 
+                success: true, 
+                settings: {
+                    name: 'St4Nger AI',
+                    greeting: "Hello! I'm your St4Nger AI. How can I help you today?",
+                    avatar: null
+                }
+            });
+        }
+    } catch (error) {
+        console.error('GET /api/admin/ai-settings error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Save AI settings
+app.post('/api/admin/ai-settings', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const { name, greeting, avatar } = req.body;
+        
+        const settingsValue = JSON.stringify({ name, greeting, avatar });
+        
+        await pool.query(`
+            INSERT INTO system_settings (setting_key, setting_value) 
+            VALUES ('ai_settings', ?)
+            ON DUPLICATE KEY UPDATE setting_value = ?
+        `, [settingsValue, settingsValue]);
+        
+        res.json({ success: true, message: 'AI settings saved' });
+    } catch (error) {
+        console.error('POST /api/admin/ai-settings error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Upload AI Avatar (base64 JSON)
+app.post('/api/admin/upload-ai-avatar', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        const { avatar } = req.body; // Base64 data URL
+        
+        if (!avatar) {
+            return res.status(400).json({ error: 'Avatar data is required' });
+        }
+        
+        // Validate it's a valid base64 image
+        if (!avatar.startsWith('data:image/')) {
+            return res.status(400).json({ error: 'Invalid image format' });
+        }
+        
+        // Save avatar as base64 string
+        await pool.query(
+            `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
+             VALUES ('ai_avatar', ?, ?) 
+             ON DUPLICATE KEY UPDATE settings_value = VALUES(settings_value), updated_by = VALUES(updated_by)`,
+            [avatar, decoded.id]
+        );
+        
+        console.log('✅ AI Avatar saved by user:', decoded.id);
+        res.json({ success: true, avatarUrl: avatar, message: 'AI Avatar saved' });
+    } catch (error) {
+        console.error('POST /api/admin/upload-ai-avatar error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE - Remove AI Avatar
+app.delete('/api/admin/remove-ai-avatar', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin', 'head/manager', 'head manager', 'branch manager'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied.' });
+        }
+        
+        // Remove AI avatar from system_settings
+        await pool.query(
+            `UPDATE system_settings SET settings_value = NULL, updated_by = ? WHERE settings_key = 'ai_avatar'`,
+            [decoded.id]
+        );
+        
+        console.log('✅ AI Avatar removed by user:', decoded.id);
+        res.json({ success: true, message: 'AI Avatar removed' });
+    } catch (error) {
+        console.error('DELETE /api/admin/remove-ai-avatar error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // Start server
 async function startServer() {
@@ -9936,7 +10176,7 @@ async function startServer() {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`\n🚀 EDPtech Helpdesk Backend running on:`);
         console.log(`   Local:    http://localhost:${PORT}`);
-        console.log(`   Network:  http://192.168.10.250:${PORT}`);
+        console.log(`   Network:  http://192.168.0.10:${PORT}`);
         console.log(`\n📋 API Endpoints:`);
         console.log(`   POST   /api/auth/login`);
         console.log(`   POST   /api/auth/register`);

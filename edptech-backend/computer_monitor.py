@@ -19,7 +19,6 @@ from dotenv import load_dotenv
 load_dotenv()  # ← Load FIRST before any imports that need env vars
 
 import jwt
-from ai_assistant import ai_assistant
 from functools import wraps
 # ============================================
 # FLASK API
@@ -35,7 +34,7 @@ DB_CONFIG = {
     'user': 'root',
     'password': '',  # Your MySQL password
     'database': 'edptech_helpdesk',
-    'port': 3307
+    'port': 3306
 }
 
 # Network range to scan (adjust to your network)
@@ -69,7 +68,7 @@ def get_my_network():
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         local_ip = s.getsockname()[0]
-        s.close()
+        s.close()   
         
         ip_parts = local_ip.split('.')
         network = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.0/24"
@@ -126,9 +125,11 @@ def get_network_interfaces():
 # DATABASE SETUP
 # ============================================
 def get_db_connection():
-    """Create database connection."""
-    return mysql.connector.connect(**DB_CONFIG)
-
+    """Create database connection using pure Python implementation."""
+    return mysql.connector.connect(
+        **DB_CONFIG,
+        use_pure=True
+    )
 
 def setup_database():
     """Create the computers table if it doesn't exist."""
@@ -1352,48 +1353,6 @@ def token_required(f):
 
 
 # ============================================
-# AI ASSISTANT ROUTES
-# ============================================
-@app.route('/api/ai/assistant', methods=['POST'])
-def ai_assistant_endpoint():
-    """AI Assistant endpoint powered by Gemini."""
-    try:
-        data = request.get_json()
-        query = data.get('query', '')
-        context = data.get('context', {})
-        
-        if not query:
-            return jsonify({'success': False, 'error': 'Query is required'}), 400
-        
-        username = context.get('currentUser', {}).get('fullname', 'Unknown')
-        logger.info(f"AI Query from {username}: {query[:50]}...")
-        
-        # Get AI response
-        response = ai_assistant.ask(query, context)
-        
-        return jsonify({
-            'success': True,
-            'answer': response
-        })
-        
-    except Exception as e:
-        logger.error(f"AI Assistant error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/ai/health', methods=['GET'])
-def ai_health():
-    """Check AI service health."""
-    return jsonify({
-        'status': 'ok',
-        'gemini_configured': bool(ai_assistant.gemini_api_key),
-        'available': True
-    })
-
-# ============================================
 # COMPUTER MONITORING ROUTES
 # ============================================
 @app.route('/api/computers', methods=['GET'])
@@ -1533,10 +1492,18 @@ def health_check():
 # MAIN ENTRY POINT
 # ============================================
 if __name__ == '__main__':
-    setup_database()
-    
-    print("\n🔍 Running initial network scan...")
-    run_scan()
-    
+    print("\n🔧 Setting up database...")
+
+    try:
+        setup_database()
+        print("✅ Database setup completed.")
+    except Exception as e:
+        print(f"❌ Database setup failed: {e}")
+        raise
+
     print("\n🚀 Starting Flask API server on port 5000...")
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+
+    app.run(host='0.0.0.0', port=5001,
+        debug=True,
+        use_reloader=False
+    )

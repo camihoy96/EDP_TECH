@@ -100,7 +100,7 @@ import { ClientNotificationService } from '../../../services/client-notification
               <tr *ngFor="let item of items; let i = index">
                 <td><input type="number" [(ngModel)]="item.qty" class="item-input" min="1" style="width:60px" [readonly]="approvalMode"></td>
                 <td><input type="text" [(ngModel)]="item.item" class="item-input" placeholder="Item description" [readonly]="approvalMode"></td>
-                <td><input type="number" [(ngModel)]="item.unit_price" class="item-input" step="0.01" style="width:100px" [readonly]="!approvalMode"></td>
+                <td><input type="number" [(ngModel)]="item.unit_price" class="item-input" step="0.01" style="width:100px" [readonly]="approvalMode"></td>
                 <td class="item-total">{{ (item.qty || 0) * (item.unit_price || 0) | number:'1.2-2' }}</td>
                 <td *ngIf="!approvalMode"><button type="button" class="remove-item-btn" (click)="removeItem(i)">✕</button></td>
               </tr>

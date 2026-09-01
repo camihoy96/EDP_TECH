@@ -1,7 +1,7 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://192.168.10.250:6001',  // ✅ Local backend API
-  aiApiUrl: 'http://192.168.10.250:6000',  // AI service (local)
-  streamUrl: 'http://192.168.10.250:5001',  // Stream service (local)
-  uploadsUrl: 'http://192.168.10.250:6001/uploads'  // ✅ Local uploads path
+  apiUrl: 'http://192.168.0.10:6001',
+  aiApiUrl: 'http://192.168.0.10:5000',  // ✅ Changed from 6000 to 5000
+  streamUrl: 'http://192.168.0.10:5001',
+  uploadsUrl: 'http://192.168.0.10:6001/uploads'
 };

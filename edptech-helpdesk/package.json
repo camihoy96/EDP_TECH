@@ -24,10 +24,14 @@
     "@angular/router": "^17.3.0",
     "@auth0/angular-jwt": "^5.1.0",
     "chart.js": "^4.4.0",
+    "classlist-polyfill": "^1.2.0",
+    "core-js": "^3.50.0",
     "multer": "^2.1.1",
     "rxjs": "~7.8.0",
     "socket.io-client": "^4.6.0",
     "tslib": "^2.3.0",
+    "url-polyfill": "^1.1.14",
+    "web-animations-js": "^2.3.2",
     "zone.js": "~0.14.4"
   },
   "devDependencies": {

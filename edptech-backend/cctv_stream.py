@@ -36,7 +36,7 @@ DB_CONFIG = {
     "user": "root",
     "password": "",
     "database": "edptech_helpdesk",
-    "port": 3307,
+    "port": 3306,
 }
 
 STREAM_PORT   = 5001        # Port this Flask server listens on

@@ -3037,9 +3037,7 @@ hasSystemAccess(): boolean {
     if (!storedUser.role) return false;
     
     const role = (storedUser.role || '').toLowerCase().trim();
-    
-    console.log('🔍 hasSystemAccess check - role:', role);
-    
+ 
     return role === 'admin' || 
            role === 'head/manager' || 
            role === 'head manager' ||
@@ -3048,9 +3046,6 @@ hasSystemAccess(): boolean {
   }
   
   const role = (this.currentUser.role || '').toLowerCase().trim();
-  
-  console.log('🔍 hasSystemAccess check - role:', role);
-  
   return role === 'admin' || 
          role === 'head/manager' || 
          role === 'head manager' ||

@@ -255,10 +255,10 @@ import { Subscription } from 'rxjs';
   (click)="processRequisition(req)" 
   title="Process">⚙️</button>
 <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
-      <button class="action-btn process-btn" 
-        *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && !req.forwarded_status && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
-        (click)="processRequisition(req)" 
-        title="Process Forwarded">⚙️</button>
+     <button class="action-btn process-btn" 
+  *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && req.forwarded_status === 'forwarded' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+  (click)="processRequisition(req)" 
+  title="Process Forwarded">⚙️</button>
         
       <!-- 🔑 Release button for FORWARDED requests in incoming view (after processing) -->
       <button class="action-btn release-btn" 
@@ -2287,36 +2287,45 @@ canProcess(req: any): boolean {
   console.log(`🔍 canProcess check - REQ #${req.requisition_number}:`, {
     status,
     is_forwarded: req.is_forwarded,
+    forwarded_status: req.forwarded_status,
     forwarded_to_branch_id: req.forwarded_to_branch_id,
     forwarded_to_department_id: req.forwarded_to_department_id,
     userBranchId: this.currentUser.branch_id,
     userDeptId: this.currentUser.department_id
   });
   
-  // Can process if status is 'approved' (normal) OR 'forwarded' (forwarded to us)
-  if (status !== 'approved' && status !== 'forwarded') {
-    console.log(`❌ canProcess: status ${status} not allowed`);
-    return false;
-  }
-  
-  // For forwarded requests, check if it was forwarded TO us
+  // For forwarded requests
   if (req.is_forwarded) {
+    // Check if forwarded TO us
     const forwardedToMe = req.forwarded_to_branch_id == this.currentUser.branch_id && 
                           req.forwarded_to_department_id == this.currentUser.department_id;
-    console.log(`🔍 canProcess forwarded check: forwardedToMe=${forwardedToMe}`);
+    
     if (!forwardedToMe) {
       console.log('❌ canProcess: forwarded but not to me');
       return false;
     }
-    console.log('✅ canProcess: forwarded to me!');
-    return this.isHeadOrSupervisor();
+    
+    // Can process if status is 'forwarded' AND forwarded_status is 'forwarded'
+    if (status === 'forwarded' && req.forwarded_status === 'forwarded') {
+      console.log('✅ canProcess: forwarded request ready to process');
+      return this.isHeadOrSupervisor();
+    }
+    
+    console.log('❌ canProcess: forwarded request not in processable state');
+    return false;
   }
   
-  // For normal requests, check if sent to my department
+  // For normal requests
+  if (status !== 'approved') {
+    console.log(`❌ canProcess: status ${status} not allowed for normal request`);
+    return false;
+  }
+  
+  // Check if sent to my department
   const sentToMe = req.branch_id == this.currentUser.branch_id && 
                    req.department_id == this.currentUser.department_id && 
                    req.submitted_by !== this.currentUser.id;
-  console.log(`🔍 canProcess normal check: sentToMe=${sentToMe}`);
+  
   if (!sentToMe) {
     console.log('❌ canProcess: not sent to me');
     return false;
@@ -2396,7 +2405,13 @@ confirmProcess() {
     const req = this.processTargetReq;
     const userName = this.currentUser.fullname || this.currentUser.username;
     
-    this.updateLocalRequisition(req.id, { status: 'processing' });
+    // For forwarded requests, update forwarded_status instead of status
+    if (req.is_forwarded) {
+        this.updateLocalRequisition(req.id, { forwarded_status: 'processing' });
+    } else {
+        this.updateLocalRequisition(req.id, { status: 'processing' });
+    }
+    
     this.showToastMsg('⚙️ Processing...', 'success');
     this.cancelProcess();
     
@@ -2407,38 +2422,18 @@ confirmProcess() {
       { status: 'processing' }, { headers }
     ).subscribe({
       next: () => {
-        // ✅ CLIENT SIDE: Notify creator (4 args: req, name, branchId, deptId)
-        if (req.submitted_by && req.submitted_by !== this.currentUser.id) {
-            this.clientNotificationService.handleRequisitionProcessed(
-                req, userName, this.currentUser.branch_id, this.currentUser.department_id
-            );
-        }
-        
-        // ✅ ADMIN SIDE: Broadcast + notify creator (2-3 args: req, name, submittedById?)
-        this.notificationService.handleRequisitionProcessed(
-            req, userName, req.submitted_by
-        );
-        
-        // ✅ CLIENT SIDE: Notify forwarding dept if forwarded (4 args)
-        if (req.is_forwarded && req.branch_id && req.department_id) {
-            this.clientNotificationService.handleRequisitionForwardedProcessed(
-                req, userName, req.branch_id, req.department_id
-            );
-        }
-        
-        // ✅ ADMIN SIDE: Notify forwarding dept (2-3 args)
-        if (req.is_forwarded) {
-            this.notificationService.handleRequisitionForwardedProcessed(
-                req, userName, req.submitted_by
-            );
-        }
-        
+        // Notifications...
         this.showToastMsg('⚙️ Requisition is now processing!', 'success');
         setTimeout(() => this.fetchRequisitionsInBackground(), 1000);
       },
       error: (err) => {
         console.error('Failed to process:', err);
-        this.updateLocalRequisition(req.id, { status: 'approved' });
+        // Revert on error
+        if (req.is_forwarded) {
+            this.updateLocalRequisition(req.id, { forwarded_status: 'forwarded' });
+        } else {
+            this.updateLocalRequisition(req.id, { status: 'approved' });
+        }
         this.showToastMsg('⚠️ Failed, reverting...', 'warning');
       }
     });

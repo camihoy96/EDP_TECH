@@ -310,7 +310,46 @@ import { environment } from '../../../../environments/environment';
         </div>
         <button class="btn btn-primary" (click)="saveSettings()">💾 Save Settings</button>
       </div>
-
+<!-- AI Assistant Settings -->
+<div class="settings-card">
+  <h3>🤖 AI Assistant Settings</h3>
+  
+  <div class="form-group">
+    <label>AI Assistant Name:</label>
+    <input type="text" [(ngModel)]="aiAssistantName" class="form-input" placeholder="e.g., St4Nger AI">
+  </div>
+  
+  <div class="form-group">
+    <label>AI Avatar</label>
+    <div class="logo-upload-area" (click)="aiAvatarFileInput.click()" 
+         [class.has-logo]="aiAvatarImage || aiAvatarPreview">
+      <div class="logo-preview" *ngIf="aiAvatarImage || aiAvatarPreview">
+        <img [src]="aiAvatarPreview || aiAvatarImage" alt="AI Avatar" class="system-logo-preview">
+        <button class="remove-logo-btn" (click)="$event.stopPropagation(); removeAiAvatar()" title="Remove Avatar">✕</button>
+      </div>
+      <div class="logo-placeholder" *ngIf="!aiAvatarImage && !aiAvatarPreview">
+        <span class="logo-icon">🤖</span>
+        <span class="logo-text">Click to upload AI avatar</span>
+        <span class="logo-hint">PNG, JPG, SVG • Max 2MB</span>
+      </div>
+      <input type="file" #aiAvatarFileInput accept="image/*" style="display:none" 
+             (change)="onAiAvatarSelected($event)">
+    </div>
+    <div class="logo-actions" *ngIf="aiAvatarFile || (aiAvatarImage && !aiAvatarPreview)">
+      <button class="btn btn-primary btn-sm" (click)="uploadAiAvatar()" [disabled]="uploadingAiAvatar || !aiAvatarFile">
+        {{ uploadingAiAvatar ? 'Uploading...' : 'Upload AI Avatar' }}
+      </button>
+      <button class="btn btn-secondary btn-sm" (click)="cancelAiAvatarUpload()">Cancel</button>
+    </div>
+    <div class="logo-error" *ngIf="aiAvatarError">{{ aiAvatarError }}</div>
+  </div>
+  
+  <div class="form-group">
+    <label>AI Greeting Message:</label>
+    <textarea [(ngModel)]="aiGreetingMessage" class="form-input" rows="3" 
+              placeholder="Hello! I'm your St4Nger AI. How can I help you today?"></textarea>
+  </div>
+</div>
       <!-- Toast -->
       <div class="toast-notification" [class.show]="showToast" [class.success]="toastType==='success'" [class.error]="toastType==='error'">
         <span>{{ toastMessage }}</span>
@@ -869,7 +908,14 @@ export class SettingsComponent implements OnInit {
   monitoringSettings: any = {};
   appearanceSettings: any = {};
   backupSettings: any = {};
-  
+  // AI Avatar properties
+aiAvatarImage: string | null = null;
+aiAvatarFile: File | null = null;
+aiAvatarPreview: string | null = null;
+uploadingAiAvatar = false;
+aiAvatarError = '';
+aiAssistantName = 'St4Nger AI'; // Admin can change this
+aiGreetingMessage = "Hello! I'm your St4Nger AI. How can I help you today?";
   // Logo properties
   logoImage: string | null = null;
   logoFile: File | null = null;
@@ -877,8 +923,8 @@ export class SettingsComponent implements OnInit {
   uploadingLogo = false;
   logoError = '';
   
-  @ViewChild('logoFileInput') logoFileInput!: ElementRef<HTMLInputElement>;
-
+ @ViewChild('logoFileInput') logoFileInput!: ElementRef<HTMLInputElement>;
+@ViewChild('aiAvatarFileInput') aiAvatarFileInput!: ElementRef<HTMLInputElement>;
   // Branch Management
   branches: any[] = [];
   showBranchModal = false;
@@ -992,10 +1038,13 @@ loadAllSettings() {
       this.appearanceSettings = data.appearance || { ...this.defaultSettings.appearance };
       this.backupSettings = data.backup || { ...this.defaultSettings.backup };
       
+      // Load AI settings
+      this.aiAssistantName = data.ai?.name || 'St4Nger AI';
+      this.aiGreetingMessage = data.ai?.greeting || "Hello! I'm your St4Nger AI. How can I help you today?";
+this.aiAvatarImage = data.ai?.avatar || data.ai_avatar || null;
+      
       // Load logo if available
       if (data.logo) {
-        // If logo is a base64 data URL, use it directly
-        // If it's a relative path, prepend the API URL
         if (data.logo.startsWith('data:')) {
           this.logoImage = data.logo;
         } else if (data.logo.startsWith('http')) {
@@ -1003,16 +1052,14 @@ loadAllSettings() {
         } else {
           this.logoImage = `${environment.apiUrl}${data.logo}`;
         }
-        console.log('✅ Logo loaded from settings');
       } else {
         this.logoImage = null;
-        console.log('ℹ️ No logo found in settings');
       }
       
       console.log('✅ Settings loaded from database');
     },
     error: (err) => {
-      console.warn('Failed to load settings from database, using defaults:', err);
+      console.warn('Failed to load settings:', err);
       this.generalSettings = { ...this.defaultSettings.general };
       this.notificationSettings = { ...this.defaultSettings.notification };
       this.securitySettings = { ...this.defaultSettings.security };
@@ -1020,6 +1067,9 @@ loadAllSettings() {
       this.appearanceSettings = { ...this.defaultSettings.appearance };
       this.backupSettings = { ...this.defaultSettings.backup };
       this.logoImage = null;
+      this.aiAssistantName = 'St4Nger AI';
+      this.aiGreetingMessage = "Hello! I'm your St4Nger AI. How can I help you today?";
+      this.aiAvatarImage = null;
       this.showToastMsg('⚠️ Using default settings', 'error');
     }
   });
@@ -1034,14 +1084,19 @@ saveSettings() {
       'Content-Type': 'application/json'
     };
 
-    const payload: any = {
-      general: this.generalSettings,
-      notification: this.notificationSettings,
-      security: this.securitySettings,
-      monitoring: this.monitoringSettings,
-      appearance: this.appearanceSettings,
-      backup: this.backupSettings
-    };
+     const payload: any = {
+    general: this.generalSettings,
+    notification: this.notificationSettings,
+    security: this.securitySettings,
+    monitoring: this.monitoringSettings,
+    appearance: this.appearanceSettings,
+    backup: this.backupSettings,
+    ai: {
+      name: this.aiAssistantName,
+      greeting: this.aiGreetingMessage,
+      avatar: this.aiAvatarImage
+    }
+  };
 
     // Only include logo if it exists
     if (this.logoImage) {
@@ -1374,7 +1429,107 @@ removeLogo() {
       error: () => this.showToastMsg('⚠️ Failed to trigger scan', 'error')
     });
   }
+// ======================
+// AI AVATAR MANAGEMENT METHODS
+// ======================
+onAiAvatarSelected(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files.length > 0) {
+    const file = input.files[0];
+    
+    if (file.size > 2 * 1024 * 1024) {
+      this.aiAvatarError = 'File size exceeds 2MB limit.';
+      return;
+    }
+    
+    const validTypes = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      this.aiAvatarError = 'Please upload PNG, JPG, SVG, or WebP images only.';
+      return;
+    }
+    
+    this.aiAvatarFile = file;
+    this.aiAvatarError = '';
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.aiAvatarPreview = e.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  }
+}
 
+uploadAiAvatar() {
+  if (!this.aiAvatarFile) return;
+  
+  this.uploadingAiAvatar = true;
+  this.aiAvatarError = '';
+  
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  
+  // ✅ Read file as base64 and send as JSON
+  const reader = new FileReader();
+  reader.onload = (e: any) => {
+    const base64Data = e.target.result as string; // This is a data URL: "data:image/png;base64,..."
+    
+    // Send as JSON to backend
+    this.http.post(`${environment.apiUrl}/api/admin/upload-ai-avatar`, 
+      { avatar: base64Data },  // ✅ JSON payload
+      { 
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        } 
+      }
+    ).subscribe({
+      next: (response: any) => {
+        this.uploadingAiAvatar = false;
+        this.aiAvatarImage = base64Data; // ✅ Use base64 directly
+        this.aiAvatarFile = null;
+        this.aiAvatarPreview = null;
+        localStorage.removeItem('ai_avatar_cache');
+        this.showToastMsg('✅ AI Avatar uploaded!', 'success');
+      },
+      error: (err) => {
+        this.uploadingAiAvatar = false;
+        this.aiAvatarError = err.error?.message || 'Failed to upload AI avatar.';
+        this.showToastMsg('❌ Failed to upload AI avatar', 'error');
+      }
+    });
+  };
+  
+  reader.onerror = () => {
+    this.uploadingAiAvatar = false;
+    this.aiAvatarError = 'Failed to read file.';
+    this.showToastMsg('❌ Failed to read file', 'error');
+  };
+  
+  reader.readAsDataURL(this.aiAvatarFile);
+}
+removeAiAvatar() {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  this.http.delete(`${environment.apiUrl}/api/admin/remove-ai-avatar`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  }).subscribe({
+    next: () => {
+      this.aiAvatarImage = null;
+      this.aiAvatarFile = null;
+      this.aiAvatarPreview = null;
+      localStorage.removeItem('ai_avatar_cache');
+      this.showToastMsg('🗑️ AI Avatar removed!', 'success');
+    },
+    error: () => this.showToastMsg('❌ Failed to remove avatar', 'error')
+  });
+}
+
+cancelAiAvatarUpload() {
+  this.aiAvatarFile = null;
+  this.aiAvatarPreview = null;
+  this.aiAvatarError = '';
+  if (this.aiAvatarFileInput) {
+    this.aiAvatarFileInput.nativeElement.value = '';
+  }
+}
 // ============================================
 // BACKUP & RESTORE
 // ============================================

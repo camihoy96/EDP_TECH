@@ -37,24 +37,25 @@ export class ClientNotificationService {
   private serverPolling: any;
   private shownToastIds: Set<string> = new Set();
   private previousUserId: number | null = null;
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+  private deletedNotificationIds: Set<string> = new Set();
+private readonly DELETED_KEY = 'client_deleted_notifications';
+ constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.isBrowser = isPlatformBrowser(this.platformId);
     if (this.isBrowser) {
       this.injectToastStyles();
       this.createToastContainer();
       this.loadCurrentUser();
+      this.loadShownToastIds(); // ✅ Add this
       this.loadNotificationsFromStorage();
       setTimeout(() => {
         this.loadNotificationsFromServer();
         this.serverPolling = setInterval(() => {
-          // ✅ Check for user change before polling
           this.loadCurrentUser();
           this.loadNotificationsFromServer();
         }, 30000);
       }, 2000);
     }
 }
-
   // ── CURRENT USER ──
 private loadCurrentUser(): void {
     try {
@@ -81,28 +82,26 @@ private loadCurrentUser(): void {
  * ✅ Clear all notification data when user changes
  */
 private clearAllNotificationData(): void {
-    // Clear all notifications
     this.notificationsSubject.next([]);
     this.ticketNotifications = [];
     this.shownToastIds.clear();
+    this.deletedNotificationIds.clear(); // ✅ Add this
     
-    // Clear all notification-related localStorage
     try {
-        // Get all keys and clear notification-related ones
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
             if (key && (
                 key.startsWith('client_notifications_') ||
-                key.startsWith('client_ticket_notifications_')
+                key.startsWith('client_ticket_notifications_') ||
+                key === 'client_deleted_notifications' || // ✅ Add this
+                key === 'client_shown_toast_ids' // ✅ Add this
             )) {
                 keysToRemove.push(key);
             }
         }
         keysToRemove.forEach(key => localStorage.removeItem(key));
-    } catch (e) {
-        // Ignore storage errors
-    }
+    } catch (e) {}
 }
 /**
  * ✅ Public method to call when user logs out
@@ -879,6 +878,9 @@ public resetForNewUser(): void {
     .then((data: any[]) => {
       if (!Array.isArray(data)) return;
 
+      // ✅ Get locally deleted notification IDs
+      const deletedIds = this.getDeletedNotificationIds();
+      
       const current = this.notificationsSubject.value;
       const currentMap = new Map(current.map(n => [n.id, n]));
       const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
@@ -886,6 +888,12 @@ public resetForNewUser(): void {
 
       data.forEach(n => {
         const srvId = 'srv_' + n.id;
+        
+        // ✅ SKIP if this notification was deleted locally
+        if (deletedIds.has(srvId) || deletedIds.has(String(n.id))) {
+          return;
+        }
+        
         const existing = currentMap.get(srvId);
         if (existing) {
           existing.read = existing.read || (n.is_read === 1);
@@ -922,9 +930,11 @@ public resetForNewUser(): void {
               };
               serverNotifications.push(newNotif);
 
+              // ✅ Only show toast for NEW unread notifications
               const toastKey = `toast-${srvId}`;
               if (!this.shownToastIds.has(toastKey) && n.is_read === 0) {
                 this.shownToastIds.add(toastKey);
+                this.saveShownToastIds();
                 this.showToastPopup(
                   newNotif.title,
                   newNotif.message,
@@ -936,7 +946,10 @@ public resetForNewUser(): void {
         }
       });
 
-      const merged = [...serverNotifications, ...localNotifications];
+      // ✅ Filter out local notifications that were deleted
+      const filteredLocal = localNotifications.filter(n => !deletedIds.has(n.id));
+      
+      const merged = [...serverNotifications, ...filteredLocal];
       const deduped = this.removeDuplicates(merged);
       this.notificationsSubject.next(deduped);
       this.saveNotifications(deduped);
@@ -944,8 +957,45 @@ public resetForNewUser(): void {
     .catch((err) => {
       console.log('⚠️ Client notifications fetch failed:', err.message);
     });
-  }
-
+}
+private getDeletedNotificationIds(): Set<string> {
+    if (!this.isBrowser) return new Set();
+    
+    try {
+        const stored = localStorage.getItem(this.DELETED_KEY);
+        if (stored) {
+            const ids = JSON.parse(stored);
+            return new Set(ids);
+        }
+    } catch (e) {}
+    
+    return new Set();
+}
+private saveDeletedNotificationIds(ids: Set<string>): void {
+    if (!this.isBrowser) return;
+    
+    try {
+        localStorage.setItem(this.DELETED_KEY, JSON.stringify([...ids]));
+    } catch (e) {}
+}
+private saveShownToastIds(): void {
+    if (!this.isBrowser) return;
+    
+    try {
+        localStorage.setItem('client_shown_toast_ids', JSON.stringify([...this.shownToastIds]));
+    } catch (e) {}
+}
+private loadShownToastIds(): void {
+    if (!this.isBrowser) return;
+    
+    try {
+        const stored = localStorage.getItem('client_shown_toast_ids');
+        if (stored) {
+            const ids = JSON.parse(stored);
+            this.shownToastIds = new Set(ids);
+        }
+    } catch (e) {}
+}
   // ── NOTIFICATION CRUD ──
 
   private addLocalNotification(notif: ClientNotification): void {
@@ -1053,17 +1103,28 @@ public resetForNewUser(): void {
       }
     }
   }
-
-  markAllAsRead(): void {
+markAllAsRead(): void {
     const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true }));
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
-  }
-
-  dismissNotification(id: string): void {
+    
+    // ✅ Sync with backend
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (token && this.currentUserId) {
+      fetch(`${environment.apiUrl}/api/client-notifications/mark-all-read/${this.currentUserId}`, {
+        method: 'PUT',
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).catch(() => {});
+    }
+}
+ dismissNotification(id: string): void {
     const updated = this.notificationsSubject.value.filter(n => n.id !== id);
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
+
+    // ✅ Track as deleted
+    this.deletedNotificationIds.add(id);
+    this.saveDeletedNotificationIds(this.deletedNotificationIds);
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token && id.startsWith('srv_')) {
@@ -1073,10 +1134,16 @@ public resetForNewUser(): void {
         headers: { 'Authorization': `Bearer ${token}` }
       }).catch(() => {});
     }
-  }
-
-  clearAll(): void {
+}
+clearAll(): void {
     const current = this.notificationsSubject.value;
+    
+    // ✅ Track all as deleted
+    current.forEach(n => {
+        this.deletedNotificationIds.add(n.id);
+    });
+    this.saveDeletedNotificationIds(this.deletedNotificationIds);
+    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       current.forEach(n => {
@@ -1092,9 +1159,10 @@ public resetForNewUser(): void {
     this.ticketNotifications = [];
     localStorage.removeItem(this.getTicketNotifKey());
     this.shownToastIds.clear();
+    this.saveShownToastIds();
     this.notificationsSubject.next([]);
     localStorage.removeItem(this.getStorageKey());
-  }
+}
 
   getUnreadCount(): number {
     return this.notificationsSubject.value.filter(n => !n.read).length;

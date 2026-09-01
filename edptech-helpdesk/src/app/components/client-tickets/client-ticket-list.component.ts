@@ -304,7 +304,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     .ticket-list-view {
       padding: 10px;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      font-size: 11px;
+      font-size: 12px;
     }
 
     .view-header {
@@ -323,7 +323,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
       border-radius: 3px;
       padding: 5px 14px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 12px;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -344,12 +344,12 @@ import { ClientNotificationService } from '../../services/client-notification.se
       background: #d4d0c8; border: 2px solid;
       border-color: #fff #808080 #808080 #fff;
       border-radius: 2px 2px 0 0; padding: 5px 12px;
-      cursor: pointer; font-size: 10px; color: #333;
+      cursor: pointer; font-size: 11px; color: #333;
       display: inline-flex; align-items: center; gap: 6px;
     }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
-    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; }
+    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: bold; }
     .status-tab.active .tab-count { background: #0a3a8c; }
     .tab-count.new-count { background: #0066cc; }
     .tab-count.progress-count { background: #cc6600; }
@@ -361,22 +361,22 @@ import { ClientNotificationService } from '../../services/client-notification.se
       flex-wrap: wrap;
     }
     .filter-group { display: flex; align-items: center; gap: 4px; }
-    .filter-group label { font-size: 10px; font-weight: bold; color: #000; }
-    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 10px; background: white; }
+    .filter-group label { font-size: 11px; font-weight: bold; color: #000; }
+    .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 11px; background: white; }
     .search-group .classic-input { width: 160px; }
 
     .classic-status-bar {
       background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none;
-      padding: 3px 10px; font-size: 10px; color: #333;
+      padding: 3px 10px; font-size: 11px; color: #333;
       display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
     }
     .status-sep { color: #b0b0b0; }
 
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
-    .classic-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    .classic-table { width: 100%; border-collapse: collapse; font-size: 11px; }
     .classic-table th {
       background: #0a246a; color: white; padding: 6px 8px; text-align: center;
-      font-weight: bold; font-size: 10px; border-right: 1px solid rgba(255,255,255,0.2);
+      font-weight: bold; font-size: 11px; border-right: 1px solid rgba(255,255,255,0.2);
       white-space: nowrap;
     }
     .classic-table th:last-child { border-right: none; }
@@ -384,17 +384,17 @@ import { ClientNotificationService } from '../../services/client-notification.se
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0fe; }
 
-    .ticket-num { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 11px; }
+    .ticket-num { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
     .ticket-title { font-weight: 500; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .date-cell { font-family: monospace; font-size: 10px; white-space: nowrap; color: #555; }
+    .date-cell { font-family: monospace; font-size: 11px; white-space: nowrap; color: #555; }
 
-    .priority-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+    .priority-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
     .priority-critical { background: #cc0000; color: white; }
     .priority-high { background: #ff6600; color: white; }
     .priority-medium { background: #ffcc00; color: #000; }
     .priority-low { background: #008800; color: white; }
 
-    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 9px; text-transform: uppercase; }
+    .status-badge { display: inline-block; padding: 2px 6px; border-radius: 2px; font-size: 11px; text-transform: uppercase; }
     .status-new { background: #cde8f5; color: #0066cc; }
     .status-assigned { background: #e0e0e0; color: #666; }
     .status-in_progress { background: #fff0cc; color: #cc6600; }
@@ -405,9 +405,9 @@ import { ClientNotificationService } from '../../services/client-notification.se
     /* Send To Column */
     .sendto-cell { max-width: 130px; }
     .sendto-info-small { display: flex; flex-direction: column; gap: 2px; align-items: center; }
-    .dept-name-small { font-weight: 600; font-size: 10px; color: #0a3a8c; }
+    .dept-name-small { font-weight: 600; font-size: 11px; color: #0a3a8c; }
     .branch-tag-tiny {
-      font-size: 8px;
+      font-size: 11px;
       background: #f0f4ff;
       color: #0a3a8c;
       padding: 1px 5px;
@@ -418,7 +418,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
 /* Status worker info */
 .status-cell { text-align: center; }
 .worker-label { 
-  font-size: 9px; 
+  font-size: 11px; 
   color: #666; 
   display: block; 
   margin-top: 2px;
@@ -432,10 +432,10 @@ import { ClientNotificationService } from '../../services/client-notification.se
 .agent-name-display { 
   color: #333; 
   font-weight: 500; 
-  font-size: 10px; 
+  font-size: 11px; 
 }
 .creator-info {
-  font-size: 9px;
+  font-size: 11px;
   color: #666;
   margin-top: 2px;
   border-top: 1px dotted #ddd;
@@ -448,7 +448,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
   background: #f0f4ff;
   padding: 1px 4px;
   border-radius: 2px;
-  font-size: 8px;
+  font-size: 11px;
 }
     .action-cell { white-space: nowrap; display: flex; gap: 2px; justify-content: center; }
     .action-btn { background: none; border: 1px solid transparent; cursor: pointer; font-size: 13px; padding: 2px 5px; border-radius: 2px; }
@@ -459,7 +459,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     .empty-row td { text-align: center; padding: 30px; }
     .empty-state { text-align: center; }
     .empty-icon { font-size: 40px; display: block; margin-bottom: 8px; }
-    .empty-state p { margin-bottom: 12px; color: #666; font-size: 11px; }
+    .empty-state p { margin-bottom: 12px; color: #666; font-size: 12px; }
 
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
     .modal-window { background: #f0f0f0; border: 2px solid #808080; box-shadow: 3px 3px 8px rgba(0,0,0,0.4); min-width: 420px; max-width: 500px; }
@@ -471,10 +471,10 @@ import { ClientNotificationService } from '../../services/client-notification.se
     .warning-content { display: flex; gap: 14px; align-items: flex-start; }
     .warning-icon { font-size: 36px; flex-shrink: 0; }
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
-    .warning-message p { margin: 0 0 4px 0; font-size: 11px; color: #333; }
+    .warning-message p { margin: 0 0 4px 0; font-size: 12px; color: #333; }
     .warning-message strong { color: #0a3a8c; font-family: monospace; }
-    .resolve-title { font-style: italic; color: #555; margin: 4px 0; font-size: 11px; padding: 4px 8px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #ccc; word-break: break-word; }
-    .warning-hint { font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
+    .resolve-title { font-style: italic; color: #555; margin: 4px 0; font-size: 12px; padding: 4px 8px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #ccc; word-break: break-word; }
+    .warning-hint { font-size: 11px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
     .warning-hint.danger-text { color: #cc0000; background: #fff0f0; border: 1px solid #ffb0b0; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
     /* Add these to your styles array */
@@ -483,7 +483,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
 
 .assign-modal .modal-window { max-width: 480px; }
 
-.assign-info { font-size: 11px; margin-bottom: 12px; color: #333; }
+.assign-info { font-size: 12px; margin-bottom: 12px; color: #333; }
 .selected-count { font-weight: bold; color: #0a3a8c; }
 
 .agent-list { max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
@@ -493,8 +493,8 @@ import { ClientNotificationService } from '../../services/client-notification.se
 
 .agent-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; flex-shrink: 0; }
 .agent-info { flex: 1; }
-.agent-name { font-size: 11px; font-weight: bold; display: block; color: #000; }
-.agent-role { font-size: 9px; color: #666; }
+.agent-name { font-size: 12px; font-weight: bold; display: block; color: #000; }
+.agent-role { font-size: 11px; color: #666; }
 
 .self-assign { background: #f0f8ff; border-color: #0a3a8c; }
 .self-assign:hover { background: #dde8f5; }
@@ -502,11 +502,11 @@ import { ClientNotificationService } from '../../services/client-notification.se
 .agent-checkbox { font-size: 20px; color: #aaa; flex-shrink: 0; margin-left: 8px; }
 .agent-checkbox.checked { color: #0a3a8c; }
 
-.empty-agents { text-align: center; padding: 20px; color: #888; font-size: 11px; }
+.empty-agents { text-align: center; padding: 20px; color: #888; font-size: 12px; }
 
 .modal-titlebar.success { background: #008800; }
 
-.assigned-to-info { margin-top: 6px; font-size: 11px; color: #333; }
+.assigned-to-info { margin-top: 6px; font-size: 12px; color: #333; }
 .assigned-to-info strong { color: #0a3a8c; }
 /* Add to your styles array */
 .filter-toggle-btn {
@@ -521,13 +521,13 @@ import { ClientNotificationService } from '../../services/client-notification.se
   background: #1a3a8a;
 }
 .filter-indicator {
-  font-size: 10px;
+  font-size: 11px;
   margin-left: 4px;
 }
   .filter-count {
   background: rgba(255,255,255,0.3);
   color: inherit;
-  font-size: 9px;
+  font-size: 11px;
   padding: 1px 6px;
   border-radius: 8px;
   font-weight: bold;
@@ -568,6 +568,7 @@ ticketsManagementCount = 0;
 sentToMainCount = 0;
 currentUserBranchId: number | null = null;
 isMainBranch = false;
+private readonly EDP_IT_DEPT_IDS = [1, 14, 23];
 private readonly MAIN_BRANCH_IDS = [1, 5];
   constructor(
     private ticketService: ClientTicketService,
@@ -618,7 +619,7 @@ fetchTicketsDirectly(user: any) {
   const params: any = {
     userId: user.id,
     userTable: user.user_table || 'new_user',
-    includeAssignedUsers: 'true'  // Remove userFullname - not needed by backend
+    includeAssignedUsers: 'true'
   };
   
   if (user.branch_id) {
@@ -630,21 +631,24 @@ fetchTicketsDirectly(user: any) {
   }
   
   console.log('🔥 DIRECT FETCH URL:', `${this.apiUrl}/api/client/tickets?` + new URLSearchParams(params).toString());
+  console.log('👤 User:', user.fullname, 'department_id:', user.department_id, 'branch_id:', user.branch_id);
   
   this.http.get<any[]>(`${this.apiUrl}/api/client/tickets`, { params })
     .subscribe({
       next: (tickets) => {
         console.log('🔥 DIRECT FETCH RESULT:', tickets.length, 'tickets');
         
-        // 🔍 DEBUG: Log the first ticket's assigned_users
-        if (tickets.length > 0) {
-          const firstAssigned = tickets.find(t => t.assigned_to);
-          if (firstAssigned) {
-            console.log('🔍 First assigned ticket:', firstAssigned.ticket_number);
-            console.log('🔍 assigned_users:', JSON.stringify(firstAssigned.assigned_users));
-            console.log('🔍 agent_name:', firstAssigned.agent_name);
-            console.log('🔍 assigned_to:', firstAssigned.assigned_to);
-          }
+        // ✅ Log all ticket IDs and department_ids
+        tickets.forEach(t => {
+          console.log(`📋 Ticket ${t.id}: ${t.ticket_number} | dept_id: ${t.department_id} | branch_id: ${t.branch_id} | status: ${t.status}`);
+        });
+        
+        // ✅ Check if ticket #90 is in the list
+        const ticket90 = tickets.find(t => t.id === 90);
+        if (ticket90) {
+          console.log('✅ Ticket #90 FOUND!', ticket90);
+        } else {
+          console.log('❌ Ticket #90 NOT FOUND in results');
         }
         
         this.tickets = tickets || [];
@@ -656,7 +660,6 @@ fetchTicketsDirectly(user: any) {
       }
     });
 }
-
 ngOnDestroy() {
 
   if (this.pollingInterval) {
@@ -695,15 +698,43 @@ private hasTicketsChanged(newTickets: Ticket[]): boolean {
 trackByTicketId(index: number, ticket: Ticket): number {
   return ticket.id;
 }
+
 /**
  * Check if current user is in EDP/IT department
  */
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
-  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
-  const isEDP = dept === 'edp' || dept === 'it' || dept === 'edp/it' || dept === 'it/edp' ||
-                dept.includes('edp') || dept.includes('it');
-  return isEDP;
+  
+  // ✅ Check by department_id first (most reliable)
+  if (this.currentUser.department_id) {
+    if (this.EDP_IT_DEPT_IDS.includes(Number(this.currentUser.department_id))) {
+      console.log('✅ EDP/IT user by department_id:', this.currentUser.department_id);
+      return true;
+    }
+  }
+  
+  // ✅ Check by department name (strict)
+  const dept = (this.currentUser.department || '').toLowerCase().trim();
+  if (!dept) return false;
+  
+  const exactMatches = ['edp', 'it', 'edp/it', 'it/edp', 'information technology'];
+  if (exactMatches.includes(dept)) {
+    console.log('✅ EDP/IT user by exact name:', dept);
+    return true;
+  }
+  
+  // Check for "IT" or "EDP" as separate word
+  const words = dept.split(/[\s\/\-]+/);
+  for (const word of words) {
+    const cleanWord = word.trim();
+    if (cleanWord === 'edp' || cleanWord === 'it') {
+      console.log('✅ EDP/IT user by separate word:', cleanWord);
+      return true;
+    }
+  }
+  
+  console.log('❌ NOT EDP/IT:', dept);
+  return false;
 }
 /**
  * Check if current user is Head/Manager or Supervisor (full control)
@@ -823,35 +854,49 @@ loadAvailableAgents() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}` };
   
-  // Load both users and new_users tables
-  this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+  // ✅ EDP/IT department IDs
+  const edpItDeptIds = [1, 14, 23];
+  
+  // Load from new_user table (where your EDP/IT users are)
+  this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
     next: (users) => {
-      // Filter to only EDP/IT users from the same branch
-      const edpUsers = users.filter(u => {
-        const dept = (u.department || u.department_name || '').toLowerCase();
-        const isEDP = dept.includes('edp') || dept.includes('it');
-        return isEDP && u.branch_id === this.currentUser?.branch_id;
-      });
+      // Filter EDP/IT users from the same branch
+      const edpUsers = users.filter(u => 
+        edpItDeptIds.includes(Number(u.department_id)) && 
+        u.branch_id === this.currentUser?.branch_id
+      );
       
-      // Also check new_user table for EDP/IT staff
-      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
-        next: (newUsers) => {
-          const edpNewUsers = newUsers.filter(u => {
-            const dept = (u.department || '').toLowerCase();
-            const isEDP = dept.includes('edp') || dept.includes('it');
-            return isEDP && u.branch_id === this.currentUser?.branch_id;
-          });
-          this.availableAgents = [...edpUsers, ...edpNewUsers].filter(u => u.id !== this.currentUser?.id);
+      console.log('📋 EDP/IT users from new_user:', edpUsers.length);
+      
+      // Also check users table (for admin users)
+      this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+        next: (usersTable) => {
+          const edpUsersTable = usersTable.filter(u => 
+            edpItDeptIds.includes(Number(u.department_id)) && 
+            u.branch_id === this.currentUser?.branch_id
+          );
+          
+          // Combine both tables, remove duplicates
+          const allAgents = [...edpUsers, ...edpUsersTable];
+          const uniqueAgents = allAgents.filter((agent, index, self) => 
+            index === self.findIndex(a => a.id === agent.id)
+          );
+          
+          // Exclude current user
+          this.availableAgents = uniqueAgents.filter(u => u.id !== this.currentUser?.id);
+          console.log('✅ Available agents:', this.availableAgents.length);
         },
         error: () => {
           this.availableAgents = edpUsers.filter(u => u.id !== this.currentUser?.id);
         }
       });
     },
-    error: () => { this.availableAgents = []; }
+    error: (err) => { 
+      console.error('❌ Failed to load agents from new_user:', err);
+      this.availableAgents = [];
+    }
   });
 }
-
 toggleAgent(agent: any) {
   if (!agent || !agent.id) return;
   const index = this.selectedAgentIds.indexOf(agent.id);

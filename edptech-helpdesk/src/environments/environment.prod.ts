@@ -1,8 +1,7 @@
-// src/environments/environment.prod.ts
 export const environment = {
-  production: true,
-  apiUrl: '/api',  // Same relative path - will use the same domain
-  aiApiUrl: '/ai',
-  streamUrl: '/stream',
-  uploadsUrl: '/uploads'
+  production: false,
+  apiUrl: 'http://192.168.0.10:6001',
+  aiApiUrl: 'http://192.168.0.10:5000',  // ✅ Changed from 6000 to 5000
+  streamUrl: 'http://192.168.0.10:5001',
+  uploadsUrl: 'http://192.168.0.10:6001/uploads'
 };

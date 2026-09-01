@@ -159,7 +159,7 @@ import { ClientNotificationService } from '../../../services/client-notification
   </tr>
 </thead>
 <tbody>
-  <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket.id)">
+ <tr *ngFor="let ticket of paginatedTickets" class="clickable-row" (click)="viewTicket(ticket)">
     <!-- Checkbox cell -->
     <td (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
       <input type="checkbox" [checked]="isSelected(ticket)" (change)="toggleSelect(ticket)">
@@ -207,7 +207,7 @@ import { ClientNotificationService } from '../../../services/client-notification
     <td class="date-cell">{{ ticket.created_at | date:'MMM d, h:mm a' }}</td>
     <!-- Actions -->
     <td class="action-cell" (click)="$event.stopPropagation()">
-      <button class="action-btn" (click)="viewTicket(ticket.id)" title="View">📋</button>
+      <button class="action-btn" (click)="viewTicket(ticket)" title="View">📋</button>
       <button *ngIf="canEditTicket(ticket)" class="action-btn" (click)="editTicket(ticket.id)" title="Edit">✏️</button>
       <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" [title]="ticket.assigned_to ? 'Reassign' : 'Assign'">{{ ticket.assigned_to ? '🔄' : '👤' }}</button>
       <button *ngIf="canResolveTicket(ticket)" class="action-btn resolve-btn" (click)="resolveTicket(ticket)" title="Mark as Resolved">✅</button>
@@ -236,7 +236,7 @@ import { ClientNotificationService } from '../../../services/client-notification
 <!-- GRID VIEW -->
 <div class="grid-view" *ngIf="viewMode === 'grid'">
   <div class="ticket-grid">
-    <div class="ticket-card" *ngFor="let ticket of paginatedTickets" (click)="viewTicket(ticket.id)">
+    <div class="ticket-card" *ngFor="let ticket of paginatedTickets" (click)="viewTicket(ticket)">
       <div class="card-header">
         <span class="ticket-num">{{ ticket.ticket_number }}</span>
         <span class="priority-badge" [class]="'priority-' + ticket.priority">{{ ticket.priority | uppercase }}</span>
@@ -274,7 +274,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         <span class="kanban-count">{{ getStatusCount(status.key) }}</span>
       </div>
       <div class="kanban-cards">
-        <div class="kanban-card" *ngFor="let ticket of getTicketsByStatus(status.key)" (click)="viewTicket(ticket.id)">
+       <div class="kanban-card" *ngFor="let ticket of getTicketsByStatus(status.key)" (click)="viewTicket(ticket)">
           <div class="kb-card-title">{{ ticket.title }}</div>
           <div class="kb-card-id">{{ ticket.ticket_number }}</div>
           <div class="kb-card-meta">
@@ -488,21 +488,21 @@ import { ClientNotificationService } from '../../../services/client-notification
     :host { user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; }
     .retro-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; padding: 4px 8px; background: linear-gradient(180deg, #1c5fb5 0%, #0a3a8c 100%); color: #fff; border: 2px solid; border-color: #fff #808080 #808080 #fff; }
     .retro-header h2 { margin: 0; font-size: 12px; font-weight: bold; letter-spacing: 0.3px; }
-    .retro-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px; padding: 2px 10px; cursor: pointer; font-size: 10px; display: inline-flex; align-items: center; gap: 4px; color: #000; }
+    .retro-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px; padding: 2px 10px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; color: #000; }
     .retro-btn:hover { background: #e8f0ff; }
     .retro-btn:active { border-color: #808080 #fff #fff #808080; }
     .retro-btn.primary { background: #0a3a8c; color: #fff; border-color: #1c5fb5 #042070 #042070 #1c5fb5; }
     .retro-btn.primary:hover { background: #1c5fb5; }
     .retro-filter-bar { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 4px 8px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-bottom: 4px; }
     .filter-group { display: flex; align-items: center; gap: 4px; }
-    .filter-group label { font-size: 10px; font-weight: bold; color: #000; }
-    .retro-select, .retro-input { padding: 2px 6px; border: 1px solid #808080; background: #fff; font-size: 10px; border-radius: 1px; outline: none; }
+    .filter-group label { font-size: 12px; font-weight: bold; color: #000; }
+    .retro-select, .retro-input { padding: 2px 6px; border: 1px solid #808080; background: #fff; font-size: 12px; border-radius: 1px; outline: none; }
     .retro-select:focus, .retro-input:focus { border-color: #0a3a8c; }
     .search-group .retro-input { width: 140px; }
-    .retro-status-bar { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-top: none; padding: 2px 8px; font-size: 10px; color: #333; display: flex; gap: 8px; margin-bottom: 6px; }
+    .retro-status-bar { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-top: none; padding: 2px 8px; font-size: 12px; color: #333; display: flex; gap: 8px; margin-bottom: 6px; }
     .retro-table-container { border: 2px solid; border-color: #fff #808080 #808080 #fff; background: #f0f0f0; overflow-x: auto; }
-    .retro-table { width: 100%; border-collapse: collapse; font-size: 10px; background: #fff; }
-    .retro-table th { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 10px; border-bottom: 1px solid #808080; border-right: 1px solid #ccc; }
+    .retro-table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; }
+    .retro-table th { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 12px; border-bottom: 1px solid #808080; border-right: 1px solid #ccc; }
     .retro-table th:last-child { border-right: none; }
     .retro-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #ddd; vertical-align: middle; color: #000; }
     .clickable-row { cursor: pointer; }
@@ -510,16 +510,16 @@ import { ClientNotificationService } from '../../../services/client-notification
     /* Ticket Code & Creator */
     .ticket-cell { text-align: center; }
     .ticket-code { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
-    .ticket-creator { font-size: 9px; color: #555; margin-top: 2px; align-items: center;  gap: 2px;}
+    .ticket-creator { font-size: 11px; color: #555; margin-top: 2px; align-items: center;  gap: 2px;}
     .ticket-title { font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-    .ticket-meta { font-size: 9px; color: #666; margin-top: 1px; }
+    .ticket-meta { font-size: 11px; color: #666; margin-top: 1px; }
     .date-cell { font-family: monospace; font-size: 12px; white-space: nowrap; color: #666; }
-    .priority-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; text-transform: uppercase; }
+    .priority-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
     .priority-critical { background: #cc0000; color: white; }
     .priority-high { background: #ff6600; color: white; }
     .priority-medium { background: #ffcc00; color: #333; }
     .priority-low { background: #008800; color: white; }
-    .status-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 9px; text-transform: uppercase; }
+    .status-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; text-transform: uppercase; }
     .status-new { background: #cde8f5; color: #0066cc; }
     .status-assigned { background: #e0e0e0; color: #666; }
     .status-in_progress { background: #fff0cc; color: #cc6600; }
@@ -533,7 +533,7 @@ import { ClientNotificationService } from '../../../services/client-notification
     .empty-row td { text-align: center; padding: 30px; background: #f9f9f9; }
     .empty-state { text-align: center; }
     .empty-icon { font-size: 36px; display: block; margin-bottom: 8px; }
-    .empty-state p { margin-bottom: 12px; color: #666; font-size: 10px; }
+    .empty-state p { margin-bottom: 12px; color: #666; font-size: 12px; }
     .assign-btn { color: #006600; }
     .assign-btn:hover { background: #eeffee; }
     .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 2000; }
@@ -553,12 +553,12 @@ import { ClientNotificationService } from '../../../services/client-notification
     .agent-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.3); }
     .agent-info { flex: 1; }
     .agent-name { font-size: 11px; font-weight: bold; display: block; color: rgb(0, 0, 0);}
-    .agent-role { font-size: 9px; color: #444242; }
+    .agent-role { font-size: 11px; color: #444242; }
     .self-assign { background: #f0f8ff; border-color: #0a3a8c; }
     .self-assign:hover { background: #dde8f5; }
     .agent-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
-    .agent-status { font-size: 8px; padding: 1px 5px; border-radius: 2px; font-weight: bold; display: inline-block; margin-top: 2px; }
-    .current-assign { background: #e8f0ff; border: 1px solid #0a3a8c; padding: 6px 10px; margin-bottom: 10px; border-radius: 3px; font-size: 10px; }
+    .agent-status { font-size: 12px; padding: 1px 5px; border-radius: 2px; font-weight: bold; display: inline-block; margin-top: 2px; }
+    .current-assign { background: #e8f0ff; border: 1px solid #0a3a8c; padding: 6px 10px; margin-bottom: 10px; border-radius: 3px; font-size: 12px; }
     .current-label { color: #666; margin-right: 4px; }
     .current-agent { font-weight: bold; color: #0a3a8c; }
     .resolve-btn { color: #008800; }
@@ -571,7 +571,7 @@ import { ClientNotificationService } from '../../../services/client-notification
     .warning-message p { margin: 0 0 4px 0; font-size: 11px; color: #333; }
     .warning-message strong { color: #0a3a8c; font-family: monospace; font-size: 12px; }
     .resolve-title { font-style: italic; color: #555; margin: 4px 0; font-size: 11px; padding: 4px 8px; background: #f5f5f5; border-radius: 2px; border-left: 3px solid #ccc; word-break: break-word; }
-    .warning-hint { font-size: 10px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
+    .warning-hint { font-size: 12px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
     .warning-hint.danger-text { color: #cc0000; background: #fff0f0; border: 1px solid #ffb0b0; }
     .status-available { background: #ccffcc; color: #008800; }
     .status-dayoff { background: #ffe0e0; color: #cc0000; }
@@ -580,25 +580,25 @@ import { ClientNotificationService } from '../../../services/client-notification
     .agent-unavailable { opacity: 0.6; }
     .agent-warning { color: #cc6600; font-size: 14px; flex-shrink: 0; }
     .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 2px solid; border-color: #808080 #fff #fff #808080; margin-bottom: 4px; flex-wrap: wrap; }
-    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 4px 12px; cursor: pointer; font-size: 10px; color: #333; display: inline-flex; align-items: center; gap: 6px; position: relative; top: 1px; }
+    .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 4px 12px; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 6px; position: relative; top: 1px; }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; border-bottom-color: #fff; font-weight: bold; color: #0a3a8c; }
-    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 9px; font-weight: bold; min-width: 18px; text-align: center; }
+    .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 11px; font-weight: bold; min-width: 18px; text-align: center; }
     .status-tab.active .tab-count { background: #0a3a8c; }
     .tab-count.new-count { background: #0066cc; }
     .tab-count.progress-count { background: #cc6600; }
     .tab-count.resolved-count { background: #008800; }
-    .assign-warning { background: #fffae8; border: 1px solid #e0c060; padding: 6px 10px; margin-top: 8px; font-size: 10px; color: #886600; border-radius: 3px; }
+    .assign-warning { background: #fffae8; border: 1px solid #e0c060; padding: 6px 10px; margin-top: 8px; font-size: 12px; color: #886600; border-radius: 3px; }
     .empty-agents { text-align: center; padding: 20px; color: #888; font-size: 11px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .modal-titlebar.success { background: linear-gradient(180deg, #008800 0%, #006600 100%); }
     .assigned-to-info { margin-top: 6px; font-size: 11px; color: #333; }
     .assigned-to-info strong { color: #0a3a8c; }
     .pagination-bar { display: flex; justify-content: center; align-items: center; gap: 12px; padding: 8px; background: #f0f0f0; border: 2px solid; border-color: #808080 #fff #fff #808080; margin-top: 4px; }
-    .page-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 3px 12px; cursor: pointer; font-size: 10px; color: #000; }
+    .page-btn { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; padding: 3px 12px; cursor: pointer; font-size: 12px; color: #000; }
     .page-btn:hover { background: #e8f0ff; }
     .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    .page-info { font-size: 10px; color: #333; font-weight: bold; }
+    .page-info { font-size: 12px; color: #333; font-weight: bold; }
     .view-btn { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 2px 8px; cursor: pointer; font-size: 13px; border-radius: 2px; }
     .view-btn:hover { background: #e8f0ff; }
     .view-btn.active { background: #0a3a8c; color: white; border-color: #0a3a8c; }
@@ -607,30 +607,30 @@ import { ClientNotificationService } from '../../../services/client-notification
     .agent-checkbox { font-size: 20px; color: #aaa; flex-shrink: 0; margin-left: 8px; }
     .agent-checkbox.checked { color: #0a3a8c; }
     .selected-count { font-weight: bold; color: #0a3a8c; }
-    .selected-summary { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #e8f0ff; border: 1px solid #0a3a8c; border-radius: 3px; margin-bottom: 12px; font-size: 10px; }
+    .selected-summary { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #e8f0ff; border: 1px solid #0a3a8c; border-radius: 3px; margin-bottom: 12px; font-size: 12px; }
     .summary-label { color: #666; }
     .summary-count { font-weight: bold; color: #0a3a8c; }
     .ticket-card:hover { border-color: #0a3a8c; }
     .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
     .card-title { font-size: 13px; font-weight: 600; color: #111; margin: 0 0 10px 0; }
-    .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 10px; color: #292727; }
-    .card-footer { display: flex; justify-content: space-between; font-size: 10px; color: #3a3838; border-top: 1px solid #eee; padding-top: 8px; }
+    .card-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: #292727; }
+    .card-footer { display: flex; justify-content: space-between; font-size: 12px; color: #3a3838; border-top: 1px solid #eee; padding-top: 8px; }
     .kanban-board { display: flex; gap: 8px; padding: 6px; overflow-x: auto; min-height: 400px; }
     .kanban-column { flex: 1; min-width: 200px; background: #f0f0f0; border: 1px solid #c0c0c0; border-radius: 6px; display: flex; flex-direction: column; }
-    .kanban-header { padding: 8px 10px; font-weight: bold; font-size: 10px; color: white; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 4px; }
+    .kanban-header { padding: 8px 10px; font-weight: bold; font-size: 12px; color: white; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 4px; }
     .kb-new { background: #0066cc; }
     .kb-assigned { background: #555; }
     .kb-in_progress { background: #cc6600; }
     .kb-pending { background: #886600; }
     .kb-resolved { background: #008800; }
-    .kanban-count { margin-left: auto; background: rgba(255,255,255,0.3); padding: 1px 6px; border-radius: 10px; font-size: 9px; }
+    .kanban-count { margin-left: auto; background: rgba(255,255,255,0.3); padding: 1px 6px; border-radius: 10px; font-size: 11px; }
     .kanban-cards { padding: 6px; flex: 1; overflow-y: auto; }
     .kanban-card { background: white; border: 1px solid #d0d0d0; border-radius: 4px; padding: 8px; margin-bottom: 5px; cursor: pointer; }
     .kanban-card:hover { border-color: #0a3a8c; }
     .kb-card-title { font-size: 11px; font-weight: 500; color: #111; margin-bottom: 3px; }
-    .kb-card-id { font-family: monospace; font-size: 10px; color: #0a3a8c; margin-bottom: 4px; }
-    .kb-card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #888; }
-    .kanban-empty { text-align: center; padding: 15px; color: #999; font-style: italic; font-size: 10px; }
+    .kb-card-id { font-family: monospace; font-size: 12px; color: #0a3a8c; margin-bottom: 4px; }
+    .kb-card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #888; }
+    .kanban-empty { text-align: center; padding: 15px; color: #999; font-style: italic; font-size: 12px; }
     ::-webkit-scrollbar { width: 12px; height: 12px; }
     ::-webkit-scrollbar-track { background: #d4d0c8; }
     ::-webkit-scrollbar-thumb { background: #a0a0a0; border: 2px solid #d4d0c8; border-radius: 6px; }
@@ -644,14 +644,14 @@ import { ClientNotificationService } from '../../../services/client-notification
       align-items: center;
     }
     .origin-dept {
-      font-size: 9px;
+      font-size: 11px;
       color: #555;
       background: #f5f5f5;
       padding: 1px 4px;
       border-radius: 2px;
     }
     .origin-branch {
-      font-size: 8px;
+      font-size: 12px;
       color: #0a3a8c;
       background: #f0f4ff;
       padding: 1px 5px;
@@ -695,11 +695,16 @@ selectedTicketIds: number[] = [];
   filterBranches: any[] = [];
 filterDepartments: any[] = [];
 allDepartments: any[] = [];
+showNotificationModal = false;
+notificationTitle = '';
+notificationMessage = '';
+notificationType: 'success' | 'error' | 'warning' | 'info' = 'error';
 private updateTimeout: any;
 private isDragging = false;
 private dragOffsetX = 0;
 private dragOffsetY = 0;
 private currentDragModal: HTMLElement | null = null;
+private readonly EDP_IT_DEPT_IDS = [1, 14, 23];
 showBulkDeleteModal = false;
 bulkDeleteCount = 0;
   constructor(
@@ -954,11 +959,20 @@ onFilterBranchChange() {
     return this.filteredTickets.filter(t => t.status === status); 
   }
   
-  updatePaginatedTickets() {
-    const start = (this.currentPage - 1) * this.pageSize;
-    const end = start + this.pageSize;
-    this.paginatedTickets = this.filteredTickets.slice(start, end);
+updatePaginatedTickets() {
+  const start = (this.currentPage - 1) * this.pageSize;
+  const end = start + this.pageSize;
+  this.paginatedTickets = this.filteredTickets.slice(start, end);
+  
+  // ✅ Debug: Check if tickets have valid IDs
+  if (this.paginatedTickets.length > 0) {
+    console.log('📋 First 3 tickets in paginated:', this.paginatedTickets.slice(0, 3).map(t => ({
+      id: t.id,
+      ticket_number: t.ticket_number,
+      title: t.title
+    })));
   }
+}
 
   goToPage(page: number) { 
     if (page < 1 || page > this.totalPages) return; 
@@ -1079,7 +1093,6 @@ private isEDPITDepartment(department: string): boolean {
          dept === 'edp/it' || dept === 'it/edp' ||
          dept.includes('edp') || dept.includes('it');
 }
-
 loadAvailableAgents() {
   const currentUserId = this.authService.getCurrentUser()?.id;
   const currentUserBranch = this.currentUser?.branch_id;
@@ -1090,26 +1103,36 @@ loadAvailableAgents() {
   
   this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
     next: (users) => {
-      // ✅ Filter: Only users from EDP/IT department AND same branch
+      // ✅ Filter: Only users from EDP/IT department AND same branch, EXCLUDE admin
       const edpITUsers = users.filter(u => {
-        const isEDPIT = this.isEDPITDepartment(u.department);
+        const isEDPIT = this.EDP_IT_DEPT_IDS.includes(Number(u.department_id));
         const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
-        return isEDPIT && isSameBranch && u.id !== currentUserId;
+        const isNotCurrentUser = u.id !== currentUserId;
+        const isNotAdmin = u.role?.toLowerCase() !== 'admin'; // ✅ EXCLUDE admin
+        return isEDPIT && isSameBranch && isNotCurrentUser && isNotAdmin;
       });
       
-      console.log(`📋 Found ${edpITUsers.length} EDP/IT agents from same branch`);
+      console.log(`📋 Found ${edpITUsers.length} EDP/IT agents from users table (excluding admin)`);
       
       // Also check new_user table
       this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
         next: (newUsers) => {
           const edpITNewUsers = newUsers.filter(u => {
-            const isEDPIT = this.isEDPITDepartment(u.department);
+            const isEDPIT = this.EDP_IT_DEPT_IDS.includes(Number(u.department_id));
             const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
-            return isEDPIT && isSameBranch && u.id !== currentUserId;
+            const isNotCurrentUser = u.id !== currentUserId;
+            const isNotAdmin = u.role?.toLowerCase() !== 'admin'; // ✅ EXCLUDE admin
+            return isEDPIT && isSameBranch && isNotCurrentUser && isNotAdmin;
           });
           
-          this.availableAgents = [...edpITUsers, ...edpITNewUsers];
-          console.log(`✅ Total EDP/IT agents (same branch): ${this.availableAgents.length}`);
+          // Combine and remove duplicates
+          const allAgents = [...edpITUsers, ...edpITNewUsers];
+          const uniqueAgents = allAgents.filter((agent, index, self) => 
+            index === self.findIndex(a => a.id === agent.id)
+          );
+          
+          this.availableAgents = uniqueAgents;
+          console.log(`✅ Total agents: ${this.availableAgents.length} (admin excluded)`);
         },
         error: () => {
           this.availableAgents = edpITUsers;
@@ -1240,8 +1263,6 @@ private loadAgentsFromTickets() {
     }
   });
   
-  // Try to fetch user details for these IDs
-  const headers = this.getHeaders();
   const userIds = Array.from(assignedUserIds);
   
   if (userIds.length === 0) {
@@ -1249,12 +1270,51 @@ private loadAgentsFromTickets() {
     return;
   }
   
-  // Fetch each user individually or in batch
-  // For simplicity, we'll just set availableAgents to empty
-  this.availableAgents = [];
-  console.warn('⚠️ Could not load agents, using empty list');
+  const headers = this.getHeaders();
+  const currentUserId = this.currentUser?.id;
+  const currentUserBranch = this.currentUser?.branch_id;
+  
+  let allUsers: any[] = [];
+  
+  // Fetch from users table
+  this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+    next: (users) => {
+      allUsers = [...users];
+      
+      // Fetch from new_user table
+      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
+        next: (newUsers) => {
+          allUsers = [...allUsers, ...newUsers];
+          
+          // ✅ Filter: Only EDP/IT users from same branch, exclude current user AND admin
+          this.availableAgents = allUsers.filter(u => {
+            const isEDPIT = this.EDP_IT_DEPT_IDS.includes(Number(u.department_id));
+            const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
+            const isNotCurrentUser = u.id !== currentUserId;
+            const isNotAdmin = u.role?.toLowerCase() !== 'admin'; // ✅ EXCLUDE admin
+            return isEDPIT && isSameBranch && isNotCurrentUser && isNotAdmin;
+          });
+          
+          console.log(`✅ Fallback loaded ${this.availableAgents.length} EDP/IT agents (admin excluded)`);
+        },
+        error: () => {
+          // If new_user fails, filter only users table
+          this.availableAgents = allUsers.filter(u => {
+            const isEDPIT = this.EDP_IT_DEPT_IDS.includes(Number(u.department_id));
+            const isSameBranch = currentUserBranch ? u.branch_id === currentUserBranch : true;
+            const isNotCurrentUser = u.id !== currentUserId;
+            const isNotAdmin = u.role?.toLowerCase() !== 'admin';
+            return isEDPIT && isSameBranch && isNotCurrentUser && isNotAdmin;
+          });
+        }
+      });
+    },
+    error: () => {
+      this.availableAgents = [];
+      console.warn('⚠️ Could not load agents');
+    }
+  });
 }
-
   confirmAssign() {
   if (this.selectedAgentIds.length === 0 || !this.assignTicketData) return;
   
@@ -1486,10 +1546,49 @@ private loadAgentsFromTickets() {
     return this.tickets.filter(t => t.status === status).length; 
   }
 
-  viewTicket(id: number) { 
-    this.router.navigate(['/tickets', id]); 
+viewTicket(ticketOrId: any) { 
+  // If it's a number, use it directly
+  // If it's an object, extract the ID
+  let id: number;
+  
+  if (typeof ticketOrId === 'number') {
+    id = ticketOrId;
+  } else if (typeof ticketOrId === 'object' && ticketOrId !== null) {
+    // Try multiple possible ID field names
+    id = ticketOrId.id || ticketOrId.ticket_id || ticketOrId.TicketID || 0;
+    console.log('📋 Extracted ID from object:', id);
+  } else {
+    id = 0;
   }
+  
+  console.log('📋 viewTicket called with ID:', id);
+  console.log('📋 Type of ID:', typeof id);
+  
+  if (!id || id <= 0) {
+    console.error('❌ Invalid ticket ID:', id);
+    // ✅ Show error in modal instead of alert
+    this.showErrorModal('Invalid Ticket ID', 'The ticket ID is invalid or missing. Please try again from the ticket list.');
+    return;
+  }
+  
+  this.router.navigate(['/tickets', id]).then(success => {
+    console.log('✅ Navigation result:', success);
+  }).catch(err => {
+    console.error('❌ Navigation error:', err);
+    // ✅ Show error in modal instead of alert
+    this.showErrorModal('Navigation Error', 'Failed to navigate to ticket details. Please try again.');
+  });
+}
 
+// Add this method to show error modals
+showErrorModal(title: string, message: string) {
+  // You can use your existing modal system here
+  // If you have a notification service:
+  this.showNotificationModal = true;
+  this.notificationTitle = title;
+  this.notificationMessage = message;
+  this.notificationType = 'error';
+}
   editTicket(id: number) { 
     this.router.navigate(['/tickets', id, 'edit']); 
   }

@@ -283,6 +283,22 @@ import { environment } from '../../../environments/environment';
         </main>
       </div>
     </div>
+    <!-- Success Modal -->
+<div class="modal-overlay" *ngIf="showSuccessModal" (click)="closeSuccessModal()">
+  <div class="modal-content success-modal" (click)="$event.stopPropagation()">
+    <div class="modal-header success-header">
+      <h3>{{ successTitle }}</h3>
+      <button class="modal-close" (click)="closeSuccessModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="success-icon">✅</div>
+      <p class="success-message">{{ successMessage }}</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" (click)="closeSuccessModal()">OK</button>
+    </div>
+  </div>
+</div>
   `,
   styles: [`
     /* ── Tokens ──────────────────────────────────────────────── */
@@ -381,7 +397,95 @@ import { environment } from '../../../environments/environment';
       color: var(--text);
       font-weight: 500;
     }
+    /* Success Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
 
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+  animation: slideIn 0.3s ease;
+}
+
+.success-modal {
+  text-align: center;
+}
+
+.success-header {
+  background: #ebfbee;
+  border-bottom: 1px solid #d3f9d8;
+  border-radius: 12px 12px 0 0;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.success-header h3 {
+  margin: 0;
+  color: #2f9e44;
+  font-size: 16px;
+}
+
+.success-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.success-message {
+  font-size: 13px;
+  color: #333;
+  line-height: 1.5;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: #888;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.modal-close:hover {
+  background: #e0e0e0;
+}
+
+.modal-body {
+  padding: 24px 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-top: 1px solid #e0e0e0;
+  border-radius: 0 0 12px 12px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
     /* Avatar */
     .avatar-card { text-align: center; }
     .avatar-wrap {
@@ -537,7 +641,9 @@ export class ClientProfileComponent implements OnInit {
   saving = false;
   showPasswordFields = false;
   uploadingPhoto = false;
-
+  showSuccessModal = false;
+successMessage = '';
+successTitle = '✅ Success';
   // ✅ New properties for branch and company
   userBranch: string = '';
   userCompany: string = '';
@@ -643,22 +749,26 @@ export class ClientProfileComponent implements OnInit {
     }
   }
 
-  savePhoto(file: File) {
-    if (!this.currentUser) return;
-    this.uploadingPhoto = true;
-    const formData = new FormData();
-    formData.append('photo', file);
-    const table = this.getTableName();
-    this.http.post(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}/upload-photo`, formData).subscribe({
-      next: (res: any) => {
-        this.editForm.photo_url = res.file_path;
-        const updated = { ...this.currentUser, photo_url: res.file_path };
-        localStorage.setItem('currentUser', JSON.stringify(updated));
-        this.uploadingPhoto = false;
-      },
-      error: () => { this.uploadingPhoto = false; alert('Failed to upload photo.'); }
-    });
-  }
+ savePhoto(file: File) {
+  if (!this.currentUser) return;
+  this.uploadingPhoto = true;
+  const formData = new FormData();
+  formData.append('photo', file);
+  const table = this.getTableName();
+  this.http.post(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}/upload-photo`, formData).subscribe({
+    next: (res: any) => {
+      this.editForm.photo_url = res.file_path;
+      const updated = { ...this.currentUser, photo_url: res.file_path };
+      localStorage.setItem('currentUser', JSON.stringify(updated));
+      this.uploadingPhoto = false;
+      this.showSuccess('Your profile photo has been updated!', '✅ Photo Updated');
+    },
+    error: () => { 
+      this.uploadingPhoto = false; 
+      this.showSuccess('Failed to upload photo. Please try again.', '❌ Upload Failed');
+    }
+  });
+}
 
   toggleWorkDay(day: string) {
     if (!this.editMode) return;
@@ -678,17 +788,20 @@ export class ClientProfileComponent implements OnInit {
     return this.editForm.dayOff.join(', ');
   }
 
-  addLeave() {
-    if (!this.newLeave.startDate || !this.newLeave.endDate || this.newLeave.endDate < this.newLeave.startDate) return;
-    const start = new Date(this.newLeave.startDate);
-    const end = new Date(this.newLeave.endDate);
-    const hasOverlap = this.leaveEntries.some(l => start <= new Date(l.endDate) && end >= new Date(l.startDate));
-    if (hasOverlap) { alert('This leave overlaps with an existing entry.'); return; }
-    this.leaveEntries.push({ startDate: this.newLeave.startDate, endDate: this.newLeave.endDate });
-    this.leaveEntries.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-    this.newLeave = { startDate: '', endDate: '' };
+ addLeave() {
+  if (!this.newLeave.startDate || !this.newLeave.endDate || this.newLeave.endDate < this.newLeave.startDate) return;
+  const start = new Date(this.newLeave.startDate);
+  const end = new Date(this.newLeave.endDate);
+  const hasOverlap = this.leaveEntries.some(l => start <= new Date(l.endDate) && end >= new Date(l.startDate));
+  if (hasOverlap) { 
+    this.showSuccess('This leave overlaps with an existing entry. Please choose different dates.', '⚠️ Overlap Detected');
+    return; 
   }
-
+  this.leaveEntries.push({ startDate: this.newLeave.startDate, endDate: this.newLeave.endDate });
+  this.leaveEntries.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+  this.newLeave = { startDate: '', endDate: '' };
+  this.showSuccess('Leave entry added successfully!', '✅ Leave Added');
+}
   removeLeave(index: number) { this.leaveEntries.splice(index, 1); }
 
   isOnLeave(): boolean {
@@ -706,26 +819,38 @@ export class ClientProfileComponent implements OnInit {
   }
 
   saveProfile() {
-    if (!this.currentUser) return;
-    this.saving = true;
-    const table = this.getTableName();
-    const payload = {
-      ...this.editForm,
-      workDays: JSON.stringify(this.editForm.workDays),
-      dayOff: JSON.stringify(this.editForm.dayOff),
-      leaveEntries: JSON.stringify(this.leaveEntries)
-    };
-    this.http.put(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}`, payload).subscribe({
-      next: () => {
-        const updated = { ...this.currentUser, ...this.editForm, leaveEntries: JSON.stringify(this.leaveEntries) };
-        localStorage.setItem('currentUser', JSON.stringify(updated));
-        this.editMode = false; this.saving = false;
-        alert('Profile updated!');
-      },
-      error: (err) => { this.saving = false; alert('Error: ' + (err.error?.message || err.message)); }
-    });
-  }
+  if (!this.currentUser) return;
+  this.saving = true;
+  const table = this.getTableName();
+  const payload = {
+    ...this.editForm,
+    workDays: JSON.stringify(this.editForm.workDays),
+    dayOff: JSON.stringify(this.editForm.dayOff),
+    leaveEntries: JSON.stringify(this.leaveEntries)
+  };
+  this.http.put(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}`, payload).subscribe({
+    next: () => {
+      const updated = { ...this.currentUser, ...this.editForm, leaveEntries: JSON.stringify(this.leaveEntries) };
+      localStorage.setItem('currentUser', JSON.stringify(updated));
+      this.editMode = false; 
+      this.saving = false;
+      this.showSuccess('Your profile has been updated successfully!', '✅ Profile Updated');
+    },
+    error: (err) => { 
+      this.saving = false; 
+      this.showSuccess('Error: ' + (err.error?.message || err.message), '❌ Update Failed');
+    }
+  });
+}
+showSuccess(message: string, title: string = '✅ Success') {
+  this.successTitle = title;
+  this.successMessage = message;
+  this.showSuccessModal = true;
+}
 
+closeSuccessModal() {
+  this.showSuccessModal = false;
+}
   canChangePassword(): boolean {
     return !!(this.passwordForm.currentPassword && this.passwordForm.newPassword &&
               this.passwordForm.newPassword === this.passwordForm.confirmPassword &&
@@ -733,16 +858,17 @@ export class ClientProfileComponent implements OnInit {
   }
 
   changePassword() {
-    if (!this.canChangePassword()) return;
-    const table = this.getTableName();
-    this.http.post(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}/change-password`, this.passwordForm).subscribe({
-      next: () => {
-        alert('Password changed!'); this.showPasswordFields = false;
-        this.passwordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
-      },
-      error: (err) => alert('Error: ' + (err.error?.message || err.message))
-    });
-  }
+  if (!this.canChangePassword()) return;
+  const table = this.getTableName();
+  this.http.post(`${environment.apiUrl}/api/profile/${table}/${this.currentUser.id}/change-password`, this.passwordForm).subscribe({
+    next: () => {
+      this.showSuccess('Your password has been changed successfully!', '✅ Password Changed');
+      this.showPasswordFields = false;
+      this.passwordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
+    },
+    error: (err) => this.showSuccess('Error: ' + (err.error?.message || err.message), '❌ Change Failed')
+  });
+}
 
   cancelEdit() { this.editMode = false; this.ngOnInit(); }
   goBack() { this.router.navigate(['/client/dashboard']); }

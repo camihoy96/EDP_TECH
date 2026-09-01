@@ -31,7 +31,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     🏢 {{ userBranch.name }}
   </div>
   <h3>JOB ORDER FORM</h3>
-  <div class="ctrl-no">CTRL NO.: {{ joCtrlNumber }}</div>
+  <div class="ctrl-no">CTRL NO.: {{ joCtrlNumber || 'Will be generated upon submission' }}</div>
 </div>
 
        <div class="req-top-row">
@@ -239,9 +239,9 @@ import { ClientNotificationService } from '../../services/client-notification.se
   </div>
 </div>
         <div class="req-footer">
-          <p>📋 This Job Order authorizes the recipient department to perform the described work.</p>
-          <p>EDPtech Helpdesk v2.0 | Job Order #{{ joNumber }}</p>
-        </div>
+  <p>📋 This Job Order authorizes the recipient department to perform the described work.</p>
+  <p>EDPtech Helpdesk v2.0 | Job Order #{{ joNumber || 'Will be generated upon submission' }}</p>
+</div>
       </div>
 
       <div class="form-actions">
@@ -450,8 +450,8 @@ constructor(
     document.addEventListener('mouseup', this.onDragEnd.bind(this));
         this.loadJobOrder(params['id']);
       } else {
-      this.joNumber = this.generateJONumber();
-       this.joCtrlNumber = this.joNumber;
+        this.joNumber = '';
+        this.joCtrlNumber = '';
         this.loadBranchesAndDepartments();
         this.authService.currentUser$.subscribe((user: any) => {
           if (user) {
@@ -831,24 +831,7 @@ generateCtrlNumber(): string {
     // ✅ CTRL NO is the same as JO number
     return this.joNumber;
 }
-generateJONumber(): string {
-    const now = new Date();
-    const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
-    
-    const lastDate = localStorage.getItem('lastJODate');
-    if (lastDate !== datePart) {
-        localStorage.setItem('lastJODate', datePart);
-        localStorage.setItem('lastJONumber', '0');
-    }
-    
-    const lastNumber = parseInt(localStorage.getItem('lastJONumber') || '0');
-    const nextNumber = lastNumber + 1;
-    const paddedNumber = String(nextNumber).padStart(3, '0');
-    
-    localStorage.setItem('lastJONumber', String(nextNumber));
-    
-    return `JO-${paddedNumber}-${datePart}`;
-}
+
 submitJobOrder() {
     // ✅ Approval mode - receive the job order
     if (this.approvalMode) {
@@ -952,8 +935,6 @@ submitJobOrder() {
     this.submitting = true;
 
   const payload: any = {
-    job_order_number: this.joNumber,
-    ctrl_no: this.joCtrlNumber,
     date: this.joData.date,
     time: this.joData.time,
     request_dept: this.joData.request_from,

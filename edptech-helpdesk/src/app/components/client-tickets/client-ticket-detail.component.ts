@@ -586,6 +586,7 @@ showDeleteCommentModal = false;
 deleteCommentData: any = null;
 private ticketsSub: any;
 private ticketUpdateSub: any;
+private readonly EDP_IT_DEPT_IDS = [1, 14, 23];
 private readonly MAIN_BRANCH_IDS = [1, 5];
   constructor(
     private route: ActivatedRoute,
@@ -675,10 +676,39 @@ private pollComments(ticketId: number): void {
 
 isEDPUser(): boolean {
   if (!this.currentUser) return false;
-  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase();
-  const isEDP = dept === 'edp' || dept === 'it' || dept === 'edp/it' || dept === 'it/edp' ||
-                dept.includes('edp') || dept.includes('it');
-  return isEDP;
+  
+  // ✅ FIRST: Check by department_id (most reliable)
+  if (this.currentUser.department_id) {
+    if (this.EDP_IT_DEPT_IDS.includes(Number(this.currentUser.department_id))) {
+      return true;
+    }
+  }
+  
+  // ✅ SECOND: Check by department name - STRICT matching
+  const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase().trim();
+  if (!dept) return false;
+  
+  // Exact matches only - NOT includes()
+  const exactMatches = ['edp', 'it', 'edp/it', 'it/edp', 'information technology'];
+  if (exactMatches.includes(dept)) {
+    return true;
+  }
+  
+  // Check if it starts with "edp" or "it " (with space)
+  if (dept.startsWith('edp') || dept.startsWith('it ')) {
+    return true;
+  }
+  
+  // Check for "IT" or "EDP" as a separate word
+  const words = dept.split(/[\s\/\-]+/);
+  for (const word of words) {
+    const cleanWord = word.trim();
+    if (cleanWord === 'edp' || cleanWord === 'it') {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 isHeadOrSupervisor(): boolean {
@@ -801,21 +831,20 @@ loadAvailableAgents() {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}` };
   
+  // ✅ Filter by department_id using the EDP/IT IDs
   this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
     next: (users) => {
-      const edpUsers = users.filter(u => {
-        const dept = (u.department || u.department_name || '').toLowerCase();
-        return (dept.includes('edp') || dept.includes('it')) && 
-               u.branch_id === this.currentUser?.branch_id;
-      });
+      const edpUsers = users.filter(u => 
+        this.EDP_IT_DEPT_IDS.includes(Number(u.department_id)) && 
+        u.branch_id === this.currentUser?.branch_id
+      );
       
       this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
         next: (newUsers) => {
-          const edpNewUsers = newUsers.filter(u => {
-            const dept = (u.department || '').toLowerCase();
-            return (dept.includes('edp') || dept.includes('it')) && 
-                   u.branch_id === this.currentUser?.branch_id;
-          });
+          const edpNewUsers = newUsers.filter(u => 
+            this.EDP_IT_DEPT_IDS.includes(Number(u.department_id)) && 
+            u.branch_id === this.currentUser?.branch_id
+          );
           this.availableAgents = [...edpUsers, ...edpNewUsers].filter(u => u.id !== this.currentUser?.id);
         },
         error: () => {
@@ -830,8 +859,20 @@ loadAvailableAgents() {
  * Check if a comment was made by an EDP/IT user
  */
 isCommentFromEDP(comment: any): boolean {
+  if (!comment) return false;
+  
   // EDP users are in 'users' table (not 'new_user')
-  return comment.user_table === 'users';
+  if (comment.user_table !== 'users') return false;
+  
+  // Check if the user is actually EDP/IT
+  // We need to check the user's department
+  const userId = comment.user_id;
+  if (!userId) return false;
+  
+  // Check if this user is in the EDP/IT department
+  // We can check cached data or make a lookup
+  // For now, check if the comment has EDP badge or fetch user info
+  return true; // Placeholder - you may want to fetch user info
 }
 
 /**

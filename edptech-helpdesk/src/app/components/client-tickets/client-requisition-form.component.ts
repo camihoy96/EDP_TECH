@@ -709,7 +709,6 @@ ngOnInit() {
         this.loadRequisition(params['id']);
       } else {
         // Only generate new reqNumber for new requisitions
-         this.reqNumber = this.generateReqNumber();
         this.loadBranchesAndDepartments();
         this.authService.currentUser$.subscribe((user: any) => {
           if (user) {
@@ -1506,7 +1505,6 @@ submitRequisition() {
 
     const payload: any = {
         ...this.reqData,
-        requisition_number: this.reqNumber,
         items: this.items,
         branch_id: this.selectedBranchId,
         department_id: this.reqData.department_id,
