@@ -32,14 +32,16 @@ from flask_cors import CORS
 DB_CONFIG = {
     'host': 'localhost',
     'user': 'root',
-    'password': '',  # Your MySQL password
+    'password': '',  # MySQL password
     'database': 'edptech_helpdesk',
     'port': 3306
 }
 
-# Network range to scan (adjust to your network)
-NETWORK_RANGES = ['192.168.0.0/16']
-
+# Network range to scan 
+NETWORK_RANGES = [
+    '192.168.0.0/24',     # ✅ MegaSpeed Network
+    '192.168.5.0/24'      # ✅ PLDT Network
+]
 # Scan settings
 MAX_IPS_TO_SCAN = 65536  # Safety limit (maximum IPs to scan)
 PING_TIMEOUT = 0.5  # Ping timeout in seconds (reduced for speed)
@@ -1487,7 +1489,6 @@ def health_check():
     """Health check endpoint."""
     return jsonify({'status': 'ok', 'service': 'computer-monitor'})
 
-
 # ============================================
 # MAIN ENTRY POINT
 # ============================================
@@ -1501,7 +1502,10 @@ if __name__ == '__main__':
         print(f"❌ Database setup failed: {e}")
         raise
 
-    print("\n🚀 Starting Flask API server on port 5000...")
+    print("\n🚀 Starting Computer Monitor API server...")
+    print(f"   Local:    http://localhost:5001")
+    print(f"   Network 1: http://192.168.0.10:5001")
+    print(f"   Network 2: http://192.168.5.108:5001")
 
     app.run(host='0.0.0.0', port=5001,
         debug=True,

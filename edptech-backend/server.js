@@ -23,19 +23,33 @@ const OFFLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 // Middleware
 app.use(cors({
     origin: [
-        'http://localhost:8082',       // ✅ IIS - local
-        'http://192.168.0.10:8082',    // ✅ IIS - network
-        'http://127.0.0.1:8082',       // ✅ IIS - loopback
-        'http://localhost:4000',       // ✅ Dev server
-        'http://192.168.0.10:4000',    // ✅ Dev server (network)
-        'http://127.0.0.1:4000',       // ✅ Dev server (loopback)
-        'http://localhost:4200',       // ✅ Angular dev server
-        'http://192.168.0.10:4200',    // ✅ Angular dev server (network)
-        'http://127.0.0.1:4200'        // ✅ Angular dev server (loopback)
+        // ✅ Network 1 - IIS
+        'http://localhost:8082',
+        'http://192.168.0.10:8082',
+        'http://127.0.0.1:8082',
+        
+        // ✅ Network 2 - IIS
+        'http://192.168.5.108:8082',
+        
+        // ✅ Network 1 - Dev server
+        'http://localhost:4000',
+        'http://192.168.0.10:4000',
+        'http://127.0.0.1:4000',
+        
+        // ✅ Network 2 - Dev server
+        'http://192.168.5.108:4000',
+        
+        // ✅ Network 1 - Angular dev server
+        'http://localhost:4200',
+        'http://192.168.0.10:4200',
+        'http://127.0.0.1:4200',
+        
+        // ✅ Network 2 - Angular dev server
+        'http://192.168.5.108:4200'
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
@@ -6895,8 +6909,6 @@ app.use('/api/computers', (req, res, next) => {
 // ============================================
 // SYSTEM SETTINGS API - Updated
 // ============================================
-
-// GET - All Settings
 // GET - All Settings
 app.get('/api/admin/settings', async (req, res) => {
     try {
@@ -6909,52 +6921,40 @@ app.get('/api/admin/settings', async (req, res) => {
         
         const [rows] = await pool.query('SELECT settings_key, settings_value FROM system_settings');
         
-        const settings = {};
-        rows.forEach(row => {
-            if (row.settings_key === 'logo' || row.settings_key === 'ai_avatar') {
-                // Store as plain string
+       const settings = {};
+    rows.forEach(row => {
+        if (row.settings_key === 'logo' || row.settings_key === 'ai_avatar') {
+            settings[row.settings_key] = row.settings_value;
+        } else {
+            try {
+                settings[row.settings_key] = JSON.parse(row.settings_value);
+            } catch {
                 settings[row.settings_key] = row.settings_value;
-            } else {
-                try {
-                    settings[row.settings_key] = JSON.parse(row.settings_value);
-                } catch {
-                    settings[row.settings_key] = row.settings_value;
-                }
             }
-        });
-        
-        // ✅ CRITICAL FIX: Merge ai_avatar into ai object
-        if (!settings.ai) {
-            settings.ai = {
-                name: 'St4Nger AI',
-                greeting: "Hello! I'm your St4Nger AI. How can I help you today?",
-                avatar: null
-            };
         }
-        
-        // ✅ If ai_avatar exists and ai.avatar is null/empty, use ai_avatar
-        if (settings.ai_avatar && (!settings.ai.avatar || settings.ai.avatar === null)) {
-            settings.ai.avatar = settings.ai_avatar;
-        }
-        
-        // ✅ If ai.avatar exists, make sure ai_avatar also has it (for backward compatibility)
-        if (settings.ai.avatar && settings.ai.avatar !== null) {
-            settings.ai_avatar = settings.ai.avatar;
-        }
-        
-        console.log('✅ Settings loaded with AI:', {
-            ai_name: settings.ai.name,
-            ai_has_avatar: !!settings.ai.avatar,
-            ai_avatar_length: settings.ai.avatar ? settings.ai.avatar.length : 0
-        });
-        
-        res.json(settings);
-    } catch (error) {
+    });
+    
+    // ✅ Ensure ai exists
+    if (!settings.ai) {
+        settings.ai = {
+            name: 'St4Nger AI',
+            greeting: "Hello! I'm your St4Nger AI.",
+            avatar: null
+        };
+    }
+    
+    // ✅ Merge ai_avatar into ai.avatar
+    if (settings.ai_avatar) {
+        settings.ai.avatar = settings.ai_avatar;
+    }
+    
+    res.json(settings);
+    } catch (error) {  
         console.error('GET /api/admin/settings error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-// POST - Save Settings
+
 // POST - Save Settings
 app.post('/api/admin/settings', async (req, res) => {
     try {
@@ -10118,18 +10118,17 @@ app.post('/api/admin/upload-ai-avatar', async (req, res) => {
             return res.status(403).json({ error: 'Access denied.' });
         }
         
-        const { avatar } = req.body; // Base64 data URL
+        const { avatar } = req.body;
         
         if (!avatar) {
             return res.status(400).json({ error: 'Avatar data is required' });
         }
         
-        // Validate it's a valid base64 image
         if (!avatar.startsWith('data:image/')) {
             return res.status(400).json({ error: 'Invalid image format' });
         }
         
-        // Save avatar as base64 string
+        // 1. Save to ai_avatar key
         await pool.query(
             `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
              VALUES ('ai_avatar', ?, ?) 
@@ -10137,14 +10136,45 @@ app.post('/api/admin/upload-ai-avatar', async (req, res) => {
             [avatar, decoded.id]
         );
         
-        console.log('✅ AI Avatar saved by user:', decoded.id);
+        // 2. Also update the 'ai' key if it exists
+        const [existingAi] = await pool.query(
+            "SELECT settings_value FROM system_settings WHERE settings_key = 'ai'"
+        );
+        
+        if (existingAi.length > 0) {
+            try {
+                const aiSettings = JSON.parse(existingAi[0].settings_value);
+                aiSettings.avatar = avatar;
+                await pool.query(
+                    `UPDATE system_settings SET settings_value = ?, updated_by = ? WHERE settings_key = 'ai'`,
+                    [JSON.stringify(aiSettings), decoded.id]
+                );
+            } catch (e) {
+                // If parse fails, create new
+                await pool.query(
+                    `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
+                     VALUES ('ai', ?, ?) 
+                     ON DUPLICATE KEY UPDATE settings_value = VALUES(settings_value), updated_by = VALUES(updated_by)`,
+                    [JSON.stringify({ name: 'St4Nger AI', greeting: "Hello!", avatar: avatar }), decoded.id]
+                );
+            }
+        } else {
+            // Create new 'ai' settings
+            await pool.query(
+                `INSERT INTO system_settings (settings_key, settings_value, updated_by) 
+                 VALUES ('ai', ?, ?) 
+                 ON DUPLICATE KEY UPDATE settings_value = VALUES(settings_value), updated_by = VALUES(updated_by)`,
+                [JSON.stringify({ name: 'St4Nger AI', greeting: "Hello! I'm your St4Nger AI.", avatar: avatar }), decoded.id]
+            );
+        }
+        
+        console.log('✅ AI Avatar saved:', avatar.substring(0, 50) + '...');
         res.json({ success: true, avatarUrl: avatar, message: 'AI Avatar saved' });
     } catch (error) {
         console.error('POST /api/admin/upload-ai-avatar error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // DELETE - Remove AI Avatar
 app.delete('/api/admin/remove-ai-avatar', async (req, res) => {
     try {
@@ -10155,13 +10185,31 @@ app.delete('/api/admin/remove-ai-avatar', async (req, res) => {
             return res.status(403).json({ error: 'Access denied.' });
         }
         
-        // Remove AI avatar from system_settings
+        // 1. Remove ai_avatar key
         await pool.query(
             `UPDATE system_settings SET settings_value = NULL, updated_by = ? WHERE settings_key = 'ai_avatar'`,
             [decoded.id]
         );
         
-        console.log('✅ AI Avatar removed by user:', decoded.id);
+        // 2. Update 'ai' key to remove avatar
+        const [existingAi] = await pool.query(
+            "SELECT settings_value FROM system_settings WHERE settings_key = 'ai'"
+        );
+        
+        if (existingAi.length > 0) {
+            try {
+                const aiSettings = JSON.parse(existingAi[0].settings_value);
+                aiSettings.avatar = null;
+                await pool.query(
+                    `UPDATE system_settings SET settings_value = ? WHERE settings_key = 'ai'`,
+                    [JSON.stringify(aiSettings)]
+                );
+            } catch (e) {
+                // Ignore parse errors
+            }
+        }
+        
+        console.log('✅ AI Avatar removed');
         res.json({ success: true, message: 'AI Avatar removed' });
     } catch (error) {
         console.error('DELETE /api/admin/remove-ai-avatar error:', error);
@@ -10169,6 +10217,305 @@ app.delete('/api/admin/remove-ai-avatar', async (req, res) => {
     }
 });
 
+// ============================================
+// AI KNOWLEDGE BASE ENDPOINTS
+// ============================================
+
+// GET - Get all knowledge base entries
+app.get('/api/ai/knowledge-base', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const [rows] = await pool.query(
+            'SELECT * FROM ai_knowledge_base WHERE is_active = 1 ORDER BY priority DESC, id ASC'
+        );
+        
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('GET /api/ai/knowledge-base error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET - Get single knowledge entry
+app.get('/api/ai/knowledge-base/:id', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const [rows] = await pool.query(
+            'SELECT * FROM ai_knowledge_base WHERE id = ?',
+            [req.params.id]
+        );
+        
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Entry not found' });
+        }
+        
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        console.error('GET /api/ai/knowledge-base/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Add new knowledge entry (manual)
+app.post('/api/ai/knowledge-base', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        }
+        
+        const { category, keywords, answer, priority = 10 } = req.body;
+        
+        if (!category || !keywords || !answer) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Category, keywords, and answer are required' 
+            });
+        }
+        
+        const [result] = await pool.query(
+            'INSERT INTO ai_knowledge_base (category, keywords, answer, priority) VALUES (?, ?, ?, ?)',
+            [category, keywords, answer, priority]
+        );
+        
+        res.status(201).json({ 
+            success: true, 
+            id: result.insertId,
+            message: 'Knowledge added successfully' 
+        });
+    } catch (error) {
+        console.error('POST /api/ai/knowledge-base error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Process prompt and auto-store (Simplified interface)
+app.post('/api/ai/knowledge-base/process', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        }
+        
+        const { prompt } = req.body;
+        
+        if (!prompt || !prompt.trim()) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Prompt text is required' 
+            });
+        }
+        
+        const promptText = prompt.trim();
+        const category = extractCategory(promptText);
+        const keywords = extractKeywords(promptText);
+        const answer = promptText;
+        const priority = 10;
+        
+        const [result] = await pool.query(
+            'INSERT INTO ai_knowledge_base (category, keywords, answer, priority) VALUES (?, ?, ?, ?)',
+            [category, keywords, answer, priority]
+        );
+        
+        res.status(201).json({ 
+            success: true, 
+            id: result.insertId,
+            category,
+            keywords,
+            message: 'Knowledge stored successfully' 
+        });
+    } catch (error) {
+        console.error('POST /api/ai/knowledge-base/process error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT - Update knowledge entry
+app.put('/api/ai/knowledge-base/:id', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        }
+        
+        const { category, keywords, answer, priority, is_active } = req.body;
+        const entryId = req.params.id;
+        
+        // Build dynamic update query
+        let updateFields = [];
+        let updateValues = [];
+        
+        if (category !== undefined) { updateFields.push('category = ?'); updateValues.push(category); }
+        if (keywords !== undefined) { updateFields.push('keywords = ?'); updateValues.push(keywords); }
+        if (answer !== undefined) { updateFields.push('answer = ?'); updateValues.push(answer); }
+        if (priority !== undefined) { updateFields.push('priority = ?'); updateValues.push(priority); }
+        if (is_active !== undefined) { updateFields.push('is_active = ?'); updateValues.push(is_active); }
+        
+        if (updateFields.length === 0) {
+            return res.status(400).json({ success: false, error: 'No fields to update' });
+        }
+        
+        updateValues.push(entryId);
+        
+        const [result] = await pool.query(
+            `UPDATE ai_knowledge_base SET ${updateFields.join(', ')} WHERE id = ?`,
+            updateValues
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Entry not found' });
+        }
+        
+        res.json({ success: true, message: 'Knowledge updated successfully' });
+    } catch (error) {
+        console.error('PUT /api/ai/knowledge-base/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// DELETE - Remove knowledge entry
+app.delete('/api/ai/knowledge-base/:id', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        }
+        
+        const [result] = await pool.query(
+            'DELETE FROM ai_knowledge_base WHERE id = ?',
+            [req.params.id]
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Entry not found' });
+        }
+        
+        res.json({ success: true, message: 'Knowledge deleted successfully' });
+    } catch (error) {
+        console.error('DELETE /api/ai/knowledge-base/:id error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST - Toggle active status
+app.post('/api/ai/knowledge-base/:id/toggle', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        
+        const decoded = req.decodedUser;
+        const allowedRoles = ['admin'];
+        if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
+            return res.status(403).json({ error: 'Access denied. Admin only.' });
+        }
+        
+        const [result] = await pool.query(
+            'UPDATE ai_knowledge_base SET is_active = NOT is_active WHERE id = ?',
+            [req.params.id]
+        );
+        
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ success: false, error: 'Entry not found' });
+        }
+        
+        const [rows] = await pool.query(
+            'SELECT is_active FROM ai_knowledge_base WHERE id = ?',
+            [req.params.id]
+        );
+        
+        res.json({ success: true, is_active: rows[0].is_active });
+    } catch (error) {
+        console.error('POST /api/ai/knowledge-base/:id/toggle error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ============================================
+// HELPER FUNCTIONS FOR KNOWLEDGE BASE
+// ============================================
+
+function extractCategory(prompt) {
+    const promptLower = prompt.toLowerCase();
+    
+    if (containsAny(promptLower, ['ticket', 'support', 'issue'])) return 'ticket';
+    if (containsAny(promptLower, ['requisition', 'request item', 'purchase'])) return 'requisition';
+    if (containsAny(promptLower, ['job order', 'work order', 'maintenance'])) return 'job_order';
+    if (containsAny(promptLower, ['computer', 'monitoring', 'license', 'pc'])) return 'computer_monitoring';
+    if (containsAny(promptLower, ['sla', 'service level', 'response time'])) return 'sla';
+    if (containsAny(promptLower, ['cctv', 'camera', 'surveillance'])) return 'cctv';
+    if (containsAny(promptLower, ['user', 'role', 'permission', 'access'])) return 'user_management';
+    if (containsAny(promptLower, ['department', 'branch', 'location'])) return 'departments';
+    if (containsAny(promptLower, ['report', 'statistics', 'analytics'])) return 'reports';
+    if (containsAny(promptLower, ['notification', 'alert', 'message'])) return 'notifications';
+    if (containsAny(promptLower, ['knowledge', 'article', 'guide', 'documentation'])) return 'knowledge_base';
+    
+    return 'general';
+}
+
+function containsAny(text, words) {
+    return words.some(word => text.includes(word));
+}
+
+function extractKeywords(prompt) {
+    const commonWords = new Set([
+        'the', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'and', 'or', 'but', 'if', 'then', 'else', 'for', 'nor', 'on', 'at',
+        'to', 'from', 'by', 'with', 'about', 'against', 'between', 'into',
+        'through', 'during', 'before', 'after', 'above', 'below', 'up', 'down',
+        'in', 'out', 'off', 'over', 'under', 'again', 'further', 'once',
+        'this', 'that', 'these', 'those', 'there', 'their', 'what', 'which',
+        'who', 'whom', 'whose', 'when', 'where', 'why', 'how', 'all', 'each',
+        'few', 'more', 'most', 'other', 'some', 'such', 'only', 'own',
+        'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'should',
+        'now', 'also', 'has', 'have', 'had', 'does', 'did', 'doing'
+    ]);
+    
+    const words = prompt.toLowerCase().split(/[\s,.;:!?()\[\]{}"']+/).filter(Boolean);
+    const keywords = [];
+    
+    for (const word of words) {
+        if (!commonWords.has(word) && word.length > 2) {
+            keywords.push(word);
+        }
+    }
+    
+    // Add key phrases
+    const phrases = [];
+    const promptLower = prompt.toLowerCase();
+    if (promptLower.includes('how to')) phrases.push('how to');
+    if (promptLower.includes('step by step')) phrases.push('step by step');
+    if (promptLower.includes('what is')) phrases.push('what is');
+    if (promptLower.includes('how does')) phrases.push('how does');
+    if (promptLower.includes('workflow')) phrases.push('workflow');
+    if (promptLower.includes('process')) phrases.push('process');
+    
+    const allKeywords = [...new Set([...phrases, ...keywords.slice(0, 15)])];
+    
+    return allKeywords.join(', ');
+}
+// ============================================
+// HEALTH CHECK ENDPOINT (for network detection)
+// ============================================
+app.get('/health', (req, res) => {
+    res.json({ 
+        status: 'ok', 
+        service: 'EDPTech Backend', 
+        timestamp: new Date().toISOString() 
+    });
+});
 // Start server
 async function startServer() {
     await testConnection();
@@ -10176,7 +10523,8 @@ async function startServer() {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`\n🚀 EDPtech Helpdesk Backend running on:`);
         console.log(`   Local:    http://localhost:${PORT}`);
-        console.log(`   Network:  http://192.168.0.10:${PORT}`);
+        console.log(`   Network 1: http://192.168.0.10:${PORT}`);
+        console.log(`   Network 2: http://192.168.5.108:${PORT}`);
         console.log(`\n📋 API Endpoints:`);
         console.log(`   POST   /api/auth/login`);
         console.log(`   POST   /api/auth/register`);
@@ -10191,6 +10539,8 @@ async function startServer() {
         console.log(`   GET    /api/stats`);
         console.log(`   GET    /api/departments`);
         console.log(`   GET    /api/users`);
+        console.log(`   GET    /api/ai/knowledge-base`);
+        console.log(`   POST   /api/ai/knowledge-base`);
         console.log(`\n✅ Server is ready!\n`);
     });
 }

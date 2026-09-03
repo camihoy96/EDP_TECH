@@ -66,18 +66,40 @@ import { ReportModalComponent } from './report-modal.component';
           </div>
         </div>
         <div class="menu-item" (click)="toggleMenu('tools')">
-          Tools
-          <div class="dropdown" *ngIf="activeMenu === 'tools'">
-           <div class="dropdown-item" (click)="goToFeatures()">💾 Features</div>
-            <div class="dropdown-item" (click)="backupData()">
-  💾 {{ cacheStatus === 'Exporting...' ? '⏳ Exporting Database...' : 'Backup Database' }}
+  Tools
+  <div class="dropdown" *ngIf="activeMenu === 'tools'">
+    <div class="dropdown-item" (click)="goToFeatures()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+        <polyline points="2 17 12 22 22 17"/>
+        <polyline points="2 12 12 17 22 12"/>
+      </svg>
+      Features
+    </div>
+    
+    <!-- Admin-only AI Knowledge button -->
+    <div class="dropdown-item" *ngIf="isAdminUser()" (click)="goToAiknowledge()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/>
+        <path d="M12 6v6l4 2"/>
+      </svg>
+      AI Knowledge
+    </div>
+    
+    <div class="dropdown-item" (click)="backupData()">
+      💾 {{ cacheStatus === 'Exporting...' ? '⏳ Exporting Database...' : 'Backup Database' }}
+    </div>
+    <div class="dropdown-item" (click)="restoreData()">🔄 Restore Data</div>
+    <div class="dropdown-divider"></div>
+    <div class="dropdown-item" (click)="systemHealth()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+  </svg>
+  System Health Check
 </div>
-            <div class="dropdown-item" (click)="restoreData()">🔄 Restore Data</div>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-item" (click)="systemHealth()">🩺 System Health Check</div>
-            <div class="dropdown-item" (click)="clearCache()">🗑️ Clear Cache</div>
-          </div>
-        </div>
+    <div class="dropdown-item" (click)="clearCache()">🗑️ Clear Cache</div>
+  </div>
+</div>
         <div class="menu-item" (click)="toggleMenu('reports')">
           Reports
           <div class="dropdown" *ngIf="activeMenu === 'reports'">
@@ -172,31 +194,55 @@ import { ReportModalComponent } from './report-modal.component';
   Knowledge Base
 </button>
         <div class="toolbar-separator"></div>
-        
-        <app-ai-assistant 
+      <app-ai-assistant 
   #aiAssistant 
   [context]="aiContext"
   [userPhotoUrl]="currentUser?.photo_url ? (apiUrl + currentUser.photo_url) : ''"
-  [userAvatarColor]="currentUser?.avatar_color || '#0a246a'"
+  [userAvatarColor]="currentUser?.avatar_color || '#4f46e5'"
   [userInitial]="currentUser?.fullname?.charAt(0)?.toUpperCase() || '?'">
 </app-ai-assistant>
-        <button class="toolbar-btn" (click)="openAIAssistant()" title="AI Assistant">
-  🤖
+<button class="toolbar-btn ai-btn" (click)="openAIAssistant()" title="AI Assistant">
+  <!-- Show custom avatar if available -->
+  <img *ngIf="toolbarAiAvatarUrl && toolbarAiAvatarUrl !== 'assets/images/ai.png'" 
+       [src]="toolbarAiAvatarUrl" 
+       alt="AI" 
+       class="toolbar-ai-avatar"
+       (error)="onToolbarAiAvatarError()">
+  
+  <!-- Show default bot icon if no custom avatar -->
+  <svg *ngIf="!toolbarAiAvatarUrl || toolbarAiAvatarUrl === 'assets/images/ai.png'" 
+       width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <rect x="4" y="7" width="16" height="12" rx="3"/>
+    <path d="M12 7V4M8 4h8"/>
+    <circle cx="9" cy="12" r="1" fill="currentColor"/>
+    <circle cx="15" cy="12" r="1" fill="currentColor"/>
+    <path d="M9 16h6" stroke-linecap="round"/>
+  </svg>
+  
+  <span>AI</span>
 </button>
+
         <app-notification-bell></app-notification-bell>
         
         <button class="quick-action-btn" (click)="refreshData()">
               <span>🔄</span> Refresh Data
             </button>
         <div class="spacer"></div>
-        <div class="status-bar-info">
-  <!-- User Avatar -->
+    <div class="user-chip">
   <div class="user-avatar-small" [style.background]="currentUser?.avatar_color || '#0a3a8c'">
-    <img *ngIf="currentUser?.photo_url" [src]="'${environment.apiUrl}' + currentUser.photo_url" alt="Avatar" class="user-photo-small">
-    <span *ngIf="!currentUser?.photo_url">{{ currentUser?.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
+    <img *ngIf="currentUser?.photo_url && !userPhotoError" 
+         [src]="getUserPhotoUrl()" 
+         alt="Avatar" 
+         class="user-photo-small"
+         (error)="onUserPhotoError()">
+    <span *ngIf="!currentUser?.photo_url || userPhotoError">{{ currentUser?.fullname?.charAt(0)?.toUpperCase() || '?' }}</span>
+    <span class="user-status-dot" [class.online]="isOnline"></span>
   </div>
-  <span>{{ currentUser?.fullname }} ({{ currentUser?.role }})</span>
-  <button class="logout-btn" (click)="logout()">Logout</button>
+  <div class="user-info">
+    <span class="user-name">{{ currentUser?.fullname }}</span>
+    <span class="user-role">{{ currentUser?.role }}</span>
+  </div>
+  <button class="logout-btn" (click)="logout()">Sign out</button>
 </div>
       </div>
 
@@ -1124,16 +1170,189 @@ import { ReportModalComponent } from './report-modal.component';
   font-size: 15px;
   flex: 1;
 }
+/* Add to your existing styles */
+.toolbar-btn.ai-btn {
+  background: linear-gradient(135deg, #eee9e9, #eee8e8);
+  border-color: rgba(0, 0, 0, 0.13);
+  color: black;
+  font-weight: 600;
+  border-radius: 5px;
+}
 
+.toolbar-btn.ai-btn:hover {
+  opacity: 0.9;
+  background: linear-gradient(135deg, #4d5c81, #58586e);
+  color: white;
+}
+
+.toolbar-ai-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+}
 .logout-confirm-icon {
   font-size: 22px;
 }
+/* User Chip - Modern Style */
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border: 1px solid #d0d0d0;
+  border-radius: 24px;
+  background: #f8f9fa;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
 
+.user-chip:hover {
+  border-color: #a0a0a0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.user-avatar-small {
+ position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.user-photo-small {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  align-items: center;
+}
+
+.user-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1a1a1a;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.user-role {
+  font-size: 9px;
+  font-weight: 500;
+  color: #666;
+  text-transform: capitalize;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.logout-btn {
+  background: transparent;
+  border: 1px solid #c0c0c0;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 10px;
+  color: #333;
+  transition: all 0.15s;
+  white-space: nowrap;
+  margin-left: 2px;
+}
+
+.logout-btn:hover {
+  background: #ffecec;
+  border-color: #cc0000;
+  color: #cc0000;
+}
 .logout-confirm-body {
   padding: 20px;
   text-align: center;
 }
+  .user-status-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #ccc;
+}
 
+.user-status-dot.online {
+  background: #22c55e;
+}
+
+/* Responsive User Chip */
+@media (max-width: 768px) {
+  .user-info {
+    display: none; /* Hide user name/role on small screens */
+  }
+  
+  .user-chip {
+    padding: 4px;
+  }
+  
+  .user-avatar-small {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .user-chip {
+    gap: 4px;
+    padding: 3px;
+  }
+  
+  .user-avatar-small {
+    width: 28px;
+    height: 28px;
+    font-size: 10px;
+  }
+  
+  .logout-btn {
+    padding: 2px 6px;
+    font-size: 9px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .user-avatar-small {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .user-info {
+    display: flex;
+  }
+  
+  .user-name {
+    font-size: 12px;
+  }
+  
+  .user-role {
+    font-size: 10px;
+  }
+}
 .logout-confirm-body p {
   font-size: 13px;
   color: #333;
@@ -1224,6 +1443,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   apiOnline = true;
   totalTickets = 0;
   openTickets = 0;
+  userPhotoError = false;
   criticalTickets = 0;
   resolvedToday = 0;
   slaCompliance = 98;
@@ -1245,6 +1465,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   showAIAssistant = false;
   showLogoutWarning = false;
   logoutCountdown = 60;
+  toolbarAiAvatarUrl: string = 'assets/images/ai.png';
   private departmentMap: Map<number, string> = new Map()
   private logoutWarningTimer: any;
   private logoutCountdownInterval: any;
@@ -1420,6 +1641,28 @@ loadNotificationCount() {
     
     this.computerMonitoringNotifCount = this.getActiveNotificationCount(dismissedSet);
 }
+getUserPhotoUrl(): string {
+  if (!this.currentUser?.photo_url) return '';
+  
+  const photoUrl = this.currentUser.photo_url;
+  
+  // If it's already a full URL, return as is
+  if (photoUrl.startsWith('http://') || photoUrl.startsWith('https://') || photoUrl.startsWith('data:')) {
+    return photoUrl;
+  }
+  
+  // If it starts with the API URL already, don't duplicate
+  if (photoUrl.includes(this.apiUrl)) {
+    return photoUrl;
+  }
+  
+  // Construct full URL
+  return `${this.apiUrl}${photoUrl.startsWith('/') ? '' : '/'}${photoUrl}`;
+}
+
+onUserPhotoError() {
+  this.userPhotoError = true;
+}
   getActiveNotificationCount(dismissedSet: Set<string>): number {
     const stored = localStorage.getItem('computer_monitoring_cache_v3');
     if (!stored) return 0;
@@ -1499,6 +1742,71 @@ onEscKey(event: KeyboardEvent) {
     if (this.showLogoutWarning) this.cancelLogout();
     if (this.showLogoutConfirmModal) this.cancelLogoutConfirm();
   }
+}
+getAiAvatarUrl(): string {
+  return this.toolbarAiAvatarUrl;
+}
+
+onToolbarAiAvatarError() {
+  // Fallback to default if custom avatar fails
+  if (this.toolbarAiAvatarUrl !== 'assets/images/ai.png') {
+    this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+    // Clear the cache to prevent repeated failures
+    localStorage.removeItem('ai_avatar_cache');
+  }
+}
+
+loadToolbarAiAvatar() {
+  // Try cache first with timestamp check
+  const cached = localStorage.getItem('ai_avatar_cache');
+  if (cached) {
+    try {
+      const cacheData = JSON.parse(cached);
+      const cacheAge = Date.now() - (cacheData.timestamp || 0);
+      
+      // Use cache if less than 1 hour old
+      if (cacheAge < 3600000 && cacheData.avatar) {
+        this.toolbarAiAvatarUrl = cacheData.avatar;
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse AI avatar cache');
+    }
+  }
+  
+  // Fetch from API
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token) {
+    this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+    return;
+  }
+  
+  const headers = { 'Authorization': `Bearer ${token}` };
+  
+  this.http.get<any>(`${environment.apiUrl}/api/admin/settings`, { headers }).subscribe({
+    next: (data) => {
+      let avatar = data?.ai?.avatar || data?.ai_avatar || '';
+      
+      if (avatar && avatar.trim()) {
+        // Handle relative paths
+        if (!avatar.startsWith('http') && !avatar.startsWith('data:')) {
+          avatar = this.apiUrl + avatar;
+        }
+        this.toolbarAiAvatarUrl = avatar;
+      } else {
+        this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+      }
+      
+      // Cache with timestamp
+      localStorage.setItem('ai_avatar_cache', JSON.stringify({
+        avatar: this.toolbarAiAvatarUrl,
+        timestamp: Date.now()
+      }));
+    },
+    error: () => {
+      this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+    }
+  });
 }
  // =============================================
   // SUBSCRIPTIONS (safe to set up immediately)
@@ -1667,7 +1975,7 @@ get requisitionsNotificationCount(): number {
     this.loadJobOrdersCount();
     this.loadRequisitionsCount();
     this.loadSystemSettings();
-    
+    this.loadToolbarAiAvatar();
     setInterval(() => {
       this.loadJobOrdersCount();
       this.loadRequisitionsCount();
@@ -1824,9 +2132,9 @@ cancelLogout() {
 // Add this method
 openAIAssistant() {
   this.activeMenu = null;
+  this.loadToolbarAiAvatar(); 
   this.aiAssistant?.open();
 }
-
 // Add this method
 sendAIQuery() {
   if (!this.aiQuery.trim()) return;
@@ -2305,6 +2613,10 @@ loadRegistrationKeys() {
   goToTickets()      { this.router.navigate(['/tickets']); }
  goToFeatures() {
   this.router.navigate(['/features']); 
+  this.activeMenu = null;
+}
+goToAiknowledge() {
+  this.router.navigate(['/admin/ai-knowledge']);
   this.activeMenu = null;
 }
   goToChat() {

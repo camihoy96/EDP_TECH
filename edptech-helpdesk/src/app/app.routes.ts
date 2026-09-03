@@ -29,7 +29,7 @@ import { AdminSupportComponent } from './components/admin/admin-panel/support.co
 import { AuthCallbackComponent } from './components/auth-callback/auth-callback.component';
 import { ClientFeaturesComponent } from './components/client/features/features.component';
 import { AnnouncementsComponent } from './components/admin/admin-panel/announcements.component';
-
+import {AiKnowledgeManagementComponent} from './components/admin/admin-panel/ai-knowledge-management.component';
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'signup', component: SignupPageComponent },
@@ -66,6 +66,11 @@ export const routes: Routes = [
           {
             path: 'admin/announcements',
             component: AnnouncementsComponent,
+            canActivate: [AuthGuard]
+          },
+          {
+            path: 'admin/ai-knowledge',
+            component: AiKnowledgeManagementComponent,
             canActivate: [AuthGuard]
           },
           { 

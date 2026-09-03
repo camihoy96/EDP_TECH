@@ -53,68 +53,179 @@ import { environment } from '../../../../environments/environment';
         </div>
       </div>
 
-    <!-- Filter Bar -->
+<!-- Filter Bar -->
 <div class="filter-bar">
-  <!-- Search and basic filters - ALWAYS visible -->
-  <input type="text" [(ngModel)]="searchTerm" (input)="applyFilters()" class="filter-input" placeholder="Computer name, user, IP, location...">
+  <!-- Search input with SVG icon -->
+  <div class="search-wrapper">
+    <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    <input type="text" [(ngModel)]="searchTerm" (input)="applyFilters()" class="filter-input search-input" placeholder="Search computers...">
+  </div>
   
-  <select [(ngModel)]="filterExpiry" (change)="applyFilters()" class="filter-select">
-    <option value="all">All Computers</option>
-    <option value="expiring">Expiring Soon</option>
-    <option value="expired">Expired</option>
-    <option value="active">Active Licenses</option>
-    <option value="office">Office Expiring</option>
-    <option value="av">AV Update Needed</option>
-  </select>
+  <!-- Sort toggle button with SVG icons -->
+  <button *ngIf="showCleanedOnly" 
+          class="btn sort-btn" 
+          (click)="toggleCleaningSort()" 
+          title="Toggle sort order">
+    <svg *ngIf="cleaningSortDirection === 'newest'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <polyline points="19 12 12 19 5 12"/>
+    </svg>
+    <svg *ngIf="cleaningSortDirection === 'oldest'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="19" x2="12" y2="5"/>
+      <polyline points="5 12 12 5 19 12"/>
+    </svg>
+    <span class="sort-btn-label">
+      {{ cleaningSortDirection === 'newest' ? 'Newest First' : 'Oldest First' }}
+    </span>
+  </button>
   
-  <select [(ngModel)]="filterLocation" (change)="applyFilters()" class="filter-select">
-    <option value="all">All Locations</option>
-    <option *ngFor="let loc of uniqueLocations" [value]="loc">{{ loc }}</option>
-  </select>
+  <!-- Filter dropdowns with SVG icons -->
+  <div class="select-wrapper">
+    <svg class="select-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    </svg>
+    <select [(ngModel)]="filterExpiry" (change)="applyFilters()" class="filter-select select-with-icon">
+      <option value="all">All Computers</option>
+      <option value="expiring">Expiring Soon</option>
+      <option value="expired">Expired</option>
+      <option value="active">Active Licenses</option>
+      <option value="office">Office Expiring</option>
+      <option value="av">AV Update Needed</option>
+    </select>
+  </div>
   
-  <!-- Cache badge - always visible -->
+  <div class="select-wrapper">
+    <svg class="select-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </svg>
+    <select [(ngModel)]="filterLocation" (change)="applyFilters()" class="filter-select select-with-icon">
+      <option value="all">All Locations</option>
+      <option *ngFor="let loc of uniqueLocations" [value]="loc">{{ loc }}</option>
+    </select>
+  </div>
+  
+  <!-- Cache badge with SVG icon -->
   <span class="cache-badge" [class.from-cache]="isFromCache" [class.from-server]="!isFromCache && pcs.length > 0" title="Data source indicator">
-    {{ isFromCache ? '💾 Cached' : pcs.length > 0 ? '🌐 Live' : '' }}
+    <svg *ngIf="isFromCache" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+      <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+    </svg>
+    <svg *ngIf="!isFromCache && pcs.length > 0" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+    {{ isFromCache ? 'Cached' : pcs.length > 0 ? 'Live' : '' }}
   </span>
 
-  <!-- Scan Network - only in normal mode -->
-  <button class="btn btn-primary" *ngIf="!showCleanedOnly" (click)="triggerScan()">🔄 Scan Network</button>
+  <!-- Scan Network button with SVG icon -->
+  <button class="btn btn-primary" *ngIf="!showCleanedOnly" (click)="triggerScan()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="1 4 1 10 7 10"/>
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+    </svg>
+    Scan Network
+  </button>
   
-  <!-- ✅ Cleaning Records toggle button - always visible -->
+  <!-- Cleaning Records toggle button with SVG icon -->
   <button class="btn btn-cleaning" (click)="filterCleanedPCs()" [class.active-filter]="showCleanedOnly" title="Show computers with cleaning records">
-    🧹 Cleaning Records
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h18"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>
+    Cleaning Records
     <span class="badge-count" *ngIf="cleanedPCsCount > 0">{{ cleanedPCsCount }}</span>
   </button>
 
-  <!-- ✅ Show these when in cleaning-only mode -->
+  <!-- Show these when in cleaning-only mode -->
   <ng-container *ngIf="showCleanedOnly">
     <button class="btn btn-back-all" (click)="filterCleanedPCs()" title="Show all computers">
-      📋 Show All Computers
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Show All Computers
     </button>
     
-    <!-- ✅ Month filter -->
-    <select [(ngModel)]="cleaningListFilterMonth" (change)="applyCleaningListFilters()" class="filter-select">
-      <option value="">All Months</option>
-      <option *ngFor="let m of monthOptions" [value]="m.value">{{ m.label }}</option>
-    </select>
+    <!-- Month filter with SVG icon -->
+    <div class="select-wrapper">
+      <svg class="select-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <select [(ngModel)]="cleaningListFilterMonth" (change)="applyCleaningListFilters()" class="filter-select select-with-icon">
+        <option value="">All Months</option>
+        <option *ngFor="let m of monthOptions" [value]="m.value">{{ m.label }}</option>
+      </select>
+    </div>
     
-    <!-- ✅ Year filter -->
-    <select [(ngModel)]="cleaningListFilterYear" (change)="applyCleaningListFilters()" class="filter-select">
-      <option value="">All Years</option>
-      <option *ngFor="let y of yearOptions" [value]="y">{{ y }}</option>
-    </select>
+    <!-- Year filter with SVG icon -->
+    <div class="select-wrapper">
+      <svg class="select-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      <select [(ngModel)]="cleaningListFilterYear" (change)="applyCleaningListFilters()" class="filter-select select-with-icon">
+        <option value="">All Years</option>
+        <option *ngFor="let y of yearOptions" [value]="y">{{ y }}</option>
+      </select>
+    </div>
     
-    <button class="btn" (click)="clearCleaningListFilters()" *ngIf="cleaningListFilterMonth || cleaningListFilterYear">✕ Clear</button>
+    <button class="btn" (click)="clearCleaningListFilters()" *ngIf="cleaningListFilterMonth || cleaningListFilterYear">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+      Clear
+    </button>
   </ng-container>
 
-  <!-- Refresh and Add PC - only in normal mode -->
-  <button class="btn" *ngIf="!showCleanedOnly" (click)="forceRefresh()" title="Force refresh from server">🔄 Refresh</button>
-  <button class="btn" *ngIf="!showCleanedOnly" (click)="addPC()">➕ Add PC</button>
+  <!-- Refresh button with SVG icon -->
+  <button class="btn" *ngIf="!showCleanedOnly" (click)="forceRefresh()" title="Force refresh from server">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+    Refresh
+  </button>
   
-  <!-- New Cleaning - always visible -->
-  <button class="btn" (click)="openCleaningModal()" title="Cleaning & Maintenance Records">🧹 New Cleaning</button>
+  <!-- Add PC button with SVG icon -->
+  <button class="btn" *ngIf="!showCleanedOnly" (click)="addPC()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+      <line x1="12" y1="7" x2="12" y2="13"/>
+      <line x1="9" y1="10" x2="15" y2="10"/>
+    </svg>
+    Add PC
+  </button>
   
-  <span class="count-badge">{{ filteredPCs.length }} computer(s)</span>
+  <!-- New Cleaning button with SVG icon -->
+  <button class="btn" (click)="openCleaningModal()" title="Cleaning & Maintenance Records">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2v20M2 12h20"/>
+    </svg>
+    New Cleaning
+  </button>
+  
+  <span class="count-badge">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="2" ry="2"/>
+    </svg>
+    {{ filteredPCs.length }} computer(s)
+  </span>
 </div>
      <!-- Table -->
 <div class="table-container">
@@ -191,14 +302,58 @@ import { environment } from '../../../../environments/environment';
   <span class="cleaning-date-badge">{{ getLastCleaningDate(pc.id) | date:'MMM d, yyyy' }}</span>
 </td>
         <td><span class="status-badge" [class]="'staatus-' + (pc.status || 'unknown')">{{ pc.status || 'unknown' }}</span></td>
-        <td class="actions-cell">
-          <button class="action-btn" (click)="viewDetail(pc)" title="View Details">👁️</button>
-          <button class="action-btn" (click)="editPC(pc)" title="Edit">✏️</button>
-          <button class="action-btn check" (click)="checkLicenseStatus(pc)" title="Check License">🔍</button>
-          <button class="action-btn clean" (click)="openCleaningModal(pc)" title="Cleaning Record">🧹</button>
-          <button class="action-btn history" (click)="viewCleaningHistory(pc)" title="Cleaning History">📋</button>
-          <button class="action-btn" (click)="deletePC(pc)" title="Delete">🗑️</button>
-        </td>
+       <td class="actions-cell">
+  <!-- View Details -->
+  <button class="action-btn view" (click)="viewDetail(pc)" title="View Details">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  </button>
+  
+  <!-- Edit -->
+  <button class="action-btn edit" (click)="editPC(pc)" title="Edit">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  </button>
+  
+  <!-- Check License -->
+  <button class="action-btn check" (click)="checkLicenseStatus(pc)" title="Check License">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      <path d="M8 11l2 2 4-4"/>
+    </svg>
+  </button>
+  
+  <!-- Cleaning Record -->
+  <button class="action-btn clean" (click)="openCleaningModal(pc)" title="Cleaning Record">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/>
+    </svg>
+  </button>
+  
+  <!-- Cleaning History -->
+  <button class="action-btn history" (click)="viewCleaningHistory(pc)" title="Cleaning History">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 8v4l3 3"/>
+      <circle cx="12" cy="12" r="10"/>
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+    </svg>
+  </button>
+  
+  <!-- Delete -->
+  <button class="action-btn delete" (click)="deletePC(pc)" title="Delete">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>
+  </button>
+</td>
       </tr>
       <tr *ngIf="filteredPCs.length === 0">
         <td [attr.colspan]="showCleanedOnly ? 14 : 12" class="empty-row">
@@ -747,81 +902,149 @@ import { environment } from '../../../../environments/environment';
     </div>
 
     <!-- Cleaning History Modal -->
-    <div class="modal-overlay" *ngIf="showCleaningHistory">
+<div class="modal-overlay" *ngIf="showCleaningHistory">
   <div class="modal-content" id="cleaningHistoryModal" (click)="$event.stopPropagation()" 
        [style.left.px]="modalPositions['cleaningHistoryModal'].x" 
        [style.top.px]="modalPositions['cleaningHistoryModal'].y">
-        <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'cleaningHistoryModal')">
-          <h3>🧹 Cleaning History: {{ cleaningHistoryTarget?.computer_name }}</h3>
-          <button class="modal-close" (click)="closeCleaningHistory()">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="cleaning-filters" *ngIf="cleaningRecords.length > 0">
-            <div class="filter-row">
-              <div class="filter-group">
-                <label>Month:</label>
-                <select [(ngModel)]="cleaningFilterMonth" (change)="applyCleaningFilters()" class="form-input">
-                  <option value="">All Months</option>
-                  <option *ngFor="let m of monthOptions" [value]="m.value">{{ m.label }}</option>
-                </select>
-              </div>
-              <div class="filter-group">
-                <label>Year:</label>
-                <select [(ngModel)]="cleaningFilterYear" (change)="applyCleaningFilters()" class="form-input">
-                  <option value="">All Years</option>
-                  <option *ngFor="let y of yearOptions" [value]="y">{{ y }}</option>
-                </select>
-              </div>
-              <div class="filter-group filter-actions">
-                <button class="btn" (click)="clearCleaningFilters()" *ngIf="cleaningFilterMonth || cleaningFilterYear">Clear Filters</button>
-              </div>
-            </div>
-            <div class="filter-count" *ngIf="cleaningFilterMonth || cleaningFilterYear">
-              Showing {{ filteredCleaningRecords.length }} of {{ cleaningRecords.length }} records
-            </div>
+    <div class="modal-header modal-drag-handle" (mousedown)="startDrag($event, 'cleaningHistoryModal')">
+      <h3>🧹 Cleaning History: {{ cleaningHistoryTarget?.computer_name }}</h3>
+      <button class="modal-close" (click)="closeCleaningHistory()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cleaning-filters" *ngIf="cleaningRecords.length > 0">
+        <div class="filter-row">
+          <div class="filter-group">
+            <label>Month:</label>
+            <select [(ngModel)]="cleaningFilterMonth" (change)="applyCleaningFilters()" class="form-input">
+              <option value="">All Months</option>
+              <option *ngFor="let m of monthOptions" [value]="m.value">{{ m.label }}</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Year:</label>
+            <select [(ngModel)]="cleaningFilterYear" (change)="applyCleaningFilters()" class="form-input">
+              <option value="">All Years</option>
+              <option *ngFor="let y of yearOptions" [value]="y">{{ y }}</option>
+            </select>
           </div>
           
-          <table class="mini-table" *ngIf="filteredCleaningRecords.length > 0">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>AV Updated</th>
-                <th>Antivirus</th>
-                <th>Office Activation</th>
-                <th>Office Expiry</th>
-                <th>RAM</th>
-                <th>Storage</th>
-                <th>Notes</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let record of filteredCleaningRecords">
-                <td>{{ record.cleaning_date | date:'MMM d, yyyy' }}</td>
-                <td>{{ record.av_last_update | date:'MMM yyyy' }}</td>
-                <td>{{ record.antivirus || '—' }}</td>
-                <td>
-                  <span class="status-badge" [class.status-online]="record.office_activation === 'Activated'" [class.status-offline]="record.office_activation === 'Expired'">
-                    {{ record.office_activation || '—' }}
-                  </span>
-                </td>
-                <td>{{ record.office_expiry ? (record.office_expiry | date:'MMM yyyy') : '—' }}</td>
-                <td>{{ record.ram || '—' }}</td>
-                <td>{{ record.storage || '—' }}</td>
-                <td>{{ record.notes || '—' }}</td>
-                <td><button class="action-btn" (click)="openDeleteCleaningModal(record)" title="Delete">🗑️</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="empty-row" *ngIf="filteredCleaningRecords.length === 0 && cleaningRecords.length > 0">No records found for the selected filter</div>
-          <div class="empty-row" *ngIf="cleaningRecords.length === 0">No cleaning records found for this computer</div>
+          <!-- ✅ ADD SORTING CONTROLS -->
+          <div class="filter-group">
+            <label>Sort By:</label>
+            <select [(ngModel)]="cleaningSortField" (change)="applyCleaningFilters()" class="form-input">
+              <option value="cleaning_date">Date</option>
+              <option value="antivirus">Antivirus</option>
+              <option value="ram">RAM</option>
+              <option value="storage">Storage</option>
+              <option value="processor">Processor</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Order:</label>
+            <select [(ngModel)]="cleaningSortDirection" (change)="applyCleaningFilters()" class="form-input">
+              <option value="desc">Newest First</option>
+              <option value="asc">Oldest First</option>
+            </select>
+          </div>
+          
+          <div class="filter-group filter-actions">
+            <button class="btn" (click)="clearCleaningFilters()" *ngIf="cleaningFilterMonth || cleaningFilterYear">Clear Filters</button>
+          </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn" (click)="closeCleaningHistory()">Close</button>
-          <button class="btn btn-primary" (click)="closeCleaningHistory(); openCleaningModal(cleaningHistoryTarget)">➕ New Record</button>
+        <div class="filter-count" *ngIf="cleaningFilterMonth || cleaningFilterYear">
+          Showing {{ filteredCleaningRecords.length }} of {{ cleaningRecords.length }} records
         </div>
       </div>
+      
+      <table class="mini-table" *ngIf="filteredCleaningRecords.length > 0">
+        <thead>
+          <tr>
+            <th (click)="sortCleaningRecords('cleaning_date')" class="sortable-header">
+              Date 
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'cleaning_date'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('av_last_update')" class="sortable-header">
+              AV Updated
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'av_last_update'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('antivirus')" class="sortable-header">
+              Antivirus
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'antivirus'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('office_activation_date')" class="sortable-header">
+              Office Activation
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'office_activation_date'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('office_expiry')" class="sortable-header">
+              Office Expiry
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'office_expiry'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('ram')" class="sortable-header">
+              RAM
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'ram'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('storage')" class="sortable-header">
+              Storage
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'storage'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th (click)="sortCleaningRecords('notes')" class="sortable-header">
+              Notes
+              <span class="sort-indicator" *ngIf="cleaningSortField === 'notes'">
+                {{ cleaningSortDirection === 'desc' ? '▼' : '▲' }}
+              </span>
+            </th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let record of filteredCleaningRecords">
+            <td>
+              <strong>{{ record.cleaning_date | date:'MMM d, yyyy' }}</strong>
+              <div *ngIf="isLatestCleaningRecord(record)">
+                <span class="latest-badge">LATEST</span>
+              </div>
+            </td>
+            <td>{{ record.av_last_update | date:'MMM yyyy' }}</td>
+            <td>{{ record.antivirus || '—' }}</td>
+            <td>
+              <span class="status-badge" [class.status-online]="record.office_activation === 'Activated'" [class.status-offline]="record.office_activation === 'Expired'">
+                {{ record.office_activation || '—' }}
+              </span>
+              <div *ngIf="record.office_activation_date">
+                <small>{{ record.office_activation_date | date:'MMM d, yyyy' }}</small>
+              </div>
+            </td>
+            <td>{{ record.office_expiry ? (record.office_expiry | date:'MMM yyyy') : '—' }}</td>
+            <td>{{ record.ram || '—' }}</td>
+            <td>{{ record.storage || '—' }}</td>
+            <td class="notes-cell" [title]="record.notes">{{ record.notes || '—' }}</td>
+            <td><button class="action-btn" (click)="openDeleteCleaningModal(record)" title="Delete">🗑️</button></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="empty-row" *ngIf="filteredCleaningRecords.length === 0 && cleaningRecords.length > 0">No records found for the selected filter</div>
+      <div class="empty-row" *ngIf="cleaningRecords.length === 0">No cleaning records found for this computer</div>
     </div>
+    <div class="modal-footer">
+      <button class="btn" (click)="closeCleaningHistory()">Close</button>
+      <button class="btn btn-primary" (click)="closeCleaningHistory(); openCleaningModal(cleaningHistoryTarget)">➕ New Record</button>
+    </div>
+  </div>
+</div>
 
     <!-- License Check Modal -->
     <div class="modal-overlay" *ngIf="showLicenseModal">
@@ -1307,7 +1530,406 @@ import { environment } from '../../../../environments/environment';
   font-weight: bold;
   line-height: 1;
 }
+  /* Simple sort toggle button */
+.sort-btn {
+  background: #e8f0fe;
+  border-color: #0a246a;
+  color: #0a246a;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 70px;
+  transition: all 0.15s;
+}
 
+.sort-btn:hover {
+  background: #d0e0ff;
+  border-color: #0a3a8c;
+  box-shadow: 0 2px 4px rgba(10, 36, 106, 0.1);
+}
+
+.sort-btn:active {
+  transform: scale(0.95);
+}
+/* Sorting Styles */
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+  position: relative;
+  white-space: nowrap;
+}
+
+.sortable-header:hover {
+  background: #e0e7ff !important;
+}
+
+.sort-indicator {
+  font-size: 8px;
+  margin-left: 4px;
+  color: #0a246a;
+}
+
+.latest-badge {
+  display: inline-block;
+  background: #4caf50;
+  color: white;
+  font-size: 7px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+}
+
+.notes-cell {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* Responsive sorting controls */
+@media (max-width: 768px) {
+  .filter-row {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .filter-group .form-input {
+    width: 100px;
+  }
+}
+  .sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e8f0fe;
+  border-color: #0a246a;
+  color: #0a246a;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 120px;
+  transition: all 0.15s;
+}
+
+.sort-btn-label {
+  font-size: 10px;
+}
+
+.sort-btn-icon {
+  font-size: 8px;
+  margin-left: auto;
+}
+  /* Search wrapper with icon */
+.search-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 8px;
+  color: #888;
+  pointer-events: none;
+}
+
+.search-input {
+  padding-left: 28px !important;
+}
+
+/* Select wrapper with icon */
+.select-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.select-icon {
+  position: absolute;
+  left: 8px;
+  color: #888;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.select-with-icon {
+  padding-left: 24px !important;
+}
+
+/* Sort button styling */
+.sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e8f0fe;
+  border-color: #0a246a;
+  color: #0a246a;
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 130px;
+  transition: all 0.15s;
+}
+
+.sort-btn:hover {
+  background: #d0e0ff;
+  border-color: #0a3a8c;
+  box-shadow: 0 2px 4px rgba(10, 36, 106, 0.1);
+}
+
+.sort-btn svg {
+  flex-shrink: 0;
+}
+
+.sort-btn-label {
+  font-size: 10px;
+}
+
+/* Buttons with SVG icons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn svg {
+  flex-shrink: 0;
+}
+
+/* Cache badge with icon */
+.cache-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  padding: 2px 8px;
+  cursor: help;
+  white-space: nowrap;
+  border-radius: 3px;
+}
+
+.cache-badge svg {
+  flex-shrink: 0;
+}
+
+.cache-badge.from-cache {
+  background: #fff8e1;
+  color: #f57f17;
+  border: 1px solid #ffb300;
+}
+
+.cache-badge.from-server {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #66bb6a;
+}
+
+/* Count badge with icon */
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: #888;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.count-badge svg {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+/* Primary button */
+.btn-primary {
+  background: #0a246a;
+  color: #fff;
+  border-color: #0a246a;
+}
+
+.btn-primary:hover {
+  background: #0a3a8c;
+}
+
+.btn-primary svg {
+  color: #fff;
+}
+
+/* Cleaning button */
+.btn-cleaning {
+  background: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
+  position: relative;
+}
+
+.btn-cleaning:hover {
+  background: #c8e6c9;
+}
+
+.btn-cleaning.active-filter {
+  background: #4caf50;
+  color: white;
+  border-color: #388e3c;
+}
+
+.btn-cleaning.active-filter svg {
+  color: white;
+}
+
+/* Back to all button */
+.btn-back-all {
+  background: #fff3e0;
+  border-color: #ff9800;
+  color: #e65100;
+  animation: pulse 0.5s ease;
+}
+
+.btn-back-all:hover {
+  background: #ffe0b2;
+  border-color: #f57c00;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sort-btn-label {
+    display: none; /* Hide label on small screens, show only icon */
+  }
+  
+  .sort-btn {
+    min-width: auto;
+    padding: 4px 8px;
+  }
+}
+  /* Action buttons container */
+.actions-cell {
+  white-space: nowrap;
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+
+/* Base action button styles */
+.action-btn {
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.action-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* View button - neutral */
+.action-btn.view {
+  color: #4a5568;
+}
+
+.action-btn.view:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
+  color: #2d3748;
+}
+
+/* Edit button - blue */
+.action-btn.edit {
+  color: #0a246a;
+}
+
+.action-btn.edit:hover {
+  background: #e8f0fe;
+  border-color: #0a246a;
+  color: #0a246a;
+}
+
+/* Check button - green */
+.action-btn.check {
+  color: #2e7d32;
+}
+
+.action-btn.check:hover {
+  background: #e8f5e9;
+  border-color: #4caf50;
+  color: #2e7d32;
+}
+
+/* Clean button - teal/cyan */
+.action-btn.clean {
+  color: #00838f;
+}
+
+.action-btn.clean:hover {
+  background: #e0f7fa;
+  border-color: #00acc1;
+  color: #00838f;
+}
+
+/* History button - purple */
+.action-btn.history {
+  color: #6a1b9a;
+}
+
+.action-btn.history:hover {
+  background: #f3e5f5;
+  border-color: #9c27b0;
+  color: #6a1b9a;
+}
+
+/* Delete button - red */
+.action-btn.delete {
+  color: #cc0000;
+}
+
+.action-btn.delete:hover {
+  background: #ffebee;
+  border-color: #ef5350;
+  color: #cc0000;
+}
+
+/* Tooltip on hover */
+.action-btn::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: #333;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.15s ease;
+  z-index: 100;
+}
+
+.action-btn:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+
+/* Active state */
+.action-btn:active {
+  transform: scale(0.9);
+}
+
+/* Focus state for accessibility */
+.action-btn:focus {
+  outline: 2px solid #0a246a;
+  outline-offset: 2px;
+}
 .storage-add-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1344,6 +1966,10 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
   showAllNotifications = false;
   notifications: any[] = [];
   private dismissedNotifications = new Set<string>();
+   cleaningSortField: string = 'cleaning_date';  
+    historySortField: string = 'cleaning_date';
+  historySortDirection: 'asc' | 'desc' = 'desc';
+cleaningSortDirection: 'newest' | 'oldest' | 'asc' | 'desc' = 'newest';
    showCleanedOnly = false;  // ✅ NEW
   cleanedPCsCount = 0;      // ✅ NEW
   private allCleanedPCIds: Set<number> = new Set();  // ✅ NEW
@@ -1544,6 +2170,10 @@ isValidDate(dateStr: any): boolean {
 isValidOfficeDate(pc: any): boolean {
   return this.isValidDate(pc.office_activation_date) || 
          pc.office_activation === 'Activated';
+}
+toggleCleaningSort() {
+  this.cleaningSortDirection = this.cleaningSortDirection === 'newest' ? 'oldest' : 'newest';
+  this.applyFilters();
 }
  getOfficeDaysRemaining(pc: any): number {
     if (!pc.office_expiry || pc.office_expiry === '0000-00-00' || pc.office_expiry === '') return Infinity;
@@ -1793,11 +2423,16 @@ private formatDate(dateStr: any): string {
     }
   });
 }
- viewCleaningHistory(pc: any) {
+viewCleaningHistory(pc: any) {
   this.cleaningHistoryTarget = pc;
-  this.cleaningFilterMonth = ''; this.cleaningFilterYear = '';
-  this.filteredCleaningRecords = []; this.cleaningRecords = [];
-  this.centerModal('cleaningHistoryModal'); // ✅ Center the modal
+  this.cleaningFilterMonth = ''; 
+  this.cleaningFilterYear = '';
+  // ✅ Reset history sorting (not cleaning sort)
+  this.historySortField = 'cleaning_date';
+  this.historySortDirection = 'desc';
+  this.filteredCleaningRecords = []; 
+  this.cleaningRecords = [];
+  this.centerModal('cleaningHistoryModal');
   this.loadCleaningRecords(pc);
   this.showCleaningHistory = true;
 }
@@ -1931,15 +2566,154 @@ private mergeLocalCleaningRecords(pc: any) {
     }
   });
 }
-  applyCleaningFilters() {
-    let records = [...this.cleaningRecords];
-    if (this.cleaningFilterMonth) {records = records.filter(r => {const d = new Date(r.cleaning_date); return (d.getMonth()+1).toString() === this.cleaningFilterMonth;});}
-    if (this.cleaningFilterYear) {records = records.filter(r => {const d = new Date(r.cleaning_date); return d.getFullYear().toString() === this.cleaningFilterYear;});}
-    records.sort((a,b) => new Date(b.cleaning_date).getTime() - new Date(a.cleaning_date).getTime());
-    this.filteredCleaningRecords = records;
+ applyCleaningFilters() {
+  let records = [...this.cleaningRecords];
+  
+  // Apply month filter
+  if (this.cleaningFilterMonth) {
+    records = records.filter(r => {
+      const d = new Date(r.cleaning_date);
+      return (d.getMonth() + 1).toString() === this.cleaningFilterMonth;
+    });
   }
-
-  clearCleaningFilters() {this.cleaningFilterMonth = ''; this.cleaningFilterYear = ''; this.applyCleaningFilters();}
+  
+  // Apply year filter
+  if (this.cleaningFilterYear) {
+    records = records.filter(r => {
+      const d = new Date(r.cleaning_date);
+      return d.getFullYear().toString() === this.cleaningFilterYear;
+    });
+  }
+  
+  // ✅ Apply sorting
+  records = this.sortRecords(records);
+  
+  this.filteredCleaningRecords = records;
+}
+sortRecords(records: any[]): any[] {
+  return records.sort((a, b) => {
+    let valueA: any;
+    let valueB: any;
+    
+    switch (this.cleaningSortField) {
+      case 'cleaning_date':
+        valueA = new Date(a.cleaning_date).getTime() || 0;
+        valueB = new Date(b.cleaning_date).getTime() || 0;
+        break;
+      case 'av_last_update':
+        valueA = new Date(a.av_last_update).getTime() || 0;
+        valueB = new Date(b.av_last_update).getTime() || 0;
+        break;
+      case 'office_activation_date':
+        valueA = new Date(a.office_activation_date).getTime() || 0;
+        valueB = new Date(b.office_activation_date).getTime() || 0;
+        break;
+      case 'office_expiry':
+        valueA = new Date(a.office_expiry).getTime() || 0;
+        valueB = new Date(b.office_expiry).getTime() || 0;
+        break;
+      case 'antivirus':
+        valueA = (a.antivirus || '').toLowerCase();
+        valueB = (b.antivirus || '').toLowerCase();
+        break;
+      case 'ram':
+        valueA = this.parseRAMSize(a.ram);
+        valueB = this.parseRAMSize(b.ram);
+        break;
+      case 'storage':
+        valueA = this.parseStorageSize(a.storage);
+        valueB = this.parseStorageSize(b.storage);
+        break;
+      case 'processor':
+        valueA = (a.processor || '').toLowerCase();
+        valueB = (b.processor || '').toLowerCase();
+        break;
+      case 'notes':
+        valueA = (a.notes || '').toLowerCase();
+        valueB = (b.notes || '').toLowerCase();
+        break;
+      default:
+        valueA = new Date(a.cleaning_date).getTime() || 0;
+        valueB = new Date(b.cleaning_date).getTime() || 0;
+    }
+    
+    // Handle string comparison
+    if (typeof valueA === 'string' && typeof valueB === 'string') {
+      if (this.cleaningSortDirection === 'desc') {
+        return valueB.localeCompare(valueA);
+      } else {
+        return valueA.localeCompare(valueB);
+      }
+    }
+    
+    // Handle numeric comparison
+    if (this.cleaningSortDirection === 'desc') {
+      return valueB - valueA;
+    } else {
+      return valueA - valueB;
+    }
+  });
+}
+parseRAMSize(ram: string): number {
+  if (!ram) return 0;
+  const match = ram.match(/(\d+)\s*GB/i);
+  return match ? parseInt(match[1]) : 0;
+}
+parseStorageSize(storage: string): number {
+  if (!storage) return 0;
+  
+  // Handle multiple storage devices (take the largest)
+  const storages = storage.split(',');
+  let maxSize = 0;
+  
+  storages.forEach(s => {
+    const trimmed = s.trim();
+    let size = 0;
+    
+    if (trimmed.includes('TB')) {
+      const match = trimmed.match(/(\d+)\s*TB/i);
+      size = match ? parseInt(match[1]) * 1024 : 0; // Convert TB to GB
+    } else if (trimmed.includes('GB')) {
+      const match = trimmed.match(/(\d+)\s*GB/i);
+      size = match ? parseInt(match[1]) : 0;
+    }
+    
+    if (size > maxSize) maxSize = size;
+  });
+  
+  return maxSize;
+}
+sortCleaningRecords(field: string) {
+  if (this.cleaningSortField === field) {
+    // Toggle direction if same field
+    this.cleaningSortDirection = this.cleaningSortDirection === 'desc' ? 'asc' : 'desc';
+  } else {
+    // Set new field with default desc (newest first)
+    this.cleaningSortField = field;
+    this.cleaningSortDirection = 'desc';
+  }
+  this.applyCleaningFilters();
+}
+isLatestCleaningRecord(record: any): boolean {
+  if (!this.filteredCleaningRecords.length) return false;
+  
+  // Find the latest cleaning date in the filtered records
+  const latestDate = this.filteredCleaningRecords.reduce((max, r) => {
+    const date = new Date(r.cleaning_date).getTime();
+    return date > max ? date : max;
+  }, 0);
+  
+  const recordDate = new Date(record.cleaning_date).getTime();
+  return recordDate === latestDate;
+}
+  clearCleaningFilters() {
+  this.cleaningFilterMonth = '';
+  this.cleaningFilterYear = '';
+  // ✅ Reset sorting to default
+  this.cleaningSortField = 'cleaning_date';
+  this.cleaningSortDirection = 'desc';
+  this.applyCleaningFilters();
+}
   // Open the delete confirmation modal
 openDeleteCleaningModal(record: any) {
   this.deleteCleaningTarget = record;
@@ -2100,10 +2874,10 @@ filterCleanedPCs() {
   if (this.showCleanedOnly) {
     this.cleaningListFilterMonth = '';
     this.cleaningListFilterYear = '';
-    // ✅ Load both IDs AND dates
+    // ✅ Reset sorting to newest first when entering cleaning mode
+    this.cleaningSortDirection = 'newest';
     this.loadAllCleaningData();
   } else {
-    // ✅ When going back to all computers, don't reload - just apply filters
     this.applyFilters();
   }
 }
@@ -2582,8 +3356,7 @@ isOfficeExpiredForm(): boolean {
 
   cancelDelete() {this.closeDeleteModal();}
   closeDeleteModal() {this.showDeleteModal = false; this.deleteTarget = null;}
-
- applyFilters() {
+applyFilters() {
   let filtered = [...this.pcs];
   
   // Search filter
@@ -2599,6 +3372,21 @@ isOfficeExpiredForm(): boolean {
   
   if (this.showCleanedOnly) {
     filtered = filtered.filter(pc => this.allCleanedPCIds.has(Number(pc.id)));
+    
+    // ✅ Sort by cleaning date when in cleaning mode
+    filtered.sort((a, b) => {
+      const dateA = this.getLastCleaningDate(a.id) ? new Date(this.getLastCleaningDate(a.id)!).getTime() : 0;
+      const dateB = this.getLastCleaningDate(b.id) ? new Date(this.getLastCleaningDate(b.id)!).getTime() : 0;
+      
+      if (this.cleaningSortDirection === 'newest') {
+        return dateB - dateA; // Newest first
+      } else {
+        return dateA - dateB; // Oldest first
+      }
+    });
+  } else {
+    // ✅ Default sort by IP when NOT in cleaning mode
+    filtered.sort((a, b) => this.ipToNumber(a.ip_address) - this.ipToNumber(b.ip_address));
   }
   
   // Expiry filters
@@ -2621,10 +3409,8 @@ isOfficeExpiredForm(): boolean {
     };
   });
   
-  filtered.sort((a, b) => this.ipToNumber(a.ip_address) - this.ipToNumber(b.ip_address));
   this.filteredPCs = filtered;
 }
-
 // ✅ Add this method to get notifications for a specific PC
 getPCNotifications(pc: any): any[] {
   return this.notifications.filter(n => n.pc && Number(n.pc.id) === Number(pc.id));

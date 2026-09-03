@@ -15,23 +15,17 @@ import { NotificationService } from '../../services/notification.service';
   template: `
     <div class="admin-container">
       <div class="view-header">
-        <h2>📋 {{ viewMode === 'our' ? 'Our Job Orders' : 'J.O. Request Management' }}</h2>
+       <h2>{{ viewMode === 'our' ? 'Our Job Orders' : 'J.O. Request Management' }}</h2>
         <div class="header-actions">
-         <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
-  📤 Our Job Orders
-  <span class="notification-badge" *ngIf="ourOrdersUnreadCount > 0">
-    {{ ourOrdersUnreadCount }}
-  </span>
+        <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
+  Our Job Orders
 </button>
 <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
-  📥 J.O. Request Management
-  <span class="notification-badge" *ngIf="incomingOrdersUnreadCount > 0">
-    {{ incomingOrdersUnreadCount }}
-  </span>
+  J.O. Request Management
 </button>
-          <button class="classic-btn primary" routerLink="/client/job-orders/new">
-            <span>➕</span> New Job Order
-          </button>
+<button class="classic-btn primary" routerLink="/client/job-orders/new">
+  New Job Order
+</button>
         </div>
       </div>
 
@@ -92,8 +86,8 @@ import { NotificationService } from '../../services/notification.service';
   </div>
   
   <button class="classic-btn" (click)="loadAllOrders()">
-    <span>🔄</span> Refresh
-  </button>
+  Refresh
+</button>
 </div>
 
       <!-- Status Bar -->
@@ -194,57 +188,113 @@ import { NotificationService } from '../../services/notification.service';
   </div>
 </td>
 <td (click)="$event.stopPropagation()">
-  <!-- ✅ Edit button - for pending orders in both views -->
+  <!-- ✅ Edit button -->
   <button class="action-btn edit-btn" 
           *ngIf="(jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending')) && canEditOrder(jo)" 
-          (click)="editOrder(jo)" title="Edit">✏️</button>
+          (click)="editOrder(jo)" title="Edit">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  </button>
   
-  <button class="action-btn view-btn" (click)="viewDetail(jo)" title="View">👁️</button>
-  <button class="action-btn print-btn" (click)="printOrder(jo)" title="Print">🖨️</button>
+  <button class="action-btn view-btn" (click)="viewDetail(jo)" title="View">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  </button>
   
-  <!-- ✅ Receive button - ONLY in J.O. Request Management -->
+  <button class="action-btn print-btn" (click)="printOrder(jo)" title="Print">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="6 9 6 2 18 2 18 9"/>
+      <path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+  </button>
+  
+  <!-- ✅ Receive button -->
   <button class="action-btn accept-btn" 
-        *ngIf="viewMode === 'incoming' && (
-          (jo.is_forwarded && jo.forwarded_status === 'pending') ||
-          (!jo.is_forwarded && jo.status === 'pending')
-        )" 
-        (click)="receiveOrder(jo)" title="Receive">📥</button>
-  <!-- ✅ Forward button - ONLY when status is approved (received) -->
+          *ngIf="viewMode === 'incoming' && (
+            (jo.is_forwarded && jo.forwarded_status === 'pending') ||
+            (!jo.is_forwarded && jo.status === 'pending')
+          )" 
+          (click)="receiveOrder(jo)" title="Receive">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  </button>
+  
+  <!-- ✅ Forward button -->
   <button class="action-btn forward-btn" 
           *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
-          (click)="forwardOrder(jo)" title="Forward">➡️</button>
+          (click)="forwardOrder(jo)" title="Forward">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <line x1="5" y1="12" x2="19" y2="12"/>
+      <polyline points="12 5 19 12 12 19"/>
+    </svg>
+  </button>
 
-  <!-- ✅ NEW: Assign button - Show when approved/received but NOT yet assigned -->
+  <!-- ✅ Assign button -->
   <button class="action-btn assign-btn" 
-        *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
-          (jo.is_forwarded && jo.forwarded_status === 'forwarded') ||
-          (!jo.is_forwarded && jo.status === 'approved')
-        )" 
-        (click)="assignOrder(jo)" 
-        title="Assign">👤</button>
+          *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
+            (jo.is_forwarded && jo.forwarded_status === 'forwarded') ||
+            (!jo.is_forwarded && jo.status === 'approved')
+          )" 
+          (click)="assignOrder(jo)" 
+          title="Assign">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+  </button>
 
-  <!-- ✅ Reassign button - for supervisor/head/manager only when already assigned -->
- <button class="action-btn assign-btn" 
-        *ngIf="canReassign() && viewMode === 'incoming' && (
-          (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
-          (!jo.is_forwarded && jo.status === 'assigned')
-        )" 
-        (click)="assignOrder(jo)" 
-        title="Reassign">🔄</button>
-  <!-- ✅ Done button - ONLY show when assigned -->
- <button class="action-btn done-btn" 
-        *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
-          (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
-          (!jo.is_forwarded && jo.status === 'assigned')
-        )" 
-        (click)="markAsDone(jo)" title="Mark as Done">✅</button>
-  <!-- ✅ Reject button - ONLY in J.O. Request Management -->
+  <!-- ✅ Reassign button -->
+  <button class="action-btn assign-btn" 
+          *ngIf="canReassign() && viewMode === 'incoming' && (
+            (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
+            (!jo.is_forwarded && jo.status === 'assigned')
+          )" 
+          (click)="assignOrder(jo)" 
+          title="Reassign">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+    </svg>
+  </button>
+  
+  <!-- ✅ Done button -->
+  <button class="action-btn done-btn" 
+          *ngIf="viewMode === 'incoming' && isHeadOrSupervisor() && (
+            (jo.is_forwarded && jo.forwarded_status === 'assigned') ||
+            (!jo.is_forwarded && jo.status === 'assigned')
+          )" 
+          (click)="markAsDone(jo)" title="Mark as Done">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  </button>
+  
+  <!-- ✅ Reject button -->
   <button class="action-btn reject-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
-          (click)="updateStatus(jo, 'rejected')" title="Reject">❌</button>
+          (click)="updateStatus(jo, 'rejected')" title="Reject">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="15" y1="9" x2="9" y2="15"/>
+      <line x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+  </button>
   
   <!-- ✅ Delete button -->
-  <button class="action-btn delete-btn" *ngIf="canDelete(jo)" (click)="deleteOrder(jo)" title="Delete">🗑️</button>
+  <button class="action-btn delete-btn" *ngIf="canDelete(jo)" (click)="deleteOrder(jo)" title="Delete">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z"/>
+    </svg>
+  </button>
 </td>
             </tr>
             <tr *ngIf="filteredOrders.length === 0">
@@ -285,7 +335,12 @@ import { NotificationService } from '../../services/notification.service';
   <div class="modal-window view-modal" (click)="$event.stopPropagation()">
     <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
       <span>📋 Job Order Details</span>
-      <button type="button" (click)="closeDetailModal()" class="modal-close">✕</button>
+      <button type="button" (click)="closeDetailModal()" class="modal-close">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+</button>
     </div>
     <div class="modal-body view-body" *ngIf="selectedOrder">
       <div class="view-header-info">
@@ -738,7 +793,9 @@ import { NotificationService } from '../../services/notification.service';
   flex-direction: column;
   gap: 4px;
 }
-
+.action-btn svg {
+  display: block;
+}
 .detail-info-item {
   display: flex;
   align-items: center;

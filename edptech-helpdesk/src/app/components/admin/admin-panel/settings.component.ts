@@ -312,7 +312,7 @@ import { environment } from '../../../../environments/environment';
       </div>
 <!-- AI Assistant Settings -->
 <div class="settings-card">
-  <h3>🤖 AI Assistant Settings</h3>
+  <h3>🤖 AI Assistant Settings</h3>   
   
   <div class="form-group">
     <label>AI Assistant Name:</label>
@@ -324,9 +324,11 @@ import { environment } from '../../../../environments/environment';
     <div class="logo-upload-area" (click)="aiAvatarFileInput.click()" 
          [class.has-logo]="aiAvatarImage || aiAvatarPreview">
       <div class="logo-preview" *ngIf="aiAvatarImage || aiAvatarPreview">
-        <img [src]="aiAvatarPreview || aiAvatarImage" alt="AI Avatar" class="system-logo-preview">
-        <button class="remove-logo-btn" (click)="$event.stopPropagation(); removeAiAvatar()" title="Remove Avatar">✕</button>
-      </div>
+ <img [src]="aiAvatarPreview || aiAvatarImage" alt="AI Avatar" 
+     class="ai-avatar-preview" 
+     style="width: 80px; height: 80px; object-fit: cover; border-radius: 50%; object-position: center;">
+  <button class="remove-logo-btn" (click)="$event.stopPropagation(); removeAiAvatar()" title="Remove Avatar">✕</button>
+</div>
       <div class="logo-placeholder" *ngIf="!aiAvatarImage && !aiAvatarPreview">
         <span class="logo-icon">🤖</span>
         <span class="logo-text">Click to upload AI avatar</span>
@@ -490,7 +492,14 @@ import { environment } from '../../../../environments/environment';
       color: #555;
       border-bottom: 2px solid #e0e0e0;
     }
-    
+    .ai-avatar-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #0a246a;
+  object-position: center;
+}
     .branch-table td {
       padding: 10px 12px;
       border-bottom: 1px solid #f0f0f0;
@@ -738,10 +747,23 @@ import { environment } from '../../../../environments/environment';
   position: relative;
   display: inline-block;
 }
-.system-logo-preview {
+/* System Logo - rectangular */
+.logo-preview .system-logo-preview {
   max-height: 80px;
   max-width: 200px;
   object-fit: contain;
+  border-radius: 0;
+  object-position: center;
+}
+
+/* AI Avatar - circular */
+.logo-preview .ai-avatar-preview {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #0a246a;
+  object-position: center;
 }
 .remove-logo-btn {
   position: absolute;
@@ -1458,52 +1480,75 @@ onAiAvatarSelected(event: Event) {
     reader.readAsDataURL(file);
   }
 }
-
 uploadAiAvatar() {
   if (!this.aiAvatarFile) return;
   
   this.uploadingAiAvatar = true;
-  this.aiAvatarError = '';
+  this.aiAvatarError = '';  
   
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   
-  // ✅ Read file as base64 and send as JSON
   const reader = new FileReader();
   reader.onload = (e: any) => {
-    const base64Data = e.target.result as string; // This is a data URL: "data:image/png;base64,..."
-    
-    // Send as JSON to backend
-    this.http.post(`${environment.apiUrl}/api/admin/upload-ai-avatar`, 
-      { avatar: base64Data },  // ✅ JSON payload
-      { 
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        } 
+    const img = new Image();
+    img.onload = () => {
+      // ✅ Compress to 150x150 max
+      const canvas = document.createElement('canvas');
+      const maxSize = 150;
+      let width = img.width;
+      let height = img.height;
+      
+      if (width > height) {
+        if (width > maxSize) {
+          height = Math.round(height * maxSize / width);
+          width = maxSize;
+        }
+      } else {
+        if (height > maxSize) {
+          width = Math.round(width * maxSize / height);
+          height = maxSize;
+        }
       }
-    ).subscribe({
-      next: (response: any) => {
-        this.uploadingAiAvatar = false;
-        this.aiAvatarImage = base64Data; // ✅ Use base64 directly
-        this.aiAvatarFile = null;
-        this.aiAvatarPreview = null;
-        localStorage.removeItem('ai_avatar_cache');
-        this.showToastMsg('✅ AI Avatar uploaded!', 'success');
-      },
-      error: (err) => {
-        this.uploadingAiAvatar = false;
-        this.aiAvatarError = err.error?.message || 'Failed to upload AI avatar.';
-        this.showToastMsg('❌ Failed to upload AI avatar', 'error');
-      }
-    });
+      
+      canvas.width = width;
+      canvas.height = height;
+     const ctx = canvas.getContext('2d');
+if (ctx) {
+    ctx.drawImage(img, 0, 0, width, height);
+}
+      // ✅ Compress as JPEG quality 0.7 (smaller than PNG)
+      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+      
+      console.log('Compressed avatar size:', Math.round(compressedBase64.length / 1024), 'KB');
+      
+      // Send compressed
+      this.http.post(`${environment.apiUrl}/api/admin/upload-ai-avatar`, 
+        { avatar: compressedBase64 },
+        { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } }
+      ).subscribe({
+        next: () => {
+          this.uploadingAiAvatar = false;
+          this.aiAvatarImage = compressedBase64;
+          this.aiAvatarFile = null;
+          this.aiAvatarPreview = null;
+          
+          localStorage.setItem('ai_avatar_cache', JSON.stringify({
+            avatar: compressedBase64,
+            name: this.aiAssistantName,
+            greeting: this.aiGreetingMessage
+          }));
+          
+          this.showToastMsg('✅ AI Avatar uploaded!', 'success');
+          setTimeout(() => this.loadAllSettings(), 500);
+        },
+        error: (err) => {
+          this.uploadingAiAvatar = false;
+          this.showToastMsg('❌ Failed to upload avatar', 'error');
+        }
+      });
+    };
+    img.src = e.target.result;
   };
-  
-  reader.onerror = () => {
-    this.uploadingAiAvatar = false;
-    this.aiAvatarError = 'Failed to read file.';
-    this.showToastMsg('❌ Failed to read file', 'error');
-  };
-  
   reader.readAsDataURL(this.aiAvatarFile);
 }
 removeAiAvatar() {
@@ -1515,13 +1560,28 @@ removeAiAvatar() {
       this.aiAvatarImage = null;
       this.aiAvatarFile = null;
       this.aiAvatarPreview = null;
-      localStorage.removeItem('ai_avatar_cache');
+      
+      // ✅ Update cache
+      const cacheData = {
+        avatar: null,
+        name: this.aiAssistantName,
+        greeting: this.aiGreetingMessage
+      };
+      localStorage.setItem('ai_avatar_cache', JSON.stringify(cacheData));
+      
       this.showToastMsg('🗑️ AI Avatar removed!', 'success');
+      
+      // ✅ Reload settings
+      setTimeout(() => {
+        this.loadAllSettings();
+      }, 500);
     },
-    error: () => this.showToastMsg('❌ Failed to remove avatar', 'error')
+    error: (err) => {
+      console.error('Failed to remove avatar:', err);
+      this.showToastMsg('❌ Failed to remove avatar', 'error');
+    }
   });
 }
-
 cancelAiAvatarUpload() {
   this.aiAvatarFile = null;
   this.aiAvatarPreview = null;

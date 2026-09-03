@@ -14,722 +14,722 @@ import { Subscription } from 'rxjs';
   selector: 'app-client-requisition-list',
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive],
-  template: `
-    <div class="req-list-container">
-      <!-- Header -->
-      <div class="view-header">
-  <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
-<div class="header-actions">
-    <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
-      📤 Our Requests
-      <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
-    </button>
-    <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
-      📥 Request Management
-      <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
-    </button>
-    <button class="classic-btn primary" routerLink="/client/request/new">
-      <span>➕</span> New Requisition
-    </button>
-  </div>
-</div>
-
-    <div class="status-tabs-bar">
-  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-    📋 All <span class="tab-count">{{ getStatusCount('all') }}</span>
-</button>
-  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
-    ⏳ Pending <span class="tab-count pending-count">{{ getStatusCount('pending') }}</span>
-  </button>
-  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
-    📥 Accepted <span class="tab-count approved-count">{{ getStatusCount('approved') }}</span>
-  </button>
-    <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
-  📤 Forwarded <span class="tab-count forwarded-count">{{ getStatusCount('forwarded') }}</span>
-</button>
-  <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
-    ⚙️ On Process <span class="tab-count processing-count">{{ getStatusCount('processing') }}</span>
-  </button>
-  <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
-    📦 Released <span class="tab-count released-count">{{ getStatusCount('released') }}</span>
-  </button>
-  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
-    ❌ Rejected <span class="tab-count rejected-count">{{ getStatusCount('rejected') }}</span>
-  </button>
-</div>
-<!-- Filter Bar -->
-<div class="filter-bar">
- <div class="filter-group">
-  <label>Branch:</label>
-  <select class="classic-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
-    <option value="">All Branches</option>
-    <option *ngFor="let branch of filteredBranches" [value]="branch.id">
-      🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
-    </option>
-  </select>
-</div>
-  
-<div class="filter-group">
-  <label>Request From:</label>
-  <select class="classic-select" [(ngModel)]="filters.requestFromDept" (change)="applyFilters()">
-    <option value="">All Departments</option>
-    <option *ngFor="let dept of filteredFilterDepartments" [value]="dept.name">
-      {{ dept.name }}
-    </option>
-  </select>
-</div>
-  <div class="filter-group search-group">
-    <label>Search:</label>
-    <input type="text" class="classic-input" placeholder="REQ #, ATTN, name..." 
-           [(ngModel)]="searchTerm" (input)="applyFilters()">
-  </div>
-  
-  <button class="classic-btn" (click)="clearFilters()">
-    <span>🔄</span> Clear
-  </button>
-</div>
-     <!-- Status Bar -->
-<div class="classic-status-bar">
-  <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Requests' : '📥 Request Management' }}</strong></span>
-  <span class="status-sep">|</span>
-  <span>Showing: <strong>{{ filteredRequisitions.length }}</strong> requisitions</span>
-  <span class="status-sep">|</span>
-  <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
-  <span class="status-sep">|</span>
-  <span>Branch: <strong>{{ userBranch?.name || 'All' }}</strong></span>
-  <span class="status-sep">|</span>
-  <span>Dept: <strong>{{ currentUser?.department || currentUser?.department_name || 'All' }}</strong></span>
-<!-- Bulk Action Buttons -->
-<ng-container *ngIf="activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected'">
-    <span class="status-sep">|</span>
-    <label class="select-all-label">
-      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
-    </label>
-    <button class="classic-btn primary" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" 
-            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
-      ⚙️ Process ({{ selectedReqIds.length }})
-    </button>
-    <button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
-            (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
-      ⚙️ Process ({{ selectedReqIds.length }})
-    </button>
-    <!-- Delete for forwarded, released, rejected -->
-    <button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
-            (click)="bulkDeleteForwarded()" style="font-size: 12px; padding: 3px 10px;">
-      🗑️ Delete ({{ selectedReqIds.length }})
-    </button>
-    <button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
-            (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 12px; padding: 3px 10px;">
-      📦 Release ({{ selectedReqIds.length }})
-    </button>
-</ng-container>
-</div>
-
-      <!-- Requisitions Table -->
-      <div class="classic-table-container">
-        <table class="classic-table">
-       <thead>
-  <tr>
-   <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" style="width:30px;">
-  <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
-</th>
-    <th>REQ Code</th>
-    <th>Date</th>
-    <th>{{ viewMode === 'our' ? 'Forwarded To' : 'Forwarded From' }}</th>
-    <th *ngIf="viewMode === 'incoming'">Request From</th>
-    <th *ngIf="viewMode === 'our'">Recipient</th>
-    <th>ATTN</th>
-    <th>Items</th>
-    <th>Total</th>
-    <th>Status</th>
-    <th>Actions</th>
-  </tr>
-</thead>
-        <tbody>
-  <tr *ngFor="let req of filteredRequisitions; trackBy: trackByReqId" 
-      class="clickable-row" (click)="openViewModal(req)">
-    
-    <!-- Checkbox cell for Accepted/Processing tabs -->
-   <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" 
-    (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
-  <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
-</td>
-    <td class="req-num">
-      <code>{{ req.requisition_number || 'N/A' }}</code>
-      <div class="creator-info" *ngIf="req.prepared_name">
-        <span class="creator-label">by: {{ req.prepared_name }}</span>
-      </div>
-    </td>
-    <td class="date-cell">
-  {{ formatDate(req.date) }}<br>
-  <small style="font-size: 12px; color: #888;">{{ formatTime(req.time) }}</small>
-</td>
-   <td class="forward-cell">
-  <!-- If forwarded: show details -->
-  <div class="forward-info" *ngIf="req.is_forwarded">
-    <!-- "Our Requests" - shows where WE forwarded it TO -->
-    <ng-container *ngIf="viewMode === 'our'">
-      <span class="forward-label">📤 To: {{ getBranchName(req.forwarded_to_branch_id) || '—' }}</span>
-      <span class="forward-dept">{{ getDepartmentName(req.forwarded_to_department_id) || '—' }}</span>
-      <span class="forward-company">{{ getBranchCompany(req.forwarded_to_branch_id) }}</span>
-      <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
-    </ng-container>
-    <!-- "Request Management" - shows who forwarded it FROM (to us) -->
-    <ng-container *ngIf="viewMode === 'incoming'">
-      <span class="forward-label">{{ getBranchName(req.branch_id) || '—' }}</span>
-      <span class="forward-dept">{{ getDepartmentName(req.department_id) || '—' }}</span>
-      <span class="forward-company">{{ getBranchCompany(req.branch_id) }}</span>
-      <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
-    </ng-container>
-  </div>
-  <!-- If not forwarded: show dash -->
-  <span class="not-forwarded" *ngIf="!req.is_forwarded">—</span>
-</td>
-    <!-- ✅ Request From - visible for incoming view -->
-<td *ngIf="viewMode === 'incoming'">
-  <span class="dept-name-small" [class]="'type-' + (req.request_from || '').toLowerCase()">
-    {{ req.request_from || '—' }} 
-  </span>
-  <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
-    🏢 {{ getBranchName(req.branch_id) }}
-  </span>
-  <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
-</td>
-
-<!-- ✅ Recipient/Department - visible for our requests -->
-<td class="dept-cell" *ngIf="viewMode === 'our'">
-  <div class="dept-info-small">
-    <span class="dept-name-small">{{ getDepartmentName(req.department_id) }}</span>
-    <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
-      🏢 {{ getBranchName(req.branch_id) }}
-    </span>
-    <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
-    <span class="direction-tag outgoing" *ngIf="req.submitted_by === currentUser?.id">📤 Sent by you</span>
-    <span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 Sent by colleague</span>
-  </div>
-</td>
-    <td class="attn-cell">
-      <div class="attn-info">
-        <span>{{ req.attn || '—' }}</span>
-        <span class="role-tag-tiny" *ngIf="req.attn">
-          {{ getAttnRole(req.attn) }}
-        </span>
-      </div>
-    </td>
-    <td class="items-cell">{{ req.items?.length || 0 }} item(s)</td>
-    <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
-    <td class="status-cell">
-  <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
-    {{ getStatusLabel(req) }}
-</span>
-  <!-- Show sub-status for forwarded requests that are processing/released at recipient -->
-  <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
-    ↳ {{ getStatusLabel(req.forwarded_status) }}
-  </div>
-  <div class="status-worker" *ngIf="req.status === 'approved' && req.items_prepared_name">
-    <span class="worker-label">Accepted by: {{ req.items_prepared_name }}</span>
-  </div>
-  <div class="status-worker" *ngIf="req.status === 'released' && req.released_name">
-    <span class="worker-label">Released by: {{ req.released_name }}</span>
-  </div>
-  <div class="status-worker" *ngIf="req.approved_name && req.status === 'approved'">
-    <span class="worker-label">Approved by: {{ req.approved_name }}</span>
-  </div>
-<td class="action-cell" (click)="$event.stopPropagation()">
-      <!-- Creator can edit their own pending -->
-      <button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
-      
-     <!-- Forward button - only in Request Management (incoming) view -->
-<button class="action-btn forward-btn" 
-  *ngIf="viewMode === 'incoming' && req.status === 'approved' && canForward(req)" 
-  (click)="openForwardModal(req)" 
-  title="Forward">📤</button>
-      
-      <!-- Accept button - only show when request has been approved (approved_name is filled) -->
-<button class="action-btn accept-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="acceptRequisition(req)" title="Accept">✅</button>
-
-<!-- Reject button - only show when request has been approved (approved_name is filled) -->
-<button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">❌</button>
-      <button class="action-btn process-btn" 
-  *ngIf="viewMode === 'incoming' && !req.is_forwarded && req.status === 'approved' && isHeadOrSupervisor() && req.branch_id === currentUser?.branch_id && req.department_id === currentUser?.department_id" 
-  (click)="processRequisition(req)" 
-  title="Process">⚙️</button>
-<!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
-     <button class="action-btn process-btn" 
-  *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && req.forwarded_status === 'forwarded' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
-  (click)="processRequisition(req)" 
-  title="Process Forwarded">⚙️</button>
-        
-      <!-- 🔑 Release button for FORWARDED requests in incoming view (after processing) -->
-      <button class="action-btn release-btn" 
-        *ngIf="viewMode === 'incoming' && req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
-        (click)="releaseRequisition(req)" 
-        title="Release Forwarded">📦</button>
-        
-      <!-- 🔑 Release button for NORMAL requests in incoming view -->
-      <button class="action-btn release-btn" 
-        *ngIf="viewMode === 'incoming' && !req.is_forwarded && canRelease(req)" 
-        (click)="releaseRequisition(req)" 
-        title="Release">📦</button>
-
-      <!-- 🔑 Forwarding dept FINAL Release - only when forwarded_status is 'released' -->
-      <button class="action-btn release-btn" 
-        *ngIf="viewMode === 'our' && req.is_forwarded && canReleaseForwarded(req)" 
-        (click)="releaseForwardedRequisition(req)" 
-        title="Final Release">📦✓</button>
-      
-      <button class="action-btn print-btn" (click)="printRequisition(req)" title="Print">🖨️</button>
-      <button class="action-btn view-btn" (click)="openViewModal(req)" title="View Details">📋</button>
-      
-      <!-- Delete button -->
-      <button class="action-btn delete-btn" *ngIf="canDelete(req)" (click)="deleteRequisition(req)" title="Delete">🗑️</button>
-    </td>
-  
-<tr *ngIf="filteredRequisitions.length === 0">
-  <td [attr.colspan]="getEmptyColspan()" class="empty-row">
-      <div class="empty-state">
-        <span class="empty-icon">📭</span>
-        <p>No requisitions found</p>
-        <button class="classic-btn primary" routerLink="/client/request/new">Create your first requisition</button>
-      </div>
-    </td>
-  </tr>
-</tbody>
-        </table>
+      template: `
+        <div class="req-list-container">
+          <!-- Header -->
+          <div class="view-header">
+      <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
+    <div class="header-actions">
+        <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
+          📤 Our Requests
+          <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
+        </button>
+        <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
+          📥 Request Management
+          <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
+        </button>
+        <button class="classic-btn primary" routerLink="/client/request/new">
+          <span>➕</span> New Requisition
+        </button>
       </div>
     </div>
 
-    <!-- View Requisition Details Modal -->
-<div class="modal-overlay" *ngIf="showViewModal" (click)="closeViewModal()">
-  <div class="modal-window view-modal" 
-       id="viewReqModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'viewReqModal')">
-    <div class="modal-titlebar">
-      <span>📋 Requisition Details</span>
-      <button type="button" (click)="closeViewModal()" class="modal-close">✕</button>
-    </div>        <div class="modal-body view-body">
-          <div class="view-details" *ngIf="viewReq">
-            <!-- Header Info -->
-            <div class="view-header-info">
-              <div class="view-req-number">
-                <span class="view-label">REQ #:</span>
-                <code>{{ viewReq.requisition_number }}</code>
-              </div>
-              <span class="status-badge" [class]="'status-' + (viewReq.status || 'pending')">
-                  {{ getStatusLabel(viewReq) }}
-              </span>
-            </div>
+        <div class="status-tabs-bar">
+      <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
+        📋 All <span class="tab-count">{{ getStatusCount('all') }}</span>
+    </button>
+      <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+        ⏳ Pending <span class="tab-count pending-count">{{ getStatusCount('pending') }}</span>
+      </button>
+      <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
+        📥 Accepted <span class="tab-count approved-count">{{ getStatusCount('approved') }}</span>
+      </button>
+        <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+      📤 Forwarded <span class="tab-count forwarded-count">{{ getStatusCount('forwarded') }}</span>
+    </button>
+      <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
+        ⚙️ On Process <span class="tab-count processing-count">{{ getStatusCount('processing') }}</span>
+      </button>
+      <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
+        📦 Released <span class="tab-count released-count">{{ getStatusCount('released') }}</span>
+      </button>
+      <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
+        ❌ Rejected <span class="tab-count rejected-count">{{ getStatusCount('rejected') }}</span>
+      </button>
+    </div>
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+    <div class="filter-group">
+      <label>Branch:</label>
+      <select class="classic-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
+        <option value="">All Branches</option>
+        <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+          🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+        </option>
+      </select>
+    </div>
+      
+    <div class="filter-group">
+      <label>Request From:</label>
+      <select class="classic-select" [(ngModel)]="filters.requestFromDept" (change)="applyFilters()">
+        <option value="">All Departments</option>
+        <option *ngFor="let dept of filteredFilterDepartments" [value]="dept.name">
+          {{ dept.name }}
+        </option>
+      </select>
+    </div>
+      <div class="filter-group search-group">
+        <label>Search:</label>
+        <input type="text" class="classic-input" placeholder="REQ #, ATTN, name..." 
+              [(ngModel)]="searchTerm" (input)="applyFilters()">
+      </div>
+      
+      <button class="classic-btn" (click)="clearFilters()">
+        <span>🔄</span> Clear
+      </button>
+    </div>
+        <!-- Status Bar -->
+    <div class="classic-status-bar">
+      <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Requests' : '📥 Request Management' }}</strong></span>
+      <span class="status-sep">|</span>
+      <span>Showing: <strong>{{ filteredRequisitions.length }}</strong> requisitions</span>
+      <span class="status-sep">|</span>
+      <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
+      <span class="status-sep">|</span>
+      <span>Branch: <strong>{{ userBranch?.name || 'All' }}</strong></span>
+      <span class="status-sep">|</span>
+      <span>Dept: <strong>{{ currentUser?.department || currentUser?.department_name || 'All' }}</strong></span>
+    <!-- Bulk Action Buttons -->
+    <ng-container *ngIf="activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected'">
+        <span class="status-sep">|</span>
+        <label class="select-all-label">
+          <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
+        </label>
+        <button class="classic-btn primary" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" 
+                (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
+          ⚙️ Process ({{ selectedReqIds.length }})
+        </button>
+        <button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
+                (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
+          ⚙️ Process ({{ selectedReqIds.length }})
+        </button>
+        <!-- Delete for forwarded, released, rejected -->
+        <button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
+                (click)="bulkDeleteForwarded()" style="font-size: 12px; padding: 3px 10px;">
+          🗑️ Delete ({{ selectedReqIds.length }})
+        </button>
+        <button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
+                (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 12px; padding: 3px 10px;">
+          📦 Release ({{ selectedReqIds.length }})
+        </button>
+    </ng-container>
+    </div>
 
-            <!-- Main Details Grid -->
-            <div class="view-grid">
-              <div class="view-field">
-                <label>Request From:</label>
-                <span class="request-type-badge" [class]="'type-' + (viewReq.request_from || '').toLowerCase()">
-                  {{ viewReq.request_from || '—' }}
-                </span>
-              </div>
-              <div class="view-field">
-            <label>Date & Time:</label>
-            <span>{{ formatDate(viewReq.date) }} at {{ formatTime(viewReq.time) }}</span>
+          <!-- Requisitions Table -->
+          <div class="classic-table-container">
+            <table class="classic-table">
+          <thead>
+      <tr>
+      <th *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" style="width:30px;">
+      <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()">
+    </th>
+        <th>REQ Code</th>
+        <th>Date</th>
+        <th>{{ viewMode === 'our' ? 'Forwarded To' : 'Forwarded From' }}</th>
+        <th *ngIf="viewMode === 'incoming'">Request From</th>
+        <th *ngIf="viewMode === 'our'">Recipient</th>
+        <th>ATTN</th>
+        <th>Items</th>
+        <th>Total</th>
+        <th>Status</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+            <tbody>
+      <tr *ngFor="let req of filteredRequisitions; trackBy: trackByReqId" 
+          class="clickable-row" (click)="openViewModal(req)">
+        
+        <!-- Checkbox cell for Accepted/Processing tabs -->
+      <td *ngIf="viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')" 
+        (click)="$event.stopPropagation()" style="width:30px; text-align:center;">
+      <input type="checkbox" [checked]="isSelected(req)" (change)="toggleSelect(req)">
+    </td>
+        <td class="req-num">
+          <code>{{ req.requisition_number || 'N/A' }}</code>
+          <div class="creator-info" *ngIf="req.prepared_name">
+            <span class="creator-label">by: {{ req.prepared_name }}</span>
           </div>
-              <div class="view-field">
-                <label>Department:</label>
-                <span>{{ getDepartmentName(viewReq.department_id) }}</span>
-              </div>
-              <div class="view-field">
-                <label>Branch:</label>
-                <span>🏢 {{ getBranchName(viewReq.branch_id) || '—' }}</span>
-              </div>
-              <div class="view-field full-width">
-                <label>ATTN:</label>
-                <span>{{ viewReq.attn || '—' }}</span>
-              </div>
-            </div>
-            <!-- Forwarded Information - only show if forwarded -->
-<div class="view-section" *ngIf="viewReq.is_forwarded">
-  <h4>📤 Forward Information</h4>
-  <div class="view-grid">
-    <div class="view-field">
-      <label>Forwarded To Branch:</label>
-      <span>🏢 {{ getBranchName(viewReq.forwarded_to_branch_id) || '—' }}</span>
-    </div>
-    <div class="view-field">
-      <label>Forwarded To Department:</label>
-      <span>{{ getDepartmentName(viewReq.forwarded_to_department_id) || '—' }}</span>
-    </div>
-    <div class="view-field">
-      <label>Forwarded By:</label>
-      <span>{{ viewReq.forwarded_by_name || '—' }}</span>
-    </div>
-    <div class="view-field">
-      <label>Forwarded Date:</label>
-      <span>{{ formatDate(viewReq.forwarded_date) }}</span>
-    </div>
-    <div class="view-field full-width">
-      <label>Forwarded To Company:</label>
-      <span>{{ getBranchCompany(viewReq.forwarded_to_branch_id) || '—' }}</span>
-    </div>
-  </div>
-</div>
-            <!-- Remarks -->
-            <div class="view-section">
-              <h4>📝 Remarks / Reason</h4>
-              <div class="view-remarks">{{ viewReq.remarks || 'No remarks provided.' }}</div>
-            </div>
+        </td>
+        <td class="date-cell">
+      {{ formatDate(req.date) }}<br>
+      <small style="font-size: 12px; color: #888;">{{ formatTime(req.time) }}</small>
+    </td>
+      <td class="forward-cell">
+      <!-- If forwarded: show details -->
+      <div class="forward-info" *ngIf="req.is_forwarded">
+        <!-- "Our Requests" - shows where WE forwarded it TO -->
+        <ng-container *ngIf="viewMode === 'our'">
+          <span class="forward-label">📤 To: {{ getBranchName(req.forwarded_to_branch_id) || '—' }}</span>
+          <span class="forward-dept">{{ getDepartmentName(req.forwarded_to_department_id) || '—' }}</span>
+          <span class="forward-company">{{ getBranchCompany(req.forwarded_to_branch_id) }}</span>
+          <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
+        </ng-container>
+        <!-- "Request Management" - shows who forwarded it FROM (to us) -->
+        <ng-container *ngIf="viewMode === 'incoming'">
+          <span class="forward-label">{{ getBranchName(req.branch_id) || '—' }}</span>
+          <span class="forward-dept">{{ getDepartmentName(req.department_id) || '—' }}</span>
+          <span class="forward-company">{{ getBranchCompany(req.branch_id) }}</span>
+          <span class="forward-by">By: {{ req.forwarded_by_name || '—' }}</span>
+        </ng-container>
+      </div>
+      <!-- If not forwarded: show dash -->
+      <span class="not-forwarded" *ngIf="!req.is_forwarded">—</span>
+    </td>
+        <!-- ✅ Request From - visible for incoming view -->
+    <td *ngIf="viewMode === 'incoming'">
+      <span class="dept-name-small" [class]="'type-' + (req.request_from || '').toLowerCase()">
+        {{ req.request_from || '—' }} 
+      </span>
+      <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
+        🏢 {{ getBranchName(req.branch_id) }}
+      </span>
+      <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
+    </td>
 
-            <!-- Items Table -->
-            <div class="view-section">
-              <h4>📦 Items ({{ viewReq.items?.length || 0 }})</h4>
-              <table class="view-items-table" *ngIf="viewReq.items?.length > 0; else noItems">
-                <thead>
-                  <tr><th>Qty</th><th>Item Description</th><th>Unit Price</th><th>Total</th></tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let item of viewReq.items">
-                    <td class="center">{{ item.qty || 0 }}</td>
-                    <td>{{ item.item || '—' }}</td>
-                    <td class="right">{{ (item.unit_price || 0) | number:'1.2-2' }}</td>
-                    <td class="right">{{ ((item.qty || 0) * (item.unit_price || 0)) | number:'1.2-2' }}</td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr class="view-total-row">
-                    <td colspan="3" class="right"><strong>Grand Total:</strong></td>
-                    <td class="right"><strong>{{ getTotal(viewReq.items) | number:'1.2-2' }}</strong></td>
-                  </tr>
-                </tfoot>
-              </table>
-              <ng-template #noItems>
-                <p class="no-items-text">No items listed</p>
-              </ng-template>
-            </div>
+    <!-- ✅ Recipient/Department - visible for our requests -->
+    <td class="dept-cell" *ngIf="viewMode === 'our'">
+      <div class="dept-info-small">
+        <span class="dept-name-small">{{ getDepartmentName(req.department_id) }}</span>
+        <span class="branch-tag-tiny" *ngIf="getBranchName(req.branch_id)">
+          🏢 {{ getBranchName(req.branch_id) }}
+        </span>
+        <span class="company-tag-tiny" *ngIf="req.branch_id">{{ getBranchCompany(req.branch_id) }}</span>
+        <span class="direction-tag outgoing" *ngIf="req.submitted_by === currentUser?.id">📤 Sent by you</span>
+        <span class="direction-tag outgoing" *ngIf="req.submitted_by !== currentUser?.id">📤 Sent by colleague</span>
+      </div>
+    </td>
+        <td class="attn-cell">
+          <div class="attn-info">
+            <span>{{ req.attn || '—' }}</span>
+            <span class="role-tag-tiny" *ngIf="req.attn">
+              {{ getAttnRole(req.attn) }}
+            </span>
+          </div>
+        </td>
+        <td class="items-cell">{{ req.items?.length || 0 }} item(s)</td>
+        <td class="total-cell">{{ getTotal(req.items) | number:'1.2-2' }}</td>
+        <td class="status-cell">
+      <span class="status-badge" [class]="'status-' + (req.status || 'pending')">
+        {{ getStatusLabel(req) }}
+    </span>
+      <!-- Show sub-status for forwarded requests that are processing/released at recipient -->
+      <div class="status-forwarded-sub" *ngIf="req.is_forwarded && req.forwarded_status && req.forwarded_status !== 'forwarded'">
+        ↳ {{ getStatusLabel(req.forwarded_status) }}
+      </div>
+      <div class="status-worker" *ngIf="req.status === 'approved' && req.items_prepared_name">
+        <span class="worker-label">Accepted by: {{ req.items_prepared_name }}</span>
+      </div>
+      <div class="status-worker" *ngIf="req.status === 'released' && req.released_name">
+        <span class="worker-label">Released by: {{ req.released_name }}</span>
+      </div>
+      <div class="status-worker" *ngIf="req.approved_name && req.status === 'approved'">
+        <span class="worker-label">Approved by: {{ req.approved_name }}</span>
+      </div>
+    <td class="action-cell" (click)="$event.stopPropagation()">
+          <!-- Creator can edit their own pending -->
+          <button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
+          
+        <!-- Forward button - only in Request Management (incoming) view -->
+    <button class="action-btn forward-btn" 
+      *ngIf="viewMode === 'incoming' && req.status === 'approved' && canForward(req)" 
+      (click)="openForwardModal(req)" 
+      title="Forward">📤</button>
+          
+          <!-- Accept button - only show when request has been approved (approved_name is filled) -->
+    <button class="action-btn accept-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="acceptRequisition(req)" title="Accept">✅</button>
 
-            <!-- Signatures -->
-            <div class="view-section">
-              <h4>✍️ Signatures</h4>
-              <div class="view-signatures">
-                <div class="view-sig-block">
-                  <h5>Form Requested By</h5>
-                  <div class="view-sig-image" *ngIf="viewReq.prepared_signature">
-                    <img [src]="viewReq.prepared_signature" alt="Prepared Signature">
+    <!-- Reject button - only show when request has been approved (approved_name is filled) -->
+    <button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">❌</button>
+          <button class="action-btn process-btn" 
+      *ngIf="viewMode === 'incoming' && !req.is_forwarded && req.status === 'approved' && isHeadOrSupervisor() && req.branch_id === currentUser?.branch_id && req.department_id === currentUser?.department_id" 
+      (click)="processRequisition(req)" 
+      title="Process">⚙️</button>
+    <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
+        <button class="action-btn process-btn" 
+      *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && req.forwarded_status === 'forwarded' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+      (click)="processRequisition(req)" 
+      title="Process Forwarded">⚙️</button>
+            
+          <!-- 🔑 Release button for FORWARDED requests in incoming view (after processing) -->
+          <button class="action-btn release-btn" 
+            *ngIf="viewMode === 'incoming' && req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+            (click)="releaseRequisition(req)" 
+            title="Release Forwarded">📦</button>
+            
+          <!-- 🔑 Release button for NORMAL requests in incoming view -->
+          <button class="action-btn release-btn" 
+            *ngIf="viewMode === 'incoming' && !req.is_forwarded && canRelease(req)" 
+            (click)="releaseRequisition(req)" 
+            title="Release">📦</button>
+
+          <!-- 🔑 Forwarding dept FINAL Release - only when forwarded_status is 'released' -->
+          <button class="action-btn release-btn" 
+            *ngIf="viewMode === 'our' && req.is_forwarded && canReleaseForwarded(req)" 
+            (click)="releaseForwardedRequisition(req)" 
+            title="Final Release">📦✓</button>
+          
+          <button class="action-btn print-btn" (click)="printRequisition(req)" title="Print">🖨️</button>
+          <button class="action-btn view-btn" (click)="openViewModal(req)" title="View Details">📋</button>
+          
+          <!-- Delete button -->
+          <button class="action-btn delete-btn" *ngIf="canDelete(req)" (click)="deleteRequisition(req)" title="Delete">🗑️</button>
+        </td>
+      
+    <tr *ngIf="filteredRequisitions.length === 0">
+      <td [attr.colspan]="getEmptyColspan()" class="empty-row">
+          <div class="empty-state">
+            <span class="empty-icon">📭</span>
+            <p>No requisitions found</p>
+            <button class="classic-btn primary" routerLink="/client/request/new">Create your first requisition</button>
+          </div>
+        </td>
+      </tr>
+    </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- View Requisition Details Modal -->
+    <div class="modal-overlay" *ngIf="showViewModal" (click)="closeViewModal()">
+      <div class="modal-window view-modal" 
+          id="viewReqModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'viewReqModal')">
+        <div class="modal-titlebar">
+          <span>📋 Requisition Details</span>
+          <button type="button" (click)="closeViewModal()" class="modal-close">✕</button>
+        </div>        <div class="modal-body view-body">
+              <div class="view-details" *ngIf="viewReq">
+                <!-- Header Info -->
+                <div class="view-header-info">
+                  <div class="view-req-number">
+                    <span class="view-label">REQ #:</span>
+                    <code>{{ viewReq.requisition_number }}</code>
                   </div>
-                  <div class="view-sig-name">{{ viewReq.prepared_name || '—' }}</div>
-                  <div class="view-sig-date">{{ formatDate(viewReq.prepared_date) }}</div>
+                  <span class="status-badge" [class]="'status-' + (viewReq.status || 'pending')">
+                      {{ getStatusLabel(viewReq) }}
+                  </span>
                 </div>
-                <div class="view-sig-block">
-                  <h5>Form Approved By</h5>
-                  <div class="view-sig-image" *ngIf="viewReq.approved_signature">
-                    <img [src]="viewReq.approved_signature" alt="Approved Signature">
+
+                <!-- Main Details Grid -->
+                <div class="view-grid">
+                  <div class="view-field">
+                    <label>Request From:</label>
+                    <span class="request-type-badge" [class]="'type-' + (viewReq.request_from || '').toLowerCase()">
+                      {{ viewReq.request_from || '—' }}
+                    </span>
                   </div>
-                  <div class="view-sig-name">{{ viewReq.approved_name || '—' }}</div>
-                  <div class="view-sig-date">{{ formatDate(viewReq.approved_date) }}</div>
+                  <div class="view-field">
+                <label>Date & Time:</label>
+                <span>{{ formatDate(viewReq.date) }} at {{ formatTime(viewReq.time) }}</span>
+              </div>
+                  <div class="view-field">
+                    <label>Department:</label>
+                    <span>{{ getDepartmentName(viewReq.department_id) }}</span>
+                  </div>
+                  <div class="view-field">
+                    <label>Branch:</label>
+                    <span>🏢 {{ getBranchName(viewReq.branch_id) || '—' }}</span>
+                  </div>
+                  <div class="view-field full-width">
+                    <label>ATTN:</label>
+                    <span>{{ viewReq.attn || '—' }}</span>
+                  </div>
                 </div>
-                <div class="view-sig-block">
-                  <h5>Form Received By</h5>
-                  <div class="view-sig-image" *ngIf="viewReq.items_prepared_signature">
-                    <img [src]="viewReq.items_prepared_signature" alt="Items Prepared Signature">
+                <!-- Forwarded Information - only show if forwarded -->
+    <div class="view-section" *ngIf="viewReq.is_forwarded">
+      <h4>📤 Forward Information</h4>
+      <div class="view-grid">
+        <div class="view-field">
+          <label>Forwarded To Branch:</label>
+          <span>🏢 {{ getBranchName(viewReq.forwarded_to_branch_id) || '—' }}</span>
+        </div>
+        <div class="view-field">
+          <label>Forwarded To Department:</label>
+          <span>{{ getDepartmentName(viewReq.forwarded_to_department_id) || '—' }}</span>
+        </div>
+        <div class="view-field">
+          <label>Forwarded By:</label>
+          <span>{{ viewReq.forwarded_by_name || '—' }}</span>
+        </div>
+        <div class="view-field">
+          <label>Forwarded Date:</label>
+          <span>{{ formatDate(viewReq.forwarded_date) }}</span>
+        </div>
+        <div class="view-field full-width">
+          <label>Forwarded To Company:</label>
+          <span>{{ getBranchCompany(viewReq.forwarded_to_branch_id) || '—' }}</span>
+        </div>
+      </div>
+    </div>
+                <!-- Remarks -->
+                <div class="view-section">
+                  <h4>📝 Remarks / Reason</h4>
+                  <div class="view-remarks">{{ viewReq.remarks || 'No remarks provided.' }}</div>
+                </div>
+
+                <!-- Items Table -->
+                <div class="view-section">
+                  <h4>📦 Items ({{ viewReq.items?.length || 0 }})</h4>
+                  <table class="view-items-table" *ngIf="viewReq.items?.length > 0; else noItems">
+                    <thead>
+                      <tr><th>Qty</th><th>Item Description</th><th>Unit Price</th><th>Total</th></tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let item of viewReq.items">
+                        <td class="center">{{ item.qty || 0 }}</td>
+                        <td>{{ item.item || '—' }}</td>
+                        <td class="right">{{ (item.unit_price || 0) | number:'1.2-2' }}</td>
+                        <td class="right">{{ ((item.qty || 0) * (item.unit_price || 0)) | number:'1.2-2' }}</td>
+                      </tr>
+                    </tbody>
+                    <tfoot>
+                      <tr class="view-total-row">
+                        <td colspan="3" class="right"><strong>Grand Total:</strong></td>
+                        <td class="right"><strong>{{ getTotal(viewReq.items) | number:'1.2-2' }}</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                  <ng-template #noItems>
+                    <p class="no-items-text">No items listed</p>
+                  </ng-template>
+                </div>
+
+                <!-- Signatures -->
+                <div class="view-section">
+                  <h4>✍️ Signatures</h4>
+                  <div class="view-signatures">
+                    <div class="view-sig-block">
+                      <h5>Form Requested By</h5>
+                      <div class="view-sig-image" *ngIf="viewReq.prepared_signature">
+                        <img [src]="viewReq.prepared_signature" alt="Prepared Signature">
+                      </div>
+                      <div class="view-sig-name">{{ viewReq.prepared_name || '—' }}</div>
+                      <div class="view-sig-date">{{ formatDate(viewReq.prepared_date) }}</div>
+                    </div>
+                    <div class="view-sig-block">
+                      <h5>Form Approved By</h5>
+                      <div class="view-sig-image" *ngIf="viewReq.approved_signature">
+                        <img [src]="viewReq.approved_signature" alt="Approved Signature">
+                      </div>
+                      <div class="view-sig-name">{{ viewReq.approved_name || '—' }}</div>
+                      <div class="view-sig-date">{{ formatDate(viewReq.approved_date) }}</div>
+                    </div>
+                    <div class="view-sig-block">
+                      <h5>Form Received By</h5>
+                      <div class="view-sig-image" *ngIf="viewReq.items_prepared_signature">
+                        <img [src]="viewReq.items_prepared_signature" alt="Items Prepared Signature">
+                      </div>
+                      <div class="view-sig-name">{{ viewReq.items_prepared_name || '—' }}</div>
+                      <div class="view-sig-date">{{ formatDate(viewReq.items_prepared_date) }}</div>
+                    </div>
                   </div>
-                  <div class="view-sig-name">{{ viewReq.items_prepared_name || '—' }}</div>
-                  <div class="view-sig-date">{{ formatDate(viewReq.items_prepared_date) }}</div>
+                </div>
+
+                <!-- Borrow Return Info -->
+                <div class="view-section" *ngIf="viewReq.request_from === 'BORROW'">
+                  <h4>🔄 Return Information</h4>
+                  <div class="view-grid">
+                    <div class="view-field">
+                      <label>Returned By:</label>
+                      <span>{{ viewReq.returned_name || '—' }}</span>
+                    </div>
+                    <div class="view-field">
+                      <label>Return Date:</label>
+                      <span>{{ formatDate(viewReq.returned_date) }}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+            <div class="modal-footer">
+      <button class="classic-btn" (click)="printRequisition(viewReq)" *ngIf="viewReq">
+        🖨️ Print
+      </button>
+      <button class="classic-btn" (click)="closeViewModal()">Close</button>
+    <!-- In view modal footer -->
+    <button class="classic-btn primary" 
+            *ngIf="viewReq && canModify(viewReq)" 
+            (click)="editFromModal()">
+      ✏️ Edit
+    </button>
+    </div>
+          </div>
+        </div>
 
-            <!-- Borrow Return Info -->
-            <div class="view-section" *ngIf="viewReq.request_from === 'BORROW'">
-              <h4>🔄 Return Information</h4>
-              <div class="view-grid">
-                <div class="view-field">
-                  <label>Returned By:</label>
-                  <span>{{ viewReq.returned_name || '—' }}</span>
+        <!-- Delete Confirmation Modal -->
+      <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
+      <div class="modal-window" 
+          id="deleteConfirmModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'deleteConfirmModal')">
+        <div class="modal-titlebar danger">
+          <span>🗑️ Delete Requisition</span>
+          <button type="button" (click)="cancelDelete()" class="modal-close">✕</button>
+        </div>
+            <div class="modal-body">
+              <div class="warning-content">
+                <span class="warning-icon">⚠️</span>
+                <div class="warning-message">
+                  <h3>Permanently delete this requisition?</h3>
+                  <p>Requisition: <strong>#{{ reqToDelete?.requisition_number }}</strong></p>
+                  <p class="resolve-title">"{{ reqToDelete?.prepared_name || 'Unknown' }} - {{ reqToDelete?.request_from || 'N/A' }}"</p>
+                  <p class="warning-hint danger-text">This action cannot be undone. All items and signatures will be permanently removed.</p>
                 </div>
-                <div class="view-field">
-                  <label>Return Date:</label>
-                  <span>{{ formatDate(viewReq.returned_date) }}</span>
-                </div>
+              </div>
+              <div class="modal-actions">
+                <button class="classic-btn" (click)="cancelDelete()">Cancel</button>
+                <button class="classic-btn danger" (click)="confirmDelete()">🗑️ Yes, Delete</button>
               </div>
             </div>
           </div>
         </div>
-        <div class="modal-footer">
-  <button class="classic-btn" (click)="printRequisition(viewReq)" *ngIf="viewReq">
-    🖨️ Print
-  </button>
-  <button class="classic-btn" (click)="closeViewModal()">Close</button>
- <!-- In view modal footer -->
-<button class="classic-btn primary" 
-        *ngIf="viewReq && canModify(viewReq)" 
-        (click)="editFromModal()">
-  ✏️ Edit
-</button>
-</div>
-      </div>
+        <!-- Toast Notification -->
+    <div class="toast-notification" [class.show]="showToast" [class.success]="toastType === 'success'" [class.error]="toastType === 'error'" [class.warning]="toastType === 'warning'">
+      <span>{{ toastMessage }}</span>
     </div>
-
-    <!-- Delete Confirmation Modal -->
-   <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
-  <div class="modal-window" 
-       id="deleteConfirmModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'deleteConfirmModal')">
-    <div class="modal-titlebar danger">
-      <span>🗑️ Delete Requisition</span>
-      <button type="button" (click)="cancelDelete()" class="modal-close">✕</button>
-    </div>
+    <!-- Process Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showProcessConfirmModal" (click)="cancelProcess()">
+      <div class="modal-window" 
+          id="processConfirmModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'processConfirmModal')">
+        <div class="modal-titlebar" style="background: #cc6600;">
+          <span>⚙️ Process Requisition</span>
+          <button type="button" (click)="cancelProcess()" class="modal-close">✕</button>
+        </div>
         <div class="modal-body">
           <div class="warning-content">
             <span class="warning-icon">⚠️</span>
             <div class="warning-message">
-              <h3>Permanently delete this requisition?</h3>
-              <p>Requisition: <strong>#{{ reqToDelete?.requisition_number }}</strong></p>
-              <p class="resolve-title">"{{ reqToDelete?.prepared_name || 'Unknown' }} - {{ reqToDelete?.request_from || 'N/A' }}"</p>
+              <h3>Start processing this requisition?</h3>
+              <p>Requisition: <strong>#{{ processTargetReq?.requisition_number }}</strong></p>
+              <p class="resolve-title">"{{ processTargetReq?.prepared_name || 'Unknown' }} - {{ processTargetReq?.request_from || 'N/A' }}"</p>
+              <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
+                This will change the status to <strong>On Process</strong>. The requester will be notified that their request is being processed.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelProcess()">Cancel</button>
+            <button class="classic-btn primary" style="background: #cc6600; border-color: #cc6600;" (click)="confirmProcess()">⚙️ Start Processing</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Release Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showReleaseConfirm" (click)="cancelRelease()">
+      <div class="modal-window" 
+          id="releaseConfirmModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'releaseConfirmModal')">
+        <div class="modal-titlebar" style="background: #0066cc;">
+          <span>📦 Release Requisition</span>
+          <button type="button" (click)="cancelRelease()" class="modal-close">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">📦</span>
+            <div class="warning-message">
+              <h3>Release this requisition?</h3>
+              <p>Requisition: <strong>#{{ releaseTargetReq?.requisition_number }}</strong></p>
+              <p class="resolve-title">"{{ releaseTargetReq?.prepared_name || 'Unknown' }} - {{ releaseTargetReq?.request_from || 'N/A' }}"</p>
+              <p class="warning-hint" style="color: #0066cc; background: #e8f0ff; border: 1px solid #b8d0e8;">
+                This will mark the items as <strong>Released</strong>. The requester will be notified that their items have been released.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelRelease()">Cancel</button>
+            <button class="classic-btn primary" style="background: #0066cc; border-color: #0066cc;" (click)="confirmRelease()">📦 Release Items</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Bulk Process Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showBulkProcessConfirm" (click)="cancelBulkProcess()">
+      <div class="modal-window" 
+          id="bulkProcessModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'bulkProcessModal')">
+        <div class="modal-titlebar" style="background: #cc6600;">
+          <span>⚙️ Bulk Process</span>
+          <button type="button" (click)="cancelBulkProcess()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-message">
+              <h3>Process {{ bulkProcessCount }} selected requisition(s)?</h3>
+              <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
+                This will change the status to <strong>On Process</strong> for all selected requisitions.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelBulkProcess()">Cancel</button>
+            <button class="classic-btn primary" style="background: #cc6600; border-color: #cc6600;" (click)="confirmBulkProcess()">⚙️ Process All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bulk Release Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showBulkReleaseConfirm" (click)="cancelBulkRelease()">
+      <div class="modal-window" 
+          id="bulkReleaseModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'bulkReleaseModal')">
+        <div class="modal-titlebar" style="background: #0066cc;">
+          <span>📦 Bulk Release</span>
+          <button type="button" (click)="cancelBulkRelease()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">📦</span>
+            <div class="warning-message">
+              <h3>Release {{ bulkProcessCount }} selected requisition(s)?</h3>
+              <p class="warning-hint" style="color: #0066cc; background: #e8f0ff; border: 1px solid #b8d0e8;">
+                This will mark all selected items as <strong>Released</strong>.
+              </p>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelBulkRelease()">Cancel</button>
+            <button class="classic-btn primary" style="background: #0066cc; border-color: #0066cc;" (click)="confirmBulkRelease()">📦 Release All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Reject Confirmation Modal -->
+    <div class="modal-overlay" *ngIf="showRejectModal" (click)="cancelReject()">
+      <div class="modal-window" 
+          id="rejectConfirmModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'rejectConfirmModal')">
+        <div class="modal-titlebar danger">
+          <span>❌ Reject Requisition</span>
+          <button type="button" (click)="cancelReject()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-message">
+              <h3>Reject this requisition?</h3>
+              <p>Requisition: <strong>#{{ rejectTargetReq?.requisition_number }}</strong></p>
+              <p class="resolve-title">"{{ rejectTargetReq?.prepared_name || 'Unknown' }} - {{ rejectTargetReq?.request_from || 'N/A' }}"</p>
+            </div>
+          </div>
+          <div style="margin-top: 16px;">
+            <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 6px;">Reason for rejection:</label>
+            <textarea [(ngModel)]="rejectReason" 
+                      class="classic-input" 
+                      rows="3" 
+                      placeholder="Enter reason for rejection..."
+                      style="width: 100%; resize: vertical; padding: 8px;"></textarea>
+          </div>
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelReject()">Cancel</button>
+            <button class="classic-btn danger" (click)="confirmReject()">❌ Reject</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Forward Modal -->
+    <div class="modal-overlay" *ngIf="showForwardModal" (click)="cancelForward()">
+      <div class="modal-window" 
+          id="forwardModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'forwardModal')">
+        <div class="modal-titlebar" style="background: #0a3a8c;">
+          <span>📤 Forward Requisition</span>
+          <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 12px; margin-bottom: 12px;">
+            Forwarding: <strong>#{{ forwardTargetReq?.requisition_number }}</strong>
+          </p>
+          <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
+            <strong>From:</strong> {{ forwardTargetReq?.request_from || '—' }} — 
+            {{ getBranchName(forwardTargetReq?.branch_id) }} / {{ getDepartmentName(forwardTargetReq?.department_id) }}
+          </p>
+          
+          <!-- 🔑 Warning about original department -->
+          <div style="font-size: 12px; color: #cc6600; background: #fff8e8; padding: 6px 8px; border: 1px solid #e6d88a; border-radius: 3px; margin-bottom: 10px;">
+            ⚠️ Note: The original department ({{ getDepartmentName(forwardTargetReq?.department_id) }}) is excluded from forwarding options.
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
+            <select [(ngModel)]="forwardBranchId" class="classic-select" style="width: 100%;" (change)="onForwardBranchChange()">
+              <option value="">— Select Branch —</option>
+              <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+                🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+              </option>
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
+            <select [(ngModel)]="forwardDepartmentId" class="classic-select" style="width: 100%;" [disabled]="!forwardBranchId">
+              <option value="">— Select Department —</option>
+              <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
+                {{ dept.displayName || dept.name }}
+              </option>
+            </select>
+            <!-- Show message if no departments available -->
+            <div *ngIf="forwardBranchId && forwardFilteredDepartments.length === 0" 
+                style="font-size: 12px; color: #cc0000; margin-top: 4px;">
+              ⚠️ No other departments available in this branch.
+            </div>
+          </div>
+          
+          <div class="modal-actions">
+            <button class="classic-btn" (click)="cancelForward()">Cancel</button>
+            <button class="classic-btn primary" (click)="confirmForward()" 
+                    [disabled]="!forwardBranchId || !forwardDepartmentId">
+              📤 Forward
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- Bulk Delete Forwarded Modal -->
+    <div class="modal-overlay" *ngIf="showBulkDeleteForwardedModal" (click)="cancelBulkDeleteForwarded()">
+      <div class="modal-window" 
+          id="bulkDeleteForwardedModal"
+          (click)="$event.stopPropagation()"
+          (mousedown)="startDrag($event, 'bulkDeleteForwardedModal')">
+        <div class="modal-titlebar danger">
+          <span>🗑️ Bulk Delete Forwarded</span>
+          <button type="button" (click)="cancelBulkDeleteForwarded()" class="modal-close">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="warning-content">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-message">
+              <h3>Delete {{ bulkDeleteForwardedCount }} forwarded requisition(s)?</h3>
               <p class="warning-hint danger-text">This action cannot be undone. All items and signatures will be permanently removed.</p>
             </div>
           </div>
           <div class="modal-actions">
-            <button class="classic-btn" (click)="cancelDelete()">Cancel</button>
-            <button class="classic-btn danger" (click)="confirmDelete()">🗑️ Yes, Delete</button>
+            <button class="classic-btn" (click)="cancelBulkDeleteForwarded()">Cancel</button>
+            <button class="classic-btn danger" (click)="confirmBulkDeleteForwarded()">🗑️ Yes, Delete All</button>
           </div>
         </div>
       </div>
     </div>
-    <!-- Toast Notification -->
-<div class="toast-notification" [class.show]="showToast" [class.success]="toastType === 'success'" [class.error]="toastType === 'error'" [class.warning]="toastType === 'warning'">
-  <span>{{ toastMessage }}</span>
-</div>
-<!-- Process Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showProcessConfirmModal" (click)="cancelProcess()">
-  <div class="modal-window" 
-       id="processConfirmModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'processConfirmModal')">
-    <div class="modal-titlebar" style="background: #cc6600;">
-      <span>⚙️ Process Requisition</span>
-      <button type="button" (click)="cancelProcess()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">⚠️</span>
-        <div class="warning-message">
-          <h3>Start processing this requisition?</h3>
-          <p>Requisition: <strong>#{{ processTargetReq?.requisition_number }}</strong></p>
-          <p class="resolve-title">"{{ processTargetReq?.prepared_name || 'Unknown' }} - {{ processTargetReq?.request_from || 'N/A' }}"</p>
-          <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
-            This will change the status to <strong>On Process</strong>. The requester will be notified that their request is being processed.
-          </p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelProcess()">Cancel</button>
-        <button class="classic-btn primary" style="background: #cc6600; border-color: #cc6600;" (click)="confirmProcess()">⚙️ Start Processing</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Release Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showReleaseConfirm" (click)="cancelRelease()">
-  <div class="modal-window" 
-       id="releaseConfirmModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'releaseConfirmModal')">
-    <div class="modal-titlebar" style="background: #0066cc;">
-      <span>📦 Release Requisition</span>
-      <button type="button" (click)="cancelRelease()" class="modal-close">✕</button>
-    </div>
-
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">📦</span>
-        <div class="warning-message">
-          <h3>Release this requisition?</h3>
-          <p>Requisition: <strong>#{{ releaseTargetReq?.requisition_number }}</strong></p>
-          <p class="resolve-title">"{{ releaseTargetReq?.prepared_name || 'Unknown' }} - {{ releaseTargetReq?.request_from || 'N/A' }}"</p>
-          <p class="warning-hint" style="color: #0066cc; background: #e8f0ff; border: 1px solid #b8d0e8;">
-            This will mark the items as <strong>Released</strong>. The requester will be notified that their items have been released.
-          </p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelRelease()">Cancel</button>
-        <button class="classic-btn primary" style="background: #0066cc; border-color: #0066cc;" (click)="confirmRelease()">📦 Release Items</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Bulk Process Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showBulkProcessConfirm" (click)="cancelBulkProcess()">
-  <div class="modal-window" 
-       id="bulkProcessModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'bulkProcessModal')">
-    <div class="modal-titlebar" style="background: #cc6600;">
-      <span>⚙️ Bulk Process</span>
-      <button type="button" (click)="cancelBulkProcess()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">⚠️</span>
-        <div class="warning-message">
-          <h3>Process {{ bulkProcessCount }} selected requisition(s)?</h3>
-          <p class="warning-hint" style="color: #cc6600; background: #fff8e8; border: 1px solid #e6d88a;">
-            This will change the status to <strong>On Process</strong> for all selected requisitions.
-          </p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelBulkProcess()">Cancel</button>
-        <button class="classic-btn primary" style="background: #cc6600; border-color: #cc6600;" (click)="confirmBulkProcess()">⚙️ Process All</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Bulk Release Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showBulkReleaseConfirm" (click)="cancelBulkRelease()">
-  <div class="modal-window" 
-       id="bulkReleaseModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'bulkReleaseModal')">
-    <div class="modal-titlebar" style="background: #0066cc;">
-      <span>📦 Bulk Release</span>
-      <button type="button" (click)="cancelBulkRelease()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">📦</span>
-        <div class="warning-message">
-          <h3>Release {{ bulkProcessCount }} selected requisition(s)?</h3>
-          <p class="warning-hint" style="color: #0066cc; background: #e8f0ff; border: 1px solid #b8d0e8;">
-            This will mark all selected items as <strong>Released</strong>.
-          </p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelBulkRelease()">Cancel</button>
-        <button class="classic-btn primary" style="background: #0066cc; border-color: #0066cc;" (click)="confirmBulkRelease()">📦 Release All</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Reject Confirmation Modal -->
-<div class="modal-overlay" *ngIf="showRejectModal" (click)="cancelReject()">
-  <div class="modal-window" 
-       id="rejectConfirmModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'rejectConfirmModal')">
-    <div class="modal-titlebar danger">
-      <span>❌ Reject Requisition</span>
-      <button type="button" (click)="cancelReject()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">⚠️</span>
-        <div class="warning-message">
-          <h3>Reject this requisition?</h3>
-          <p>Requisition: <strong>#{{ rejectTargetReq?.requisition_number }}</strong></p>
-          <p class="resolve-title">"{{ rejectTargetReq?.prepared_name || 'Unknown' }} - {{ rejectTargetReq?.request_from || 'N/A' }}"</p>
-        </div>
-      </div>
-      <div style="margin-top: 16px;">
-        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 6px;">Reason for rejection:</label>
-        <textarea [(ngModel)]="rejectReason" 
-                  class="classic-input" 
-                  rows="3" 
-                  placeholder="Enter reason for rejection..."
-                  style="width: 100%; resize: vertical; padding: 8px;"></textarea>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelReject()">Cancel</button>
-        <button class="classic-btn danger" (click)="confirmReject()">❌ Reject</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Forward Modal -->
-<div class="modal-overlay" *ngIf="showForwardModal" (click)="cancelForward()">
-  <div class="modal-window" 
-       id="forwardModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'forwardModal')">
-    <div class="modal-titlebar" style="background: #0a3a8c;">
-      <span>📤 Forward Requisition</span>
-      <button type="button" (click)="cancelForward()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size: 12px; margin-bottom: 12px;">
-        Forwarding: <strong>#{{ forwardTargetReq?.requisition_number }}</strong>
-      </p>
-      <p style="font-size: 12px; color: #666; margin-bottom: 4px;">
-        <strong>From:</strong> {{ forwardTargetReq?.request_from || '—' }} — 
-        {{ getBranchName(forwardTargetReq?.branch_id) }} / {{ getDepartmentName(forwardTargetReq?.department_id) }}
-      </p>
-      
-      <!-- 🔑 Warning about original department -->
-      <div style="font-size: 12px; color: #cc6600; background: #fff8e8; padding: 6px 8px; border: 1px solid #e6d88a; border-radius: 3px; margin-bottom: 10px;">
-        ⚠️ Note: The original department ({{ getDepartmentName(forwardTargetReq?.department_id) }}) is excluded from forwarding options.
-      </div>
-      
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Branch:</label>
-        <select [(ngModel)]="forwardBranchId" class="classic-select" style="width: 100%;" (change)="onForwardBranchChange()">
-          <option value="">— Select Branch —</option>
-          <option *ngFor="let branch of filteredBranches" [value]="branch.id">
-            🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
-          </option>
-        </select>
-      </div>
-      
-      <div style="margin-bottom: 12px;">
-        <label style="font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px;">Forward To Department:</label>
-        <select [(ngModel)]="forwardDepartmentId" class="classic-select" style="width: 100%;" [disabled]="!forwardBranchId">
-          <option value="">— Select Department —</option>
-          <option *ngFor="let dept of forwardFilteredDepartments" [value]="dept.id">
-            {{ dept.displayName || dept.name }}
-          </option>
-        </select>
-        <!-- Show message if no departments available -->
-        <div *ngIf="forwardBranchId && forwardFilteredDepartments.length === 0" 
-             style="font-size: 12px; color: #cc0000; margin-top: 4px;">
-          ⚠️ No other departments available in this branch.
-        </div>
-      </div>
-      
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelForward()">Cancel</button>
-        <button class="classic-btn primary" (click)="confirmForward()" 
-                [disabled]="!forwardBranchId || !forwardDepartmentId">
-          📤 Forward
-        </button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- Bulk Delete Forwarded Modal -->
-<div class="modal-overlay" *ngIf="showBulkDeleteForwardedModal" (click)="cancelBulkDeleteForwarded()">
-  <div class="modal-window" 
-       id="bulkDeleteForwardedModal"
-       (click)="$event.stopPropagation()"
-       (mousedown)="startDrag($event, 'bulkDeleteForwardedModal')">
-    <div class="modal-titlebar danger">
-      <span>🗑️ Bulk Delete Forwarded</span>
-      <button type="button" (click)="cancelBulkDeleteForwarded()" class="modal-close">✕</button>
-    </div>
-    <div class="modal-body">
-      <div class="warning-content">
-        <span class="warning-icon">⚠️</span>
-        <div class="warning-message">
-          <h3>Delete {{ bulkDeleteForwardedCount }} forwarded requisition(s)?</h3>
-          <p class="warning-hint danger-text">This action cannot be undone. All items and signatures will be permanently removed.</p>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="classic-btn" (click)="cancelBulkDeleteForwarded()">Cancel</button>
-        <button class="classic-btn danger" (click)="confirmBulkDeleteForwarded()">🗑️ Yes, Delete All</button>
-      </div>
-    </div>
-  </div>
-</div>
   `,
  styles: [`
     .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; }

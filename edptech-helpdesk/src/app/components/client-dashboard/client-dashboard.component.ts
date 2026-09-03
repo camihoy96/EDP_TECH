@@ -225,10 +225,13 @@ interface ClientTicket {
     [userAvatarColor]="currentUser?.avatar_color || '#4f46e5'"
     [userInitial]="currentUser?.fullname?.charAt(0)?.toUpperCase() || '?'">
   </app-ai-assistant>
-  <button class="toolbar-btn ai-btn" (click)="openAIAssistant()" title="AI Assistant">
-    <span>🤖</span> AI
-  </button>
-
+<button class="toolbar-btn ai-btn" (click)="openAIAssistant()" title="AI Assistant">
+    <img [src]="getAiAvatarUrl()" 
+         alt="AI" 
+         class="toolbar-ai-avatar"
+         (error)="onToolbarAiAvatarError()">
+    AI
+</button>
  <!-- Refresh Button -->
 <button class="toolbar-btn refresh-btn" (click)="refreshAll()" title="Refresh Data" [disabled]="isRefreshing">
   <svg *ngIf="!isRefreshing" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2204,7 +2207,14 @@ body.compact-mode .toolbar {
 .btn-confirm-logout:hover {
   background: #b91c1c;
 }
-
+.toolbar-ai-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  flex-shrink: 0;
+}
 .logout-modal-footer .btn {
   min-width: 100px;
 }
@@ -2272,6 +2282,7 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   pendingRequisitionsCount = 0;
   showNotificationsModal = false;
   private clockInterval: any;
+  toolbarAiAvatarUrl: string = 'assets/images/ai.png';
   messageNotificationCount = 0;
   private messageCountInterval: any;
   private inactivityTimer: any;
@@ -2370,7 +2381,44 @@ announcements: any[] = [];
     const age = Date.now() - cached.timestamp;
     return age < this.CACHE_DURATION_MS;
   }
-
+getAiAvatarUrl(): string {
+  return this.toolbarAiAvatarUrl;
+}
+onToolbarAiAvatarError() {
+  if (this.toolbarAiAvatarUrl !== 'assets/images/ai.png') {
+    this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+  }
+}
+loadToolbarAiAvatar() {
+  // Try cache first
+  const cached = localStorage.getItem('ai_avatar_cache');
+  if (cached) {
+    try {
+      const settings = JSON.parse(cached);
+      if (settings.avatar) {
+        this.toolbarAiAvatarUrl = settings.avatar;
+        return;
+      }
+    } catch (e) {
+      console.warn('Failed to parse AI cache');
+    }
+  }
+  
+  // Fallback: Fetch from API
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (token) {
+    const headers = { 'Authorization': `Bearer ${token}` };
+    this.http.get<any>(`${environment.apiUrl}/api/admin/settings`, { headers }).subscribe({
+      next: (data) => {
+        const avatar = data.ai?.avatar || data.ai_avatar || 'assets/images/ai.png';
+        this.toolbarAiAvatarUrl = avatar;
+      },
+      error: () => {
+        this.toolbarAiAvatarUrl = 'assets/images/ai.png';
+      }
+    });
+  }
+}
   // ✅ Check if cache is stale (can use but should refresh)
   private isCacheStale(key: string): boolean {
     const cached = this.requestsCache.get(key);
@@ -3264,8 +3312,11 @@ refreshAll() {
     };
   }
 
-  openAIAssistant() { this.activeMenu = null; this.aiAssistant?.open(); }
-
+openAIAssistant() { 
+  this.activeMenu = null; 
+  this.loadToolbarAiAvatar();  // ✅ Refresh avatar
+  this.aiAssistant?.open(); 
+}
   clearFilters() { this.searchTerm = ''; this.currentView = 'all'; this.router.navigate(['/client/tickets']); this.activeMenu = null; }
   goToKnowledgeBase() { this.router.navigate(['/client/knowledge-base']); this.activeMenu = null; }
   newJobOrder() { this.router.navigate(['/client/job-orders/new']); this.activeMenu = null; }
