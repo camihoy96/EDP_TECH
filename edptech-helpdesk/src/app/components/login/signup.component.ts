@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
@@ -26,14 +26,12 @@ import { environment } from '../../../environments/environment';
 
         <!-- LEFT PANEL -->
         <aside class="left-panel">
-          <div class="video-bg">
-            <video autoplay muted loop playsinline class="bg-video">
-              <source src="/assets/videos/helpdesk-bg.mp4" type="video/mp4">
-              <div class="video-fallback"></div>
-            </video>
-            <div class="video-overlay"></div>
-          </div>
-          
+        <div class="video-bg">
+  <video autoplay muted loop playsinline class="bg-video" #bgVideo>
+    <source src="/assets/videos/helpdesk-bg.mp4" type="video/mp4">
+  </video>
+  <div class="video-overlay"></div>
+</div>
           <div class="lp-inner">
             <div class="lp-logo">
               <div class="logo-ring">
@@ -103,7 +101,17 @@ import { environment } from '../../../environments/environment';
   <div class="field">
     <label class="lbl">Branch <span class="req">*</span></label>
     <div class="input-wrap">
-      <span class="field-ico">🏢</span>
+      <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+  <line x1="9" y1="6" x2="9" y2="6.01"/>
+  <line x1="15" y1="6" x2="15" y2="6.01"/>
+  <line x1="9" y1="10" x2="9" y2="10.01"/>
+  <line x1="15" y1="10" x2="15" y2="10.01"/>
+  <line x1="9" y1="14" x2="9" y2="14.01"/>
+  <line x1="15" y1="14" x2="15" y2="14.01"/>
+  <line x1="9" y1="18" x2="9" y2="18.01"/>
+  <line x1="15" y1="18" x2="15" y2="18.01"/>
+</svg></span>
       <select class="inp" [(ngModel)]="selectedBranchId" name="branch" required (change)="onBranchChange()">
         <option value="">Select Branch</option>
         <option *ngFor="let branch of branches" [value]="branch.id">
@@ -131,7 +139,17 @@ import { environment } from '../../../environments/environment';
 
               <!-- Branch Header -->
               <div class="branch-header">
-                <span class="branch-label">🏢 {{ getBranchName(selectedBranchId) }}</span>
+                <span class="branch-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+  <line x1="9" y1="6" x2="9" y2="6.01"/>
+  <line x1="15" y1="6" x2="15" y2="6.01"/>
+  <line x1="9" y1="10" x2="9" y2="10.01"/>
+  <line x1="15" y1="10" x2="15" y2="10.01"/>
+  <line x1="9" y1="14" x2="9" y2="14.01"/>
+  <line x1="15" y1="14" x2="15" y2="14.01"/>
+  <line x1="9" y1="18" x2="9" y2="18.01"/>
+  <line x1="15" y1="18" x2="15" y2="18.01"/>
+</svg> {{ getBranchName(selectedBranchId) }}</span>
                 <button type="button" class="change-branch-btn" (click)="resetBranchSelection()">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
                   Change
@@ -143,7 +161,15 @@ import { environment } from '../../../environments/environment';
                 <div class="field">
                   <label class="lbl">Department <span class="req">*</span></label>
                   <div class="input-wrap">
-                    <span class="field-ico">🏛️</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="3" y1="22" x2="21" y2="22"/>
+  <line x1="6" y1="18" x2="6" y2="11"/>
+  <line x1="10" y1="18" x2="10" y2="11"/>
+  <line x1="14" y1="18" x2="14" y2="11"/>
+  <line x1="18" y1="18" x2="18" y2="11"/>
+  <polygon points="12 2 20 7 4 7"/>
+  <line x1="2" y1="18" x2="22" y2="18"/>
+</svg></span>
                     <select class="inp" [(ngModel)]="selectedDepartmentId" name="dept" required
                       (change)="onDepartmentChange()">
                       <option value="">Select Department</option>
@@ -157,7 +183,10 @@ import { environment } from '../../../environments/environment';
 <div class="field">
   <label class="lbl">Role <span class="req">*</span></label>
   <div class="input-wrap">
-    <span class="field-ico">👤</span>
+    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+  <circle cx="12" cy="7" r="4"/>
+</svg></span>
     <select class="inp" [(ngModel)]="reg.role" name="rr" required [disabled]="!selectedDepartmentId">
       <option value="" disabled selected>Select Role</option>
       <option *ngFor="let role of departmentRoles" [value]="role.role_name">
@@ -181,7 +210,10 @@ import { environment } from '../../../environments/environment';
                 <div class="field">
                   <label class="lbl">Full Name <span class="req">*</span></label>
                   <div class="input-wrap">
-                    <span class="field-ico">👤</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+  <circle cx="12" cy="7" r="4"/>
+</svg></span>
                     <input class="inp" type="text" [(ngModel)]="reg.fullname" name="rf" placeholder="Full Name" required>
                   </div>
                 </div>
@@ -190,7 +222,10 @@ import { environment } from '../../../environments/environment';
                 <div class="field">
                   <label class="lbl">Email <span class="req">*</span></label>
                   <div class="input-wrap">
-                    <span class="field-ico">✉</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+  <polyline points="22,6 12,13 2,6"/>
+</svg></span>
                     <input class="inp" type="email" [(ngModel)]="reg.email" name="re" placeholder="Email Address" required>
                   </div>
                 </div>
@@ -199,7 +234,10 @@ import { environment } from '../../../environments/environment';
                 <div class="field">
                   <label class="lbl">Password <span class="req">*</span></label>
                   <div class="input-wrap">
-                    <span class="field-ico">🔒</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+</svg></span>
                     <input class="inp" [type]="showRegPw ? 'text' : 'password'"
                       [(ngModel)]="reg.password" name="rp" placeholder="Min. 5 chars" required minlength="5">
                     <button type="button" class="eye-btn" (click)="showRegPw = !showRegPw" tabindex="-1">
@@ -222,7 +260,11 @@ import { environment } from '../../../environments/environment';
                   <label class="lbl">Confirm <span class="req">*</span></label>
                   <div class="input-wrap" [class.inp-err]="reg.confirmPassword && reg.password !== reg.confirmPassword"
                     [class.inp-ok]="reg.confirmPassword && reg.password === reg.confirmPassword">
-                    <span class="field-ico">🔐</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/>
+</svg></span>
                     <input class="inp" type="password" [(ngModel)]="reg.confirmPassword" name="rc" placeholder="Confirm Password" required>
                   </div>
                   <span class="field-err" *ngIf="reg.confirmPassword && reg.password !== reg.confirmPassword">Passwords do not match</span>
@@ -232,7 +274,9 @@ import { environment } from '../../../environments/environment';
                 <div class="field full-width">
                   <label class="lbl">Registration Key <span class="req">*</span></label>
                   <div class="input-wrap" [class.inp-ok]="regKeyValid" [class.inp-err]="regKeyInvalid">
-                    <span class="field-ico">🔑</span>
+                    <span class="field-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+</svg></span>
                     <input class="inp key-inp" type="text" [(ngModel)]="reg.registrationKey" name="rk"
                       placeholder="Enter registration key" required (input)="validateRegKey()">
                     <span class="key-status ok" *ngIf="regKeyValid">✓</span>
@@ -278,7 +322,12 @@ import { environment } from '../../../environments/environment';
       <div class="modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div class="modal-header-inner">
-            <span class="modal-icon">📜</span>
+            <span class="modal-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-3"/>
+  <circle cx="12" cy="3" r="2"/>
+  <path d="M8 12h8"/>
+  <path d="M8 16h5"/>
+</svg></span>
             <h3>Terms of Use</h3>
           </div>
           <button class="modal-close-btn" (click)="closeTermsModal()">✕</button>
@@ -313,7 +362,10 @@ import { environment } from '../../../environments/environment';
       <div class="modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
           <div class="modal-header-inner">
-            <span class="modal-icon">🔒</span>
+            <span class="modal-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+</svg></span>
             <h3>Privacy Policy</h3>
           </div>
           <button class="modal-close-btn" (click)="closePrivacyModal()">✕</button>
@@ -1118,7 +1170,7 @@ export class SignupPageComponent implements OnInit, OnDestroy {
   private keyCheckTimeout: any;
   private clockInterval: any;
   private tickerInterval: any;
-
+ @ViewChild('bgVideo') bgVideo!: ElementRef;
   constructor(
     private authService: AuthService,
     private router: Router,
@@ -1126,20 +1178,50 @@ export class SignupPageComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
-    this.updateTime();
-    this.clockInterval = setInterval(() => this.updateTime(), 1000);
-    this.tickerInterval = setInterval(() => {
-      this.tickerIndex = (this.tickerIndex + 1) % this.tickerMsgs.length;
-    }, 4000);
-    this.loadBranches();
-  }
+  this.updateTime();
+  this.clockInterval = setInterval(() => this.updateTime(), 1000);
+  this.tickerInterval = setInterval(() => {
+    this.tickerIndex = (this.tickerIndex + 1) % this.tickerMsgs.length;
+  }, 4000);
+  this.loadBranches();
+  
+  // ✅ Force mute video
+  this.forceMuteVideo();
+}
 
-  ngOnDestroy() {
-    if (this.keyCheckTimeout) clearTimeout(this.keyCheckTimeout);
-    clearInterval(this.clockInterval);
-    clearInterval(this.tickerInterval);
-  }
+forceMuteVideo() {
+  // Try multiple times in case video loads slowly
+  setTimeout(() => {
+    const video = this.bgVideo?.nativeElement || document.querySelector('.bg-video') as HTMLVideoElement;
+    if (video) {
+      video.muted = true;
+      video.volume = 0;
+    }
+  }, 100);
+  
+  setTimeout(() => {
+    const video = this.bgVideo?.nativeElement || document.querySelector('.bg-video') as HTMLVideoElement;
+    if (video) {
+      video.muted = true;
+      video.volume = 0;
+      video.pause();
+      video.play().catch(() => {});
+    }
+  }, 1000);
+}
 
+ngOnDestroy() {
+  if (this.keyCheckTimeout) clearTimeout(this.keyCheckTimeout);
+  clearInterval(this.clockInterval);
+  clearInterval(this.tickerInterval);
+  
+  // ✅ Stop video if needed
+  const video = this.bgVideo?.nativeElement || document.querySelector('.bg-video') as HTMLVideoElement;
+  if (video) {
+    video.pause();
+    video.muted = true;
+  }
+}
   updateTime() {
     this.currentTime = new Date().toLocaleTimeString('en-PH', {
       hour: '2-digit', minute: '2-digit', second: '2-digit'

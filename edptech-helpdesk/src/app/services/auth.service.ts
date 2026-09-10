@@ -5,6 +5,7 @@ import { BehaviorSubject, Observable, throwError } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 import { Router } from '@angular/router';
 import { NotificationService } from './notification.service';
+import { ClientNotificationService } from './client-notification.service'; 
 import { environment } from '../../environments/environment';
 export interface User {
   id: number;
@@ -37,7 +38,8 @@ export class AuthService {
     private http: HttpClient, 
     private router: Router,
     @Inject(PLATFORM_ID) private platformId: Object,
-     private notificationService: NotificationService
+     private notificationService: NotificationService,
+     private clientNotificationService: ClientNotificationService 
   ) {
     this.isBrowser = isPlatformBrowser(this.platformId);
     
@@ -86,20 +88,25 @@ export class AuthService {
     return this.http.post(`${this.apiUrl}/auth/register`, data);
   }
 
-  logout(): void {
-    if (this.isBrowser) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('currentUser');
-    }
-    this.currentUserSubject.next(null);
-    
-    const currentUrl = this.router.url;
-    if (currentUrl.startsWith('/client')) {
-      this.router.navigate(['/client/login']);
-    } else {
-      this.router.navigate(['/login']);
-    }
+logout(): void {
+  // ✅ Clear BOTH notification services BEFORE clearing auth state
+  this.clientNotificationService.handleLogout();
+  this.notificationService.handleLogout();
+
+  if (this.isBrowser) {
+    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
+    localStorage.removeItem('currentUser');
   }
+  this.currentUserSubject.next(null);
+  
+  const currentUrl = this.router.url;
+  if (currentUrl.startsWith('/client')) {
+    this.router.navigate(['/client/login']);
+  } else {
+    this.router.navigate(['/login']);
+  }
+}
 
   getToken(): string | null {
     if (this.isBrowser) {

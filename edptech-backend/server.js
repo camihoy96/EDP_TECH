@@ -6162,7 +6162,7 @@ app.get('/api/computers', async (req, res) => {
         // ✅ Check if Python is available with a quick health check
         let pythonAvailable = false;
         try {
-            const healthCheck = await fetch('http://localhost:5000/api/health', {
+            const healthCheck = await fetch('http://localhost:5002/api/health', {
                 timeout: 1000 // Quick 1 second check
             });
             pythonAvailable = healthCheck.ok;
@@ -6173,7 +6173,7 @@ app.get('/api/computers', async (req, res) => {
         // If Python is available, try to get data from it
         if (pythonAvailable) {
             try {
-                const response = await fetch('http://localhost:5000/api/computers', {
+                const response = await fetch('http://localhost:5002/api/computers', {
                     headers: { 'Authorization': authHeader },
                     timeout: 5000
                 });
@@ -6191,25 +6191,25 @@ app.get('/api/computers', async (req, res) => {
         }
         
         // ✅ Direct from MySQL (fast - no timeout delay)
-       const [computers] = await pool.query(
-    `SELECT 
-        id, computer_name, user_name, location, department, ip_address, mac_address,
-        os, bit, ram, storage, processor, antivirus, ms_license_type,
-        DATE_FORMAT(license_activation, '%Y-%m-%d') as license_activation,
-        license_duration,
-        DATE_FORMAT(license_expiry, '%Y-%m-%d') as license_expiry,
-        office_activation,  -- ✅ NEW
-        DATE_FORMAT(office_activation_date, '%Y-%m-%d') as office_activation_date,  -- ✅ NEW
-        office_duration,  -- ✅ NEW
-        DATE_FORMAT(office_expiry, '%Y-%m-%d') as office_expiry,  -- ✅ NEW
-        DATE_FORMAT(av_last_update, '%Y-%m-%d') as av_last_update,  -- ✅ NEW
-        DATE_FORMAT(av_next_update, '%Y-%m-%d') as av_next_update,  -- ✅ NEW
-        status, last_checked, created_at
-    FROM computer_monitoring 
-    ORDER BY INET_ATON(SUBSTRING_INDEX(ip_address, '/', 1))`
-);
+      const [computers] = await pool.query(
+            `SELECT 
+                id, computer_name, user_name, location, department, ip_address, mac_address,
+                os, bit, ram, storage, processor, gpu, antivirus, ms_license_type,
+                DATE_FORMAT(license_activation, '%Y-%m-%d') as license_activation,
+                license_duration,
+                DATE_FORMAT(license_expiry, '%Y-%m-%d') as license_expiry,
+                office_activation,
+                DATE_FORMAT(office_activation_date, '%Y-%m-%d') as office_activation_date,
+                office_duration,
+                DATE_FORMAT(office_expiry, '%Y-%m-%d') as office_expiry,
+                DATE_FORMAT(av_last_update, '%Y-%m-%d') as av_last_update,
+                DATE_FORMAT(av_next_update, '%Y-%m-%d') as av_next_update,
+                status, last_checked, created_at
+            FROM computer_monitoring 
+            WHERE id > 0  -- ✅ Exclude invalid records
+            ORDER BY INET_ATON(SUBSTRING_INDEX(ip_address, '/', 1))`
+        );
         
-        // Return in the format Angular expects
         res.json({
             success: true,
             count: computers.length,
@@ -6246,7 +6246,7 @@ app.get('/api/computers/:id', async (req, res) => {
         // ✅ Quick health check instead of waiting for timeout
         let pythonAvailable = false;
         try {
-            const healthCheck = await fetch('http://localhost:5000/api/health', {
+            const healthCheck = await fetch('http://localhost:5002/api/health', {
                 timeout: 500
             });
             pythonAvailable = healthCheck.ok;
@@ -6256,7 +6256,7 @@ app.get('/api/computers/:id', async (req, res) => {
         
         if (pythonAvailable) {
             try {
-                const response = await fetch(`http://localhost:5000/api/computers/${req.params.id}`, {
+                const response = await fetch(`http://localhost:5002/api/computers/${req.params.id}`, {
                     headers: { 'Authorization': authHeader },
                     timeout: 3000
                 });
@@ -6308,7 +6308,7 @@ app.post('/api/computers/scan', async (req, res) => {
         
         // Try to call Python for scan
         try {
-            const response = await fetch('http://localhost:5000/api/computers/scan', {
+            const response = await fetch('http://localhost:5002/api/computers/scan', {
                 method: 'POST',
                 headers: { 'Authorization': authHeader },
                 timeout: 3000
@@ -6325,7 +6325,7 @@ app.post('/api/computers/scan', async (req, res) => {
         // If Python is not available, return a message
         res.json({ 
             success: false, 
-            message: 'Python scanning service is not running. Please start computer_monitor.py on port 5000 for network scanning.' 
+            message: 'Python scanning service is not running. Please start computer_monitor.py on port 5002 for network scanning.' 
         });
         
     } catch (error) { 
@@ -6378,28 +6378,48 @@ app.get('/api/computers/expiring', async (req, res) => {
 });
 
 // POST - Add Computer (direct to MySQL) - FIXED
+// POST - Add Computer (direct to MySQL) - FIXED
 app.post('/api/computers', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-const decoded = req.decodedUser;
+        const decoded = req.decodedUser;
         
         const { 
             computer_name, user_name, location, department, ip_address, mac_address,
-            os, bit, ram, storage, processor, antivirus,
+            os, bit, ram, storage, processor, gpu, antivirus,
             ms_license_type, license_activation, license_duration, license_expiry,
             office_activation, office_activation_date, office_duration, office_expiry,
             av_last_update, av_next_update
         } = req.body;
         
-        // FIX: Properly count all columns - we have 23 columns + 23 values
+        // ✅ Validate required fields
+        if (!computer_name || !ip_address) {
+            return res.status(400).json({ 
+                error: 'Computer Name and IP Address are required' 
+            });
+        }
+        
+        // ✅ Check if IP already exists
+        const [existing] = await pool.query(
+            'SELECT id FROM computer_monitoring WHERE ip_address = ?',
+            [ip_address]
+        );
+        
+        if (existing.length > 0) {
+            return res.status(409).json({ 
+                error: 'IP address already exists',
+                sqlMessage: 'Duplicate entry for key \'ip_address\''
+            });
+        }
+        
         const [result] = await pool.query(
             `INSERT INTO computer_monitoring 
             (computer_name, user_name, location, department, ip_address, mac_address,
-             os, bit, ram, storage, processor, antivirus,
+             os, bit, ram, storage, processor, gpu, antivirus,
              ms_license_type, license_activation, license_duration, license_expiry,
              office_activation, office_activation_date, office_duration, office_expiry,
              av_last_update, av_next_update, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 computer_name || null,
                 user_name || null,
@@ -6412,6 +6432,7 @@ const decoded = req.decodedUser;
                 ram || null,
                 storage || null,
                 processor || null,
+                gpu || null,
                 antivirus || null,
                 ms_license_type || null,
                 license_activation || null,
@@ -6423,15 +6444,25 @@ const decoded = req.decodedUser;
                 office_expiry || null,
                 av_last_update || null,
                 av_next_update || null,
-                'online'  // status
+                'online'
             ]
         );
         
-        console.log('Computer added successfully. ID:', result.insertId);
-        res.json({ success: true, message: 'Computer added', id: result.insertId });
+        console.log('✅ Computer added successfully. ID:', result.insertId);
+        
+        res.json({ 
+            success: true, 
+            message: 'Computer added', 
+            id: result.insertId,
+            insertId: result.insertId 
+        });
+        
     } catch (error) { 
-        console.error('Error adding computer:', error);
-        res.status(500).json({ error: error.message }); 
+        console.error('❌ Error adding computer:', error);
+        res.status(500).json({ 
+            error: error.message,
+            sqlMessage: error.sqlMessage 
+        }); 
     }
 });
 // PUT - Update Computer
@@ -6442,7 +6473,7 @@ app.put('/api/computers/:id', async (req, res) => {
 
          const { 
         computer_name, user_name, location, department, ip_address, mac_address,
-        os, bit, ram, storage, processor, antivirus,
+        os, bit, ram, storage, processor,  gpu, antivirus,
         ms_license_type, license_activation, license_duration, license_expiry,
         office_activation, office_activation_date, office_duration, office_expiry,
         av_last_update, av_next_update 
@@ -6451,13 +6482,13 @@ app.put('/api/computers/:id', async (req, res) => {
      await pool.query(`UPDATE computer_monitoring SET
         computer_name=?, user_name=?, location=?, department=?, ip_address=?,
         mac_address=?, os=?, bit=?, ram=?, storage=?,
-        processor=?, antivirus=?, ms_license_type=?,
+        processor=?, gpu=?, antivirus=?, ms_license_type=?,
         license_activation=?, license_duration=?, license_expiry=?,
         office_activation=?, office_activation_date=?, office_duration=?, office_expiry=?,
         av_last_update=?, av_next_update=?
         WHERE id=?`,
         [computer_name, user_name, location, department, ip_address, mac_address,
-         os, bit, ram, storage, processor, antivirus,
+         os, bit, ram, storage, processor,  gpu, antivirus,
          ms_license_type, license_activation, license_duration, license_expiry,
          office_activation, office_activation_date, office_duration, office_expiry,  // ✅ NEW
          av_last_update, av_next_update, req.params.id]  // ✅ NEW
@@ -6520,7 +6551,7 @@ app.post('/api/computers/cleaning', async (req, res) => {
 
         const { 
             computer_id, computer_name, location, ip_address, os, bit,
-            ram, storage, processor, antivirus, av_last_update,
+            ram, storage, processor,  gpu, antivirus, av_last_update,
             office_activation, office_activation_date, office_duration, office_expiry,
             notes, cleaning_date 
         } = req.body;
@@ -6533,14 +6564,14 @@ app.post('/api/computers/cleaning', async (req, res) => {
         
         const [result] = await pool.query(
             `INSERT INTO computer_cleaning_records 
-            (computer_id, computer_name, location, ip_address, os, bit, ram, storage, processor,
+            (computer_id, computer_name, location, ip_address, os, bit, ram, storage, processor, gpu,
             antivirus, av_last_update, office_activation, office_activation_date, 
             office_duration, office_expiry, notes, cleaning_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 computer_id, computer_name, 
                 location || null, ip_address || null, os || null, bit || '64', 
-                ram || null, storage || null, processor || null,
+                ram || null, storage || null, processor || null,  gpu || null,
                 antivirus || null, av_last_update || null, 
                 office_activation || null, office_activation_date || null, 
                 office_duration || null, office_expiry || null, 
@@ -6556,6 +6587,7 @@ app.post('/api/computers/cleaning', async (req, res) => {
              ram = COALESCE(NULLIF(?, ''), ram),
              storage = COALESCE(NULLIF(?, ''), storage),
              processor = COALESCE(NULLIF(?, ''), processor),
+             gpu = COALESCE(NULLIF(?, ''), gpu),
              antivirus = COALESCE(NULLIF(?, ''), antivirus),
              av_last_update = COALESCE(?, av_last_update),
              office_activation = COALESCE(NULLIF(?, ''), office_activation),
@@ -6595,7 +6627,7 @@ app.get('/api/computers/cleaning/all-dates', async (req, res) => {
         let query = `
             SELECT 
                 cr.id, cr.computer_id, cr.computer_name, cr.location, cr.ip_address,
-                cr.os, cr.bit, cr.ram, cr.storage, cr.processor,
+                cr.os, cr.bit, cr.ram, cr.storage, cr.processor, cr.gpu,
                 cr.antivirus, cr.av_last_update, cr.office_activation,
                 cr.office_activation_date, cr.office_duration, cr.office_expiry,
                 cr.notes, cr.cleaning_date, cr.created_at, cm.department
@@ -6896,7 +6928,7 @@ app.use('/api/computers', (req, res, next) => {
     if (shouldProxy || req.method === 'POST' || req.method === 'PUT' || req.method === 'DELETE') {
         // Proxy to Python for computer operations
         return createProxyMiddleware({
-            target: 'http://localhost:5000',
+            target: 'http://localhost:5002',
             changeOrigin: true,
             onError: (err, req, res) => {
                 console.error('Python proxy error:', err);

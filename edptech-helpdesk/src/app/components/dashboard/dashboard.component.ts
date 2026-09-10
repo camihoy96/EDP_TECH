@@ -30,40 +30,141 @@ import { ReportModalComponent } from './report-modal.component';
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
   New Ticket
 </div>
-    <div class="dropdown-item" (click)="goToTickets()">🎫 View All Tickets</div>
-    <div class="dropdown-item" (click)="goToKnowledgeBase()">📚 Knowledge Base</div>
+     <div class="dropdown-item" (click)="goToTickets()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+        <line x1="13" y1="5" x2="13" y2="7"/>
+        <line x1="13" y1="11" x2="13" y2="13"/>
+        <line x1="13" y1="17" x2="13" y2="19"/>
+      </svg>
+      View All Tickets
+    </div>
+    
+    <div class="dropdown-item" (click)="goToKnowledgeBase()">
+     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+</svg>
+      Knowledge Base
+    </div>
+    
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" (click)="refreshData()">🔄 Refresh Data</div>
+    
+    <div class="dropdown-item" (click)="refreshData()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Refresh Data
+    </div>
+    
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" (click)="exit()">🚪 Exit</div>
+    
+    <div class="dropdown-item" (click)="exit()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Exit
+    </div>
   </div>
 </div>
         <div class="menu-item" (click)="toggleMenu('edit')">
           Edit
           <div class="dropdown" *ngIf="activeMenu === 'edit'">
-            <div class="dropdown-item" (click)="searchTickets()">🔍 Search Tickets</div>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-item" (click)="clearFilters()">🗑️ Clear Filters</div>
-            <div class="dropdown-item" (click)="refreshData()">🔄 Refresh</div>
+  <div class="dropdown-item" (click)="searchTickets()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    Search Tickets
+  </div>
+  
+  <div class="dropdown-divider"></div>
+  
+  <div class="dropdown-item" (click)="clearFilters()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="3 6 5 6 21 6"/>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      <line x1="10" y1="11" x2="10" y2="17"/>
+      <line x1="14" y1="11" x2="14" y2="17"/>
+    </svg>
+    Clear Filters
+  </div>
+  
+  <div class="dropdown-item" (click)="refreshData()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="23 4 23 10 17 10"/>
+      <polyline points="1 20 1 14 7 14"/>
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+    </svg>
+    Refresh
+  </div>
           </div>
         </div>
-        <div class="menu-item" (click)="toggleMenu('view')">
-          View
-          <div class="dropdown" *ngIf="activeMenu === 'view'">
-            <div class="dropdown-item" (click)="toggleSidebar()">
-              {{ sidebarHidden ? '📂 Show Sidebar' : '📁 Hide Sidebar' }}
-            </div>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-item" (click)="setViewMode('list')">
-              <span *ngIf="currentViewMode === 'list'">✔ </span>📋 List View
-            </div>
-            <div class="dropdown-item" (click)="setViewMode('grid')">
-              <span *ngIf="currentViewMode === 'grid'">✔ </span>🔲 Grid View
-            </div>
-            <div class="dropdown-item" (click)="setViewMode('kanban')">
-              <span *ngIf="currentViewMode === 'kanban'">✔ </span>📊 Kanban View
-            </div>
-          </div>
+      <div class="dropdown" *ngIf="activeMenu === 'view'">
+  
+  <!-- Show/Hide Sidebar -->
+  <div class="dropdown-item" (click)="toggleSidebar()">
+    <svg *ngIf="sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      <polyline points="12 11 15 14 12 17"/>
+      <line x1="15" y1="14" x2="9" y2="14"/>
+    </svg>
+    <svg *ngIf="!sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+      <polyline points="9 11 6 14 9 17"/>
+      <line x1="6" y1="14" x2="12" y2="14"/>
+    </svg>
+    {{ sidebarHidden ? 'Show Sidebar' : 'Hide Sidebar' }}
+  </div>
+  
+  <div class="dropdown-divider"></div>
+  
+  <!-- List View -->
+  <div class="dropdown-item" (click)="setViewMode('list')">
+    <svg *ngIf="currentViewMode === 'list'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/>
+      <line x1="8" y1="12" x2="21" y2="12"/>
+      <line x1="8" y1="18" x2="21" y2="18"/>
+      <line x1="3" y1="6" x2="3.01" y2="6"/>
+      <line x1="3" y1="12" x2="3.01" y2="12"/>
+      <line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+    List View
+  </div>
+  
+  <!-- Grid View -->
+  <div class="dropdown-item" (click)="setViewMode('grid')">
+    <svg *ngIf="currentViewMode === 'grid'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7"/>
+      <rect x="14" y="3" width="7" height="7"/>
+      <rect x="14" y="14" width="7" height="7"/>
+      <rect x="3" y="14" width="7" height="7"/>
+    </svg>
+    Grid View
+  </div>
+  
+  <!-- Kanban View -->
+  <div class="dropdown-item" (click)="setViewMode('kanban')">
+    <svg *ngIf="currentViewMode === 'kanban'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="5" height="18" rx="1"/>
+      <rect x="10" y="3" width="5" height="12" rx="1"/>
+      <rect x="17" y="3" width="5" height="8" rx="1"/>
+    </svg>
+    Kanban View
+  </div>
         </div>
         <div class="menu-item" (click)="toggleMenu('tools')">
   Tools
@@ -87,9 +188,36 @@ import { ReportModalComponent } from './report-modal.component';
     </div>
     
     <div class="dropdown-item" (click)="backupData()">
-      💾 {{ cacheStatus === 'Exporting...' ? '⏳ Exporting Database...' : 'Backup Database' }}
-    </div>
-    <div class="dropdown-item" (click)="restoreData()">🔄 Restore Data</div>
+  <!-- Save icon when idle -->
+  <svg *ngIf="cacheStatus !== 'Exporting...'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+    <polyline points="17 21 17 13 7 13 7 21"/>
+    <polyline points="7 3 7 8 15 8"/>
+  </svg>
+  
+  <!-- Loading spinner while exporting -->
+  <svg *ngIf="cacheStatus === 'Exporting...'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: spin 1s linear infinite;">
+    <line x1="12" y1="2" x2="12" y2="6"/>
+    <line x1="12" y1="18" x2="12" y2="22"/>
+    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/>
+    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/>
+    <line x1="2" y1="12" x2="6" y2="12"/>
+    <line x1="18" y1="12" x2="22" y2="12"/>
+    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/>
+    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/>
+  </svg>
+  
+  {{ cacheStatus === 'Exporting...' ? 'Exporting Database...' : 'Backup Database' }}
+</div>
+
+<div class="dropdown-item" (click)="restoreData()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="1 4 1 10 7 10"/>
+    <polyline points="23 20 23 14 17 14"/>
+    <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+  </svg>
+  Restore Data
+</div>
     <div class="dropdown-divider"></div>
     <div class="dropdown-item" (click)="systemHealth()">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -97,44 +225,177 @@ import { ReportModalComponent } from './report-modal.component';
   </svg>
   System Health Check
 </div>
-    <div class="dropdown-item" (click)="clearCache()">🗑️ Clear Cache</div>
+    <div class="dropdown-item" (click)="clearCache()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cc6600" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+  Clear Cache
+</div>
   </div>
 </div>
         <div class="menu-item" (click)="toggleMenu('reports')">
-          Reports
-          <div class="dropdown" *ngIf="activeMenu === 'reports'">
-            <div class="dropdown-item" (click)="generateReport('daily')">📅 Daily Report</div>
-            <div class="dropdown-item" (click)="generateReport('weekly')">📆 Weekly Report</div>
-            <div class="dropdown-item" (click)="generateReport('monthly')">📊 Monthly Report</div>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-item" (click)="generateReport('sla')">⏱️ SLA Performance</div>
-            <div class="dropdown-item" (click)="generateReport('agent')">👥 Agent Performance</div>
-          </div>
-        </div>
-        <div class="menu-item" (click)="toggleMenu('cctv')">
-    📹 CCTV
-    <div class="dropdown" *ngIf="activeMenu === 'cctv'">
-      <div class="dropdown-item" (click)="goToCCTVInfo()">📹 View CCTV Dashboard</div>
+  Reports
+  <div class="dropdown" *ngIf="activeMenu === 'reports'">
+    
+    <!-- Daily Report -->
+    <div class="dropdown-item" (click)="generateReport('daily')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      Daily Report
+    </div>
+    
+    <!-- Weekly Report -->
+    <div class="dropdown-item" (click)="generateReport('weekly')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+        <line x1="8" y1="14" x2="8" y2="14.01"/>
+        <line x1="12" y1="14" x2="12" y2="14.01"/>
+        <line x1="16" y1="14" x2="16" y2="14.01"/>
+        <line x1="8" y1="18" x2="8" y2="18.01"/>
+        <line x1="12" y1="18" x2="12" y2="18.01"/>
+        <line x1="16" y1="18" x2="16" y2="18.01"/>
+      </svg>
+      Weekly Report
+    </div>
+    
+    <!-- Monthly Report -->
+    <div class="dropdown-item" (click)="generateReport('monthly')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="20" x2="18" y2="10"/>
+        <line x1="12" y1="20" x2="12" y2="4"/>
+        <line x1="6" y1="20" x2="6" y2="14"/>
+      </svg>
+      Monthly Report
+    </div>
+    
+    <div class="dropdown-divider"></div>
+    
+    <!-- SLA Performance -->
+    <div class="dropdown-item" (click)="generateReport('sla')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+      SLA Performance
+    </div>
+    
+    <!-- Agent Performance -->
+    <div class="dropdown-item" (click)="generateReport('agent')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      Agent Performance
     </div>
   </div>
+</div>
+       <div class="menu-item" (click)="toggleMenu('cctv')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+    <path d="M23 7l-7 5 7 5V7z"/>
+    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+  </svg>
+  CCTV
+  <div class="dropdown" *ngIf="activeMenu === 'cctv'">
+    <div class="dropdown-item" (click)="goToCCTVInfo()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 7l-7 5 7 5V7z"/>
+        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+      </svg>
+      View CCTV Dashboard
+    </div>
+  </div>
+</div>
   
-        <div class="menu-item" (click)="toggleMenu('help')">
+   <div class="menu-item" (click)="toggleMenu('help')">
   Help
   <div class="dropdown" *ngIf="activeMenu === 'help'">
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" (click)="goToAbout()">ℹ️ About</div>
-    <div class="dropdown-item" (click)="goToDocumentation()">📖 Documentation</div>
-    <div class="dropdown-item" (click)="goToShortcuts()">⌨️ Keyboard Shortcuts</div>
+    
+    <!-- About -->
+    <div class="dropdown-item" (click)="goToAbout()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="16" x2="12" y2="12"/>
+        <line x1="12" y1="8" x2="12.01" y2="8"/>
+      </svg>
+      About
+    </div>
+    
+    <!-- Documentation -->
+    <div class="dropdown-item" (click)="goToDocumentation()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+      </svg>
+      Documentation
+    </div>
+    
+    <!-- Keyboard Shortcuts -->
+    <div class="dropdown-item" (click)="goToShortcuts()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"/>
+        <line x1="6" y1="10" x2="6" y2="10.01"/>
+        <line x1="10" y1="10" x2="10" y2="10.01"/>
+        <line x1="14" y1="10" x2="14" y2="10.01"/>
+        <line x1="18" y1="10" x2="18" y2="10.01"/>
+        <line x1="7" y1="14" x2="17" y2="14"/>
+      </svg>
+      Keyboard Shortcuts
+    </div>
+    
     <div class="dropdown-divider"></div>
-    <div class="dropdown-item" (click)="goToUpdates()">🔄 Check for Updates</div>
-    <div class="dropdown-item" (click)="goToSupport()">🆘 Support</div>
+    
+    <!-- Check for Updates -->
+    <div class="dropdown-item" (click)="goToUpdates()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="23 4 23 10 17 10"/>
+        <polyline points="1 20 1 14 7 14"/>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+      </svg>
+      Check for Updates
+    </div>
+    
+    <!-- Support -->
+    <div class="dropdown-item" (click)="goToSupport()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+      Support
+    </div>
   </div>
 </div>
       </div>  
       <!-- Toolbar -->
       <div class="toolbar">
        <button class="toolbar-btn" (click)="toggleSidebar()" title="Toggle Sidebar">
-    <span>{{ sidebarHidden ? '☰' : '❌' }}</span>
+    <span>
+  <!-- Hamburger icon (when sidebar is hidden) -->
+  <svg *ngIf="sidebarHidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <line x1="3" y1="6" x2="21" y2="6"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+    <line x1="3" y1="18" x2="21" y2="18"/>
+  </svg>
+  
+  <!-- X (close) icon (when sidebar is visible) -->
+  <svg *ngIf="!sidebarHidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+</span>
     <span class="badge" *ngIf="(pendingJobOrdersCount + requisitionsNotificationCount) > 0">
         {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 ? '99+' : (pendingJobOrdersCount + requisitionsNotificationCount) }}
     </span>
@@ -225,7 +486,13 @@ import { ReportModalComponent } from './report-modal.component';
         <app-notification-bell></app-notification-bell>
         
         <button class="quick-action-btn" (click)="refreshData()">
-              <span>🔄</span> Refresh Data
+              <span>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+</span> Refresh Data
             </button>
         <div class="spacer"></div>
     <div class="user-chip">
@@ -430,7 +697,11 @@ import { ReportModalComponent } from './report-modal.component';
 <div class="dashboard-widgets" *ngIf="isDashboardView">
 
   <div class="widget" *ngIf="!systemSettings?.appearanceSettings?.show_priority_widget !== false">
-    <div class="widget-header">📊 Priority Distribution</div>
+    <div class="widget-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="18" y1="20" x2="18" y2="10"/>
+  <line x1="12" y1="20" x2="12" y2="4"/>
+  <line x1="6" y1="20" x2="6" y2="14"/>
+</svg> Priority Distribution</div>
     <div class="widget-content">
       <div class="priority-stats">
         <div class="priority-row" *ngFor="let p of priorityLevels">
@@ -447,7 +718,9 @@ import { ReportModalComponent } from './report-modal.component';
   </div>
 
   <div class="widget" *ngIf="!systemSettings?.appearanceSettings?.show_issues_widget !== false">
-    <div class="widget-header">🔥 Top Issues</div>
+    <div class="widget-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+</svg> Top Issues</div>
     <div class="widget-content">
       <div class="issue-list">
         <div class="issue-item" *ngFor="let issue of topIssues.slice(0, 3)">
@@ -473,7 +746,10 @@ import { ReportModalComponent } from './report-modal.component';
   </div>
 
   <div class="widget">
-    <div class="widget-header">🕐 Recent Activity</div>
+    <div class="widget-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <polyline points="12 6 12 12 16 14"/>
+</svg> Recent Activity</div>
     <div class="widget-content">
       <div class="activity-list">
         <div class="activity-item" *ngFor="let ticket of recentTickets.slice(0, 3)">
@@ -509,7 +785,12 @@ import { ReportModalComponent } from './report-modal.component';
   </div>
   <!-- Requisitions Widget -->
 <div class="widget">
-  <div class="widget-header">📩 Requisitions Overview</div>
+  <div class="widget-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+  <polyline points="22,6 12,13 2,6"/>
+  <line x1="12" y1="18" x2="12" y2="22"/>
+  <polyline points="9 20 12 23 15 20"/>
+</svg> Requisitions Overview</div>
   <div class="widget-content">
     <div class="priority-stats">
       <div class="priority-row">
@@ -548,7 +829,10 @@ import { ReportModalComponent } from './report-modal.component';
 
 <!-- Job Orders Widget -->
 <div class="widget">
-  <div class="widget-header">📋 Job Orders Overview</div>
+  <div class="widget-header"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+  <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+</svg> Job Orders Overview</div>
   <div class="widget-content">
     <div class="priority-stats">
       <div class="priority-row">
@@ -862,7 +1146,11 @@ import { ReportModalComponent } from './report-modal.component';
 <div class="modal-overlay" *ngIf="showLogoutConfirmModal" (click)="cancelLogoutConfirm()">
   <div class="logout-confirm-modal" id="logoutConfirmModal" (click)="$event.stopPropagation()">
     <div class="logout-confirm-header modal-header-handle" (mousedown)="startDrag($event, 'logoutConfirmModal')">
-      <span class="logout-confirm-icon">🚪</span>
+      <span class="logout-confirm-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+  <polyline points="16 17 21 12 16 7"/>
+  <line x1="21" y1="12" x2="9" y2="12"/>
+</svg></span>
       <h3>Confirm Logout</h3>
       <button type="button" (click)="cancelLogoutConfirm()" class="modal-close-btn">✕</button>
     </div>
@@ -871,12 +1159,23 @@ import { ReportModalComponent } from './report-modal.component';
       <p class="logout-confirm-sub">Any unsaved changes will be lost.</p>
     </div>
     <div class="logout-confirm-footer">
-      <button class="btn btn-cancel" (click)="cancelLogoutConfirm()">
-        ✋ Cancel
-      </button>
-      <button class="btn btn-danger" (click)="confirmLogout()">
-        🚪 Logout
-      </button>
+     <button class="btn btn-cancel" (click)="cancelLogoutConfirm()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  </svg>
+  Cancel
+</button>
+
+<button class="btn btn-danger" (click)="confirmLogout()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+  Logout
+</button>
     </div>
   </div>
 </div>

@@ -44,14 +44,60 @@ interface ClientTicket {
   <div class="menu-item" [class.open]="activeMenu === 'file'" (click)="toggleMenu('file')">
     File
     <div class="dropdown" *ngIf="activeMenu === 'file'">
-      <div class="dropdown-item" (click)="newTicket()">📄 New Ticket</div>
-      <div class="dropdown-item" (click)="newJobOrder()">📋 New Job Order</div>
-      <div class="dropdown-item" (click)="newRequisition()">📩 New Requisition</div>
+      <div class="dropdown-item" (click)="newTicket()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>
+    New Ticket
+  </div>
+      <div class="dropdown-item" (click)="newJobOrder()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+      <line x1="9" y1="12" x2="15" y2="12"/>
+      <line x1="9" y1="16" x2="13" y2="16"/>
+    </svg>
+    New Job Order
+  </div>
+      <div class="dropdown-item" (click)="newRequisition()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8"/>
+      <polyline points="22,6 12,13 2,6"/>
+      <line x1="19" y1="3" x2="19" y2="11"/>
+      <polyline points="16 8 19 11 22 8"/>
+    </svg>
+    New Requisition
+  </div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="exportMyData()">💾 Export My Data</div>
-      <div class="dropdown-item" (click)="printPage()">🖨️ Print Page</div>
+     <div class="dropdown-item" (click)="exportMyData()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+      <polyline points="17 21 17 13 7 13 7 21"/>
+      <polyline points="7 3 7 8 15 8"/>
+    </svg>
+    Export My Data
+  </div>
+      <div class="dropdown-item" (click)="printPage()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"/>
+      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Print Page
+  </div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="logout(); $event.stopPropagation()">🚪 Logout</div>
+      <div class="dropdown-item" (click)="logout(); $event.stopPropagation()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+    Logout
+  </div>
     </div>
   </div>
 
@@ -59,12 +105,49 @@ interface ClientTicket {
     Edit
     <div class="dropdown" *ngIf="activeMenu === 'edit'">
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="clearSearch()">🗑️ Clear Search</div>
-      <div class="dropdown-item" (click)="clearFilters()">🔄 Clear All Filters</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="refreshData()">🔄 Refresh Data</div>
-      <div class="dropdown-item" (click)="showThemeModal = true; activeMenu = null">
-  🎨 Customize Theme
+     <!-- Clear Search -->
+<div class="dropdown-item" (click)="clearSearch()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+  Clear Search
+</div>
+
+<!-- Clear All Filters -->
+<div class="dropdown-item" (click)="clearFilters()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    <line x1="18" y1="6" x2="23" y2="11"/>
+    <line x1="23" y1="6" x2="18" y2="11"/>
+  </svg>
+  Clear All Filters
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Refresh Data -->
+<div class="dropdown-item" (click)="refreshData()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  Refresh Data
+</div>
+
+<!-- Customize Theme -->
+<div class="dropdown-item" (click)="showThemeModal = true; activeMenu = null">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+    <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+    <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+    <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+  </svg>
+  Customize Theme
 </div>
     </div>
   </div>
@@ -73,56 +156,246 @@ interface ClientTicket {
     View
     <div class="dropdown" *ngIf="activeMenu === 'view'">
       <div class="dropdown-item" (click)="toggleSidebar()">
-        {{ sidebarHidden ? '📂 Show Sidebar' : '📁 Hide Sidebar' }}
-      </div>
+  <!-- Open folder icon (when hidden — click to show) -->
+  <svg *ngIf="sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    <polyline points="12 11 15 14 12 17"/>
+    <line x1="15" y1="14" x2="9" y2="14"/>
+  </svg>
+  
+  <!-- Closed folder icon (when visible — click to hide) -->
+  <svg *ngIf="!sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    <polyline points="9 11 6 14 9 17"/>
+    <line x1="6" y1="14" x2="12" y2="14"/>
+  </svg>
+  
+  {{ sidebarHidden ? 'Show Sidebar' : 'Hide Sidebar' }}
+</div>
       <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="setView('all')">
-        <span *ngIf="currentView === 'all'">✔ </span>📋 All Tickets
-      </div>
-      <div class="dropdown-item" (click)="setView('open')">
-        <span *ngIf="currentView === 'open'">✔ </span>🔓 Open Only
-      </div>
-      <div class="dropdown-item" (click)="setView('resolved')">
-        <span *ngIf="currentView === 'resolved'">✔ </span>✅ Resolved
-      </div>
-      <div class="dropdown-item" (click)="setView('closed')">
-        <span *ngIf="currentView === 'closed'">✔ </span>🔒 Closed
-      </div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="toggleCompactMode()">
-        {{ compactMode ? '📐 Compact Off' : '📏 Compact Mode' }}
-      </div>
+      <!-- All Tickets -->
+<div class="dropdown-item" (click)="setView('all')">
+  <svg *ngIf="currentView === 'all'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/>
+    <line x1="8" y1="12" x2="21" y2="12"/>
+    <line x1="8" y1="18" x2="21" y2="18"/>
+    <line x1="3" y1="6" x2="3.01" y2="6"/>
+    <line x1="3" y1="12" x2="3.01" y2="12"/>
+    <line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+  All Tickets
+</div>
+
+<!-- Open Only -->
+<div class="dropdown-item" (click)="setView('open')">
+  <svg *ngIf="currentView === 'open'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
+  </svg>
+  Open Only
+</div>
+
+<!-- Resolved -->
+<div class="dropdown-item" (click)="setView('resolved')">
+  <svg *ngIf="currentView === 'resolved'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+  Resolved
+</div>
+
+<!-- Closed -->
+<div class="dropdown-item" (click)="setView('closed')">
+  <svg *ngIf="currentView === 'closed'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+  Closed
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Compact Mode toggle -->
+<div class="dropdown-item" (click)="toggleCompactMode()">
+  <svg *ngIf="!compactMode" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 3H3v18h18V3z"/>
+    <line x1="3" y1="9" x2="21" y2="9"/>
+    <line x1="3" y1="15" x2="21" y2="15"/>
+    <line x1="9" y1="3" x2="9" y2="21"/>
+    <line x1="15" y1="3" x2="15" y2="21"/>
+  </svg>
+  <svg *ngIf="compactMode" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="7" width="18" height="10" rx="1"/>
+    <line x1="3" y1="12" x2="21" y2="12"/>
+  </svg>
+  {{ compactMode ? 'Compact Off' : 'Compact Mode' }}
+</div>
     </div>
   </div>
 
   <div class="menu-item" [class.open]="activeMenu === 'tools'" (click)="toggleMenu('tools')">
     Tools
     <div class="dropdown" *ngIf="activeMenu === 'tools'">
-      <div class="dropdown-item" (click)="goTofeature()">📚 Features</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="goToMyStats()">📊 Department Statistics</div>
-      <div class="dropdown-item" (click)="goToCalendar()">📅 Calendar</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="goToNotifications()">🔔 Notification History</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="downloadApp()">📱 Download Mobile App</div>
-      <div class="dropdown-item" (click)="checkSystemStatus()">🩺 System Status</div>
+      <!-- Features -->
+<div class="dropdown-item" (click)="goTofeature()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+    <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+  </svg>
+  Features
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Department Statistics -->
+<div class="dropdown-item" (click)="goToMyStats()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/>
+    <line x1="12" y1="20" x2="12" y2="4"/>
+    <line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+  Department Statistics
+</div>
+
+<!-- Calendar -->
+<div class="dropdown-item" (click)="goToCalendar()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+  Calendar
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Notification History -->
+<div class="dropdown-item" (click)="goToNotifications()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+  Notification History
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Download Mobile App -->
+<div class="dropdown-item" (click)="downloadApp()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+    <line x1="12" y1="18" x2="12.01" y2="18"/>
+  </svg>
+  Download Mobile App
+</div>
+
+<!-- System Status -->
+<div class="dropdown-item" (click)="checkSystemStatus()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+  </svg>
+  System Status
+</div>
     </div>
   </div>
 
   <div class="menu-item" [class.open]="activeMenu === 'help'" (click)="toggleMenu('help')">
     Help
     <div class="dropdown" *ngIf="activeMenu === 'help'">
-      <div class="dropdown-item" (click)="goToSlaInfo()">📋 SLA Info</div>
-      <div class="dropdown-item" (click)="goToContact()">📞 Contact IT Support</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="goToFAQ()">❓ FAQ</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="goToAbout()">ℹ️ About Portal</div>
-      <div class="dropdown-item" (click)="goToShortcuts()">⌨️ Keyboard Shortcuts</div>
-      <div class="dropdown-divider"></div>
-      <div class="dropdown-item" (click)="reportBug()">🐛 Report a Bug</div>
-      <div class="dropdown-item" (click)="submitFeedback()">💬 Submit Feedback</div>
+      <!-- SLA Info -->
+<div class="dropdown-item" (click)="goToSlaInfo()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+  SLA Info
+</div>
+
+<!-- Contact IT Support -->
+<div class="dropdown-item" (click)="goToContact()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+  Contact IT Support
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- FAQ -->
+<div class="dropdown-item" (click)="goToFAQ()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+  FAQ
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- About Portal -->
+<div class="dropdown-item" (click)="goToAbout()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="16" x2="12" y2="12"/>
+    <line x1="12" y1="8" x2="12.01" y2="8"/>
+  </svg>
+  About Portal
+</div>
+
+<!-- Keyboard Shortcuts -->
+<div class="dropdown-item" (click)="goToShortcuts()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="6" width="20" height="12" rx="2"/>
+    <line x1="6" y1="10" x2="6" y2="10.01"/>
+    <line x1="10" y1="10" x2="10" y2="10.01"/>
+    <line x1="14" y1="10" x2="14" y2="10.01"/>
+    <line x1="18" y1="10" x2="18" y2="10.01"/>
+    <line x1="7" y1="14" x2="17" y2="14"/>
+  </svg>
+  Keyboard Shortcuts
+</div>
+
+<div class="dropdown-divider"></div>
+
+<!-- Report a Bug -->
+<div class="dropdown-item" (click)="reportBug()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="8" y="6" width="8" height="14" rx="4"/>
+    <path d="M19 10h-3"/>
+    <path d="M19 14h-3"/>
+    <path d="M19 18h-3"/>
+    <path d="M5 10h3"/>
+    <path d="M5 14h3"/>
+    <path d="M5 18h3"/>
+    <path d="M9 3l1 3"/>
+    <path d="M15 3l-1 3"/>
+    <line x1="9" y1="10" x2="9" y2="10.01"/>
+    <line x1="15" y1="10" x2="15" y2="10.01"/>
+  </svg>
+  Report a Bug
+</div>
+
+<!-- Submit Feedback -->
+<div class="dropdown-item" (click)="submitFeedback()">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  Submit Feedback
+</div>
     </div>
   </div>
 <!-- Reports - Only for Branch Manager and Head/Manager roles -->
@@ -132,10 +405,52 @@ interface ClientTicket {
      *ngIf=" isBranchManager() || isHeadOrManager()">
   Reports
   <div class="dropdown" *ngIf="activeMenu === 'reports'">
-    <div class="dropdown-item" (click)="openReportModal('daily')">📅 Daily Report</div>
-    <div class="dropdown-item" (click)="openReportModal('weekly')">📊 Weekly Report</div>
-    <div class="dropdown-item" (click)="openReportModal('monthly')">📈 Monthly Report</div>
-    <div class="dropdown-item" (click)="openReportModal('yearly')">📆 Yearly Report</div>
+    <!-- Daily Report -->
+<div class="dropdown-item" (click)="openReportModal('daily')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <circle cx="12" cy="16" r="1" fill="currentColor"/>
+  </svg>
+  Daily Report
+</div>
+
+<!-- Weekly Report -->
+<div class="dropdown-item" (click)="openReportModal('weekly')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+    <line x1="16" y1="2" x2="16" y2="6"/>
+    <line x1="8" y1="2" x2="8" y2="6"/>
+    <line x1="3" y1="10" x2="21" y2="10"/>
+    <circle cx="8" cy="15" r="1" fill="currentColor"/>
+    <circle cx="12" cy="15" r="1" fill="currentColor"/>
+    <circle cx="16" cy="15" r="1" fill="currentColor"/>
+    <circle cx="8" cy="19" r="1" fill="currentColor"/>
+    <circle cx="12" cy="19" r="1" fill="currentColor"/>
+    <circle cx="16" cy="19" r="1" fill="currentColor"/>
+  </svg>
+  Weekly Report
+</div>
+
+<!-- Monthly Report -->
+<div class="dropdown-item" (click)="openReportModal('monthly')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/>
+    <polyline points="16 7 22 7 22 13"/>
+  </svg>
+  Monthly Report
+</div>
+
+<!-- Yearly Report -->
+<div class="dropdown-item" (click)="openReportModal('yearly')">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="2" x2="12" y2="22"/>
+    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+  </svg>
+  Yearly Report
+</div>
   </div>
 </div>
 
@@ -163,7 +478,7 @@ interface ClientTicket {
       <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
       <line x1="13" y1="3" x2="3" y2="13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>
-    <!-- ✅ Combined notification badge -->
+    <!--  Combined notification badge -->
     <span class="tbadge" *ngIf="(pendingJobOrdersCount + requisitionsNotificationCount) > 0" style="position: absolute; top: -4px; right: -4px;">
         {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 ? '99+' : (pendingJobOrdersCount + requisitionsNotificationCount) }}
     </span>
@@ -398,13 +713,23 @@ interface ClientTicket {
         <span class="priority-badge" [class]="'pri-' + ticket.priority">{{ ticket.priority }}</span>
       </div>
       <div class="activity-empty" *ngIf="myTickets.length === 0">
-        <span>🎉</span>
+        <span>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <path d="M5.8 11.3L2 22l10.7-3.79"/>
+    <path d="M4 3h.01"/>
+    <path d="M22 8h.01"/>
+    <path d="M15 2h.01"/>
+    <path d="M22 20h.01"/>
+    <path d="M22 12l-4-4-8 8 4 4 8-8z"/>
+    <path d="M2 10h.01"/>
+  </svg>
+</span>
         <p>No tickets yet — everything's good!</p>
       </div>
     </div>
   </div>
 
-  <!-- ✅ Job Orders Widget -->
+  <!--  Job Orders Widget -->
   <div class="widget">
     <div class="widget-header">
      <span class="widget-icon">
@@ -428,7 +753,12 @@ interface ClientTicket {
         <span class="status-tag" [class]="'tag-' + (order.status || 'pending')">{{ order.status || 'pending' | uppercase }}</span>
       </div>
       <div class="activity-empty" *ngIf="allOrders.length === 0">
-        <span>📋</span>
+       <span>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+  </svg>
+</span>
         <p>No job orders yet</p>
       </div>
       <div class="announce-viewall" (click)="goToJobOrders()" *ngIf="allOrders.length > 0">
@@ -437,7 +767,7 @@ interface ClientTicket {
     </div>
   </div>
 
-  <!-- ✅ Requisitions Widget -->
+  <!--Requisitions Widget -->
   <div class="widget">
     <div class="widget-header">
      <span class="widget-icon">
@@ -460,7 +790,12 @@ interface ClientTicket {
         <span class="status-tag" [class]="'tag-' + getReqStatusClass(req)">{{ getReqStatusLabel(req) }}</span>
       </div>
       <div class="activity-empty" *ngIf="allRequisitions.length === 0">
-        <span>📩</span>
+       <span>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+    <polyline points="22,6 12,13 2,6"/>
+  </svg>
+</span>
         <p>No requests yet</p>
       </div>
       <div class="announce-viewall" (click)="goToRequisitions()" *ngIf="allRequisitions.length > 0">
@@ -563,13 +898,25 @@ interface ClientTicket {
        [style.transform]="'translate(' + notifModalPosition.x + 'px, ' + notifModalPosition.y + 'px)'">
     <div class="notif-modal-header" 
          (mousedown)="onNotifHeaderMouseDown($event)">
-      <h3>🔔 My Notifications</h3>
+      <h3>
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 8px;">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+  My Notifications
+</h3>
       <div class="notif-modal-header-actions">
         <button class="notif-action-btn" *ngIf="unreadNotificationsCount > 0" (click)="markAllNotificationsRead()">
           ✓ Mark all read
         </button>
         <button class="notif-action-btn danger" *ngIf="clientNotifications.length > 0" (click)="clearAllNotifications()">
-          🗑️ Clear all
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+  <polyline points="3 6 5 6 21 6"/>
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  <line x1="10" y1="11" x2="10" y2="17"/>
+  <line x1="14" y1="11" x2="14" y2="17"/>
+</svg>
+Clear all
         </button>
         <button class="modal-close-btn" (click)="closeNotificationsModal()">✕</button>
       </div>
@@ -577,7 +924,12 @@ interface ClientTicket {
     <div class="notif-modal-body">
       <!-- Keep the rest of your notification content unchanged -->
       <div class="clear-confirm" *ngIf="showClearConfirm">
-        <span class="clear-confirm-icon">🗑️</span>
+        <span class="clear-confirm-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+  <polyline points="3 6 5 6 21 6"/>
+  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+  <line x1="10" y1="11" x2="10" y2="17"/>
+  <line x1="14" y1="11" x2="14" y2="17"/>
+</svg></span>
         <p class="clear-confirm-text">Clear all notifications?</p>
         <p class="clear-confirm-sub">This action cannot be undone.</p>
         <div class="clear-confirm-actions">
@@ -601,7 +953,12 @@ interface ClientTicket {
           <button class="notif-dismiss-btn" (click)="dismissSingleNotification(notif.id)" title="Dismiss">✕</button>
         </div>
         <div class="notif-modal-empty" *ngIf="clientNotifications.length === 0">
-          <span>📭</span>
+          <span>
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+</span>
           <p>No notifications yet</p>
         </div>
       </div>
@@ -623,7 +980,14 @@ interface ClientTicket {
 <div class="modal-overlay" *ngIf="showLogoutWarning">
   <div class="logout-warning-modal" (click)="$event.stopPropagation()">
     <div class="logout-warning-header">
-      <span class="warning-icon">⏰</span>
+     <span class="warning-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="13" r="8"/>
+    <polyline points="12 9 12 13 15 14"/>
+    <path d="M5 3 2 6"/>
+    <path d="M22 6 19 3"/>
+  </svg>
+</span>
       <h3>Session Expiring Soon</h3>
     </div>
     <div class="logout-warning-body">
@@ -636,7 +1000,12 @@ interface ClientTicket {
     </div>
     <div class="logout-warning-footer">
       <button class="btn btn-primary" (click)="cancelLogout()">
-        ✋ I'm Still Here
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 6px;">
+  <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+  <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+  <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+  <path d="M18 8a2 2 0 0 1 2 2v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L6 18"/>
+</svg> I'm Still Here
       </button>
     </div>
   </div>
@@ -647,7 +1016,13 @@ interface ClientTicket {
        [style.transform]="'translate(' + themeModalPos.x + 'px, ' + themeModalPos.y + 'px)'"
        (click)="$event.stopPropagation()">
     <div class="theme-modal-header" (mousedown)="onThemeHeaderMouseDown($event)">
-      <h3>🎨 Customize Your Theme</h3>
+      <h3><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="13.5" cy="6.5" r=".5"/>
+  <circle cx="17.5" cy="10.5" r=".5"/>
+  <circle cx="8.5" cy="7.5" r=".5"/>
+  <circle cx="6.5" cy="12.5" r=".5"/>
+  <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+</svg> Customize Your Theme</h3>
       <button class="modal-close-btn" (click)="showThemeModal = false">✕</button>
     </div>
     <div class="theme-modal-body">
@@ -711,8 +1086,15 @@ interface ClientTicket {
       </div>
     </div>
     <div class="theme-modal-footer">
-      <button class="btn btn-cancel" (click)="resetTheme()">🔄 Reset Default</button>
-      <button class="btn btn-primary" (click)="showThemeModal = false">✅ Done</button>
+      <button class="btn btn-cancel" (click)="resetTheme()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="23 4 23 10 17 10"/>
+  <polyline points="1 20 1 14 7 14"/>
+  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+</svg> Reset Default</button>
+      <button class="btn btn-primary" (click)="showThemeModal = false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+  <polyline points="22 4 12 14.01 9 11.01"/>
+</svg> Done</button>
     </div>
   </div>
 </div>
@@ -724,28 +1106,56 @@ interface ClientTicket {
     
     <div class="logout-modal-header" (mousedown)="onLogoutHeaderMouseDown($event)">
       <div class="logout-header-content">
-        <span class="logout-icon">🚪</span>
+        <span class="logout-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+    <polyline points="16 17 21 12 16 7"/>
+    <line x1="21" y1="12" x2="9" y2="12"/>
+  </svg>
+</span>
         <h3>Confirm Logout</h3>
       </div>
       <button class="modal-close-btn" (click)="cancelLogout()">✕</button>
     </div>
     
     <div class="logout-modal-body">
-      <div class="logout-warning-icon">⚠️</div>
+      <div class="logout-warning-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+  <line x1="12" y1="9" x2="12" y2="13"/>
+  <line x1="12" y1="17" x2="12.01" y2="17"/>
+</svg></div>
       <p class="logout-confirm-text">Are you sure you want to log out?</p>
       <p class="logout-confirm-sub">You will be redirected to the login page.</p>
       
       <div class="logout-session-info" *ngIf="currentUser">
         <div class="session-detail">
-          <span class="session-label">👤 User:</span>
+          <span class="session-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+  <circle cx="12" cy="7" r="4"/>
+</svg> User:</span>
           <span class="session-value">{{ currentUser.fullname || currentUser.username }}</span>
         </div>
         <div class="session-detail">
-          <span class="session-label">🏢 Branch:</span>
+          <span class="session-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+  <line x1="9" y1="6" x2="9" y2="6.01"/>
+  <line x1="15" y1="6" x2="15" y2="6.01"/>
+  <line x1="9" y1="10" x2="9" y2="10.01"/>
+  <line x1="15" y1="10" x2="15" y2="10.01"/>
+  <line x1="9" y1="14" x2="9" y2="14.01"/>
+  <line x1="15" y1="14" x2="15" y2="14.01"/>
+  <line x1="9" y1="18" x2="9" y2="18.01"/>
+  <line x1="15" y1="18" x2="15" y2="18.01"/>
+</svg> Branch:</span>
           <span class="session-value">{{ currentBranch?.name || 'N/A' }}</span>
         </div>
         <div class="session-detail">
-          <span class="session-label">⏱️ Session:</span>
+          <span class="session-label"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="13" r="8"/>
+  <line x1="12" y1="9" x2="12" y2="13"/>
+  <line x1="9" y1="2" x2="15" y2="2"/>
+  <line x1="12" y1="2" x2="12" y2="5"/>
+</svg> Session:</span>
           <span class="session-value">Active since {{ currentDate }}</span>
         </div>
       </div>
@@ -753,10 +1163,19 @@ interface ClientTicket {
     
     <div class="logout-modal-footer">
       <button class="btn btn-cancel-logout" (click)="cancelLogout()">
-        ✋ Cancel
+       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+  <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+  <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+  <path d="M18 8a2 2 0 0 1 2 2v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L6 18"/>
+</svg> Cancel
       </button>
       <button class="btn btn-confirm-logout" (click)="confirmLogout()">
-        🚪 Yes, Logout
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+  <polyline points="16 17 21 12 16 7"/>
+  <line x1="21" y1="12" x2="9" y2="12"/>
+</svg> Yes, Logout
       </button>
     </div>
   </div>
@@ -2366,14 +2785,14 @@ announcements: any[] = [];
   ) {}
 
   private destroy$ = new Subject<void>();
- // ✅ Generate a unique request signature
+ // Generate a unique request signature
   private getRequestSignature(method: string, url: string, params?: any): string {
     const userId = this.currentUser?.id || 'anonymous';
     const paramStr = params ? JSON.stringify(params) : '';
     return `client_dash_${method}_${url}_${userId}_${paramStr}`;
   }
 
-  // ✅ Check if cache is still valid
+  // Check if cache is still valid
   private isCacheValid(key: string): boolean {
     const cached = this.requestsCache.get(key);
     if (!cached) return false;

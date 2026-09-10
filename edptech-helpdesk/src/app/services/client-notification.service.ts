@@ -37,6 +37,7 @@ export class ClientNotificationService {
   private serverPolling: any;
   private shownToastIds: Set<string> = new Set();
   private previousUserId: number | null = null;
+  private appInitialized = false;
   private deletedNotificationIds: Set<string> = new Set();
 private readonly DELETED_KEY = 'client_deleted_notifications';
  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
@@ -94,8 +95,8 @@ private clearAllNotificationData(): void {
             if (key && (
                 key.startsWith('client_notifications_') ||
                 key.startsWith('client_ticket_notifications_') ||
-                key === 'client_deleted_notifications' || // ✅ Add this
-                key === 'client_shown_toast_ids' // ✅ Add this
+                key === 'client_deleted_notifications' || // Add this
+                key === 'client_shown_toast_ids' //  Add this
             )) {
                 keysToRemove.push(key);
             }
@@ -104,7 +105,7 @@ private clearAllNotificationData(): void {
     } catch (e) {}
 }
 /**
- * ✅ Public method to call when user logs out
+ *  Public method to call when user logs out
  */
 public resetForNewUser(): void {
     this.clearAllNotificationData();
@@ -113,10 +114,66 @@ public resetForNewUser(): void {
     this.currentUserDeptId = null;
     this.currentUserBranchId = null;
 }
-  updateCurrentUser(userId: number): void {
-    this.currentUserId = userId;
-  }
 
+ /**
+ *  NEW: Call this from AuthService.logout() to fully clear notification state
+ */
+public handleLogout(): void {
+    // Clear everything for the outgoing user
+    this.notificationsSubject.next([]);
+    this.ticketNotifications = [];
+    this.shownToastIds.clear();
+    this.deletedNotificationIds.clear();
+    this.saveShownToastIds();
+    this.saveDeletedNotificationIds(this.deletedNotificationIds);
+    this.currentUserId = null;
+    this.currentUserDeptId = null;
+    this.currentUserBranchId = null;
+    this.previousUserId = null;
+    this.clearAllStorageKeys();
+}
+
+/**
+ * NEW: Clears all per-user notification localStorage keys
+ */
+private clearAllStorageKeys(): void {
+    try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+                key.startsWith('client_notifications_') ||
+                key.startsWith('client_ticket_notifications_') ||
+                key.startsWith('client_deleted_notifications') ||
+                key === 'client_shown_toast_ids'
+            )) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+}
+
+updateCurrentUser(userId: number): void {
+    this.currentUserId = userId;
+}
+public refreshForCurrentUser(): void {
+  if (!this.isBrowser) return;
+  
+  // Reload user context from localStorage
+  this.loadCurrentUser();
+  
+  // Reload shown toast IDs for this user
+  this.loadShownToastIds();
+  
+  // Reload notifications from localStorage first (instant UI feedback)
+  this.loadNotificationsFromStorage();
+  
+  // Then fetch fresh from server (respects deletion set)
+  if (this.currentUserId) {
+    this.loadNotificationsFromServer();
+  }
+}
   // ── TICKET NOTIFICATIONS (EXISTING METHODS) ──
 
   /**
@@ -932,15 +989,19 @@ public resetForNewUser(): void {
 
               // ✅ Only show toast for NEW unread notifications
               const toastKey = `toast-${srvId}`;
-              if (!this.shownToastIds.has(toastKey) && n.is_read === 0) {
-                this.shownToastIds.add(toastKey);
-                this.saveShownToastIds();
-                this.showToastPopup(
-                  newNotif.title,
-                  newNotif.message,
-                  newNotif.ticketId || newNotif.jobOrderId
-                );
-              }
+if (
+  !this.shownToastIds.has(toastKey) &&
+  n.is_read === 0 &&
+  this.appInitialized  // ← NEW: skip toasts during initial boot
+) {
+  this.shownToastIds.add(toastKey);
+  this.saveShownToastIds();
+  this.showToastPopup(
+    newNotif.title,
+    newNotif.message,
+    newNotif.ticketId || newNotif.jobOrderId
+  );
+}
             }
           }
         }
@@ -953,30 +1014,32 @@ public resetForNewUser(): void {
       const deduped = this.removeDuplicates(merged);
       this.notificationsSubject.next(deduped);
       this.saveNotifications(deduped);
+      this.appInitialized = true;
     })
     .catch((err) => {
       console.log('⚠️ Client notifications fetch failed:', err.message);
     });
 }
+private getDeletedKey(): string {
+  return `client_deleted_notifications_${this.currentUserId || 'anonymous'}`;
+}
+
 private getDeletedNotificationIds(): Set<string> {
-    if (!this.isBrowser) return new Set();
-    
-    try {
-        const stored = localStorage.getItem(this.DELETED_KEY);
-        if (stored) {
-            const ids = JSON.parse(stored);
-            return new Set(ids);
-        }
-    } catch (e) {}
-    
-    return new Set();
+  if (!this.isBrowser) return new Set();
+  try {
+    const stored = localStorage.getItem(this.getDeletedKey());
+    if (stored) {
+      const ids = JSON.parse(stored);
+      return new Set(ids);
+    }
+  } catch (e) {}
+  return new Set();
 }
 private saveDeletedNotificationIds(ids: Set<string>): void {
-    if (!this.isBrowser) return;
-    
-    try {
-        localStorage.setItem(this.DELETED_KEY, JSON.stringify([...ids]));
-    } catch (e) {}
+  if (!this.isBrowser) return;
+  try {
+    localStorage.setItem(this.getDeletedKey(), JSON.stringify([...ids]));
+  } catch (e) {}
 }
 private saveShownToastIds(): void {
     if (!this.isBrowser) return;
@@ -1093,13 +1156,14 @@ private loadShownToastIds(): void {
       const token = localStorage.getItem('token') || sessionStorage.getItem('token');
       if (token) {
         const numericId = id.replace('srv_', '');
-        fetch(`${environment.apiUrl}/api/client-notifications/${numericId}/read`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }).catch(() => {});
+       fetch(`${environment.apiUrl}/api/client-notifications/mark-all-read/${this.currentUserId}`, {
+  method: 'PUT',
+  headers: { 'Authorization': `Bearer ${token}` }
+})
+.then(res => {
+  if (!res.ok) console.warn(`⚠️ markAllAsRead failed: HTTP ${res.status}`);
+})
+.catch(err => console.warn('⚠️ markAllAsRead network error:', err));
       }
     }
   }
@@ -1129,10 +1193,14 @@ markAllAsRead(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token && id.startsWith('srv_')) {
       const numericId = id.replace('srv_', '');
-      fetch(`${environment.apiUrl}/api/client-notifications/${numericId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      }).catch(() => {});
+     fetch(`${environment.apiUrl}/api/client-notifications/${numericId}`, {
+  method: 'DELETE',
+  headers: { 'Authorization': `Bearer ${token}` }
+})
+.then(res => {
+  if (!res.ok) console.warn(`⚠️ dismiss failed for ${numericId}: HTTP ${res.status}`);
+})
+.catch(err => console.warn('⚠️ dismiss network error:', err));
     }
 }
 clearAll(): void {
@@ -1150,9 +1218,13 @@ clearAll(): void {
         if (n.id.startsWith('srv_')) {
           const numericId = n.id.replace('srv_', '');
           fetch(`${environment.apiUrl}/api/client-notifications/${numericId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` }
-          }).catch(() => {});
+  method: 'DELETE',
+  headers: { 'Authorization': `Bearer ${token}` }
+})
+.then(res => {
+  if (!res.ok) console.warn(`⚠️ clearAll failed for ${numericId}: HTTP ${res.status}`);
+})
+.catch(err => console.warn('⚠️ clearAll network error:', err));
         }
       });
     }

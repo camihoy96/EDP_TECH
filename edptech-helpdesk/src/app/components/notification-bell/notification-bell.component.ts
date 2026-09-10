@@ -18,7 +18,12 @@ import { AuthService } from '../../services/auth.service';
         [class.open]="showDropdown"
         title="Notifications ({{ unreadCount }} unread)"
       >
-        <span class="bell-icon" [class.wiggle]="wiggling">🔔</span>
+        <span class="bell-icon" [class.wiggle]="wiggling">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+</span>
         <span class="badge" *ngIf="unreadCount > 0">
           {{ unreadCount > 99 ? '99+' : unreadCount }}
         </span>
@@ -102,7 +107,19 @@ import { AuthService } from '../../services/auth.service';
 
           <!-- Empty State -->
           <div class="empty-state" *ngIf="filteredNotifications.length === 0">
-            <span class="empty-icon">{{ activeFilter === 'unread' ? '✅' : '📭' }}</span>
+           <span class="empty-icon">
+  <!-- All caught up (unread filter, nothing left) -->
+  <svg *ngIf="activeFilter === 'unread'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+
+  <!-- Empty inbox (no notifications) -->
+  <svg *ngIf="activeFilter !== 'unread'" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+    <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+</span>
             <p class="empty-title">
               {{ activeFilter === 'unread' ? 'All caught up!' : 'No notifications' }}
             </p>

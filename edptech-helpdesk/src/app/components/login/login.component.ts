@@ -6,6 +6,7 @@ import { HttpClient } from '@angular/common/http';
 import { AuthService } from '../../services/auth.service';
 import { environment } from '../../../environments/environment';
 import { ClientNotificationService } from '../../services/client-notification.service';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -32,13 +33,13 @@ import { ClientNotificationService } from '../../services/client-notification.se
         <!-- ─── LEFT PANEL WITH VIDEO ─────────── -->
         <div class="card-left">
           <!-- Video Background -->
-          <div class="video-bg">
-            <video autoplay muted loop playsinline class="bg-video">
-              <source src="assets/videos/cyber.mp4" type="video/mp4">
-              <div class="video-fallback"></div>
-            </video>
-            <div class="video-overlay"></div>
-          </div>
+          <!-- Video Background -->
+<div class="video-bg">
+  <video autoplay muted loop playsinline class="bg-video" #bgVideo>
+    <source src="assets/videos/cyber.mp4" type="video/mp4">
+  </video>
+  <div class="video-overlay"></div>
+</div>
 
           <div class="card-left-content">
             <div class="brand-strip">
@@ -60,7 +61,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
 
             <div class="tile-grid">
               <div class="tile" *ngFor="let f of features">
-                <div class="tile-icon">{{ f.icon }}</div>
+                <div class="tile-icon" [innerHTML]="f.icon"></div>
                 <div class="tile-text">
                   <div class="tile-title">{{ f.title }}</div>
                   <div class="tile-desc">{{ f.desc }}</div>
@@ -169,7 +170,9 @@ import { ClientNotificationService } from '../../services/client-notification.se
       <div class="modal-overlay" *ngIf="showForgotPassword" (click)="showForgotPassword = false">
         <div class="forgot-modal" (click)="$event.stopPropagation()">
           <div class="forgot-header">
-            <span class="forgot-icon">🔑</span>
+            <span class="forgot-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+</svg></span>
             <h3>Reset Password</h3>
             <button class="modal-close" (click)="showForgotPassword = false">✕</button>
           </div>
@@ -179,13 +182,17 @@ import { ClientNotificationService } from '../../services/client-notification.se
               <div class="field">
                 <label class="lbl">Email Address</label>
                 <div class="input-wrap">
-                  <span class="i-ico">📧</span>
+                  <span class="i-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+  <polyline points="22,6 12,13 2,6"/>
+</svg></span>
                   <input class="inp" type="email" [(ngModel)]="forgotEmail" placeholder="you@edptech.com">
                 </div>
               </div>
               <button class="submit-btn" (click)="sendResetCode()" [disabled]="forgotLoading || !forgotEmail">
-                {{ forgotLoading ? '⏳ Processing...' : 'Request Reset Code' }}
-              </button>
+  <span class="spin" *ngIf="forgotLoading"></span>
+  <span>{{ forgotLoading ? 'Processing…' : 'Request Reset Code' }}</span>
+</button>
               <p class="forgot-error" *ngIf="forgotError">{{ forgotError }}</p>
               <p class="forgot-success" *ngIf="forgotSuccess">{{ forgotSuccess }}</p>
             </div>
@@ -195,26 +202,44 @@ import { ClientNotificationService } from '../../services/client-notification.se
               <div class="field">
                 <label class="lbl">Reset Code</label>
                 <div class="input-wrap">
-                  <span class="i-ico">🔢</span>
+                  <span class="i-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <line x1="4" y1="9" x2="20" y2="9"/>
+  <line x1="4" y1="15" x2="20" y2="15"/>
+  <line x1="10" y1="3" x2="8" y2="21"/>
+  <line x1="16" y1="3" x2="14" y2="21"/>
+</svg></span>
                   <input class="inp key-inp" type="text" [(ngModel)]="resetCode" placeholder="000000" maxlength="6">
                 </div>
               </div>
               <div class="field">
                 <label class="lbl">New Password</label>
                 <div class="input-wrap">
-                  <span class="i-ico">🔒</span>
-                  <input class="inp" [type]="showResetPw ? 'text' : 'password'" [(ngModel)]="newPassword" placeholder="Min. 6 characters">
-                  <button type="button" class="eye" (click)="showResetPw = !showResetPw">👁</button>
+                  <span class="i-ico"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+</svg></span>
+              <input class="inp" [type]="showResetPw ? 'text' : 'password'" [(ngModel)]="newPassword" placeholder="Min. 6 characters">
+<button type="button" class="eye" (click)="showResetPw = !showResetPw">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <path *ngIf="!showResetPw" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle *ngIf="!showResetPw" cx="12" cy="12" r="3"/>
+    <line *ngIf="showResetPw" x1="1" y1="1" x2="23" y2="23"/>
+  </svg>
+</button>
                 </div>
               </div>
-              <button class="submit-btn" (click)="resetPassword()" [disabled]="forgotLoading || !resetCode || !newPassword">
-                {{ forgotLoading ? '⏳ Resetting...' : 'Reset Password' }}
-              </button>
+             <button class="submit-btn" (click)="resetPassword()" [disabled]="forgotLoading || !resetCode || !newPassword">
+  <span class="spin" *ngIf="forgotLoading"></span>
+  <span>{{ forgotLoading ? 'Resetting…' : 'Reset Password' }}</span>
+</button>
               <p class="forgot-error" *ngIf="forgotError">{{ forgotError }}</p>
             </div>
 
             <div class="forgot-step success-step" *ngIf="forgotStep === 3">
-              <span class="success-icon">✅</span>
+              <span class="success-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+  <polyline points="22 4 12 14.01 9 11.01"/>
+</svg></span>
               <h4>Password Reset Successful!</h4>
               <p>You can now login with your new password.</p>
               <button class="submit-btn" (click)="showForgotPassword = false; forgotStep = 1">Back to Login</button>
@@ -820,12 +845,7 @@ export class LoginComponent implements OnInit, OnDestroy {
   tickerIndex = 0;
   uptimeSegs  = Array.from({ length: 24 }, (_, i) => i !== 7);
 
-  readonly features = [
-    { icon: '🔐', title: 'End-to-End Encrypted',  desc: 'All data via TLS 1.3' },
-    { icon: '🛡️', title: 'Role-Based Access',      desc: 'Admin, Agent, User tiers' },
-    { icon: '📋', title: 'Full Audit Trail',        desc: 'Every action logged' },
-    { icon: '⏱️', title: 'SLA Enforcement',         desc: 'Auto-escalation rules' },
-  ];
+ readonly features: { icon: SafeHtml; title: string; desc: string }[];
 
   readonly tickerMsgs = [
     'Login attempts are monitored and logged',
@@ -838,12 +858,51 @@ export class LoginComponent implements OnInit, OnDestroy {
   private tickerInterval:  any;
   private lockoutInterval: any;
 
-  constructor(
-    private authService: AuthService, 
-    private router: Router, 
-    private clientNotificationService: ClientNotificationService,
-    private http: HttpClient
-  ) {}
+ constructor(
+  private authService: AuthService,
+  private router: Router,
+  private clientNotificationService: ClientNotificationService,
+  private http: HttpClient,
+  private sanitizer: DomSanitizer   // ← add this
+) {
+  this.features = [
+    {
+      icon: this.sanitizer.bypassSecurityTrustHtml(`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+      </svg>`),
+      title: 'End-to-End Encrypted',
+      desc: 'All data via TLS 1.3'
+    },
+    {
+      icon: this.sanitizer.bypassSecurityTrustHtml(`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>`),
+      title: 'Role-Based Access',
+      desc: 'Admin, Agent, User tiers'
+    },
+    {
+      icon: this.sanitizer.bypassSecurityTrustHtml(`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+        <line x1="9" y1="12" x2="15" y2="12"/>
+        <line x1="9" y1="16" x2="13" y2="16"/>
+      </svg>`),
+      title: 'Full Audit Trail',
+      desc: 'Every action logged'
+    },
+    {
+      icon: this.sanitizer.bypassSecurityTrustHtml(`<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="13" r="8"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="9" y1="2" x2="15" y2="2"/>
+        <line x1="12" y1="2" x2="12" y2="5"/>
+      </svg>`),
+      title: 'SLA Enforcement',
+      desc: 'Auto-escalation rules'
+    },
+  ];
+}
 
   ngOnInit() {
     this.updateTime();
@@ -851,8 +910,19 @@ export class LoginComponent implements OnInit, OnDestroy {
     this.tickerInterval = setInterval(() => {
       this.tickerIndex = (this.tickerIndex + 1) % this.tickerMsgs.length;
     }, 4000);
+    setTimeout(() => {
+  this.forceMuteVideo();
+}, 500);
   }
-
+forceMuteVideo() {
+  const video = document.querySelector('.bg-video') as HTMLVideoElement;
+  if (video) {
+    video.muted = true;
+    video.volume = 0;
+    video.pause(); // Pause and play to apply mute
+    video.play().catch(() => {});
+  }
+}
   ngOnDestroy() {
     clearInterval(this.clockInterval);
     clearInterval(this.tickerInterval);
@@ -885,32 +955,24 @@ export class LoginComponent implements OnInit, OnDestroy {
     console.log('🔐 Attempting login:', { username: this.loginUsername });
     
     this.authService.login(this.loginUsername, this.loginPassword).subscribe({
-      next: (response) => { 
-        console.log('✅ Login success');
-        this.clientNotificationService.resetForNewUser();
-        this.loginLoading = false;
-        this.failedAttempts = 0;
-        
-        const user = response.user;
-        const userTable = user?.user_table || '';
-        
-        console.log('👤 User logged in:', { 
-          username: user?.username, 
-          role: user?.role, 
-          table: userTable,
-          department: user?.department,
-          branch_id: user?.branch_id
-        });
-        
-        // Determine redirect based on user table and role
-        // Users from 'new_user' table or with role 'user' go to client dashboard
-        // Users from 'users' table (EDP) or with admin/Technician roles go to admin dashboard
-        if (userTable === 'new_user' || user?.role === 'user') {
-          this.router.navigate(['/client/dashboard']);
-        } else {
-          this.router.navigate(['/dashboard']);
-        }
-      },
+    next: (response) => {
+  console.log('✅ Login success');
+  this.loginLoading = false;
+  this.failedAttempts = 0;
+
+  const user = response.user;
+  const userTable = user?.user_table || '';
+
+  // ✅ Sync notification context with the newly logged-in user
+  this.clientNotificationService.updateCurrentUser(user.id);
+  this.clientNotificationService.refreshForCurrentUser();
+
+  if (userTable === 'new_user' || user?.role === 'user') {
+    this.router.navigate(['/client/dashboard']);
+  } else {
+    this.router.navigate(['/dashboard']);
+  }
+},
       error: (error) => {
         console.error('❌ Login error:', error);
         this.loginLoading = false;

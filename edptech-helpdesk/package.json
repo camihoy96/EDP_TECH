@@ -32,6 +32,7 @@
     "tslib": "^2.3.0",
     "url-polyfill": "^1.1.14",
     "web-animations-js": "^2.3.2",
+    "xlsx": "^0.18.5",
     "zone.js": "~0.14.4"
   },
   "devDependencies": {

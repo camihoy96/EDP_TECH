@@ -34,6 +34,9 @@ export class NotificationService {
   private currentUserId: number | null = null;
   private currentUserName: string | null = null;
   private serverPolling: any;
+  private appInitialized = false;
+  private deletedNotificationIds: Set<string> = new Set();
+private DELETED_KEY = 'edp_deleted_notifications';
   private recentlyCreatedActions: Set<string> = new Set();
   constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.isBrowser = isPlatformBrowser(this.platformId);
@@ -379,18 +382,27 @@ private loadNotificationsFromServer(): void {
         if (!Array.isArray(data)) { console.log('📭 Server returned no notifications array'); return; }
         console.log('📥 Server notifications received:', data.length);
         
-        // ✅ Get current notifications from BehaviorSubject (has read states from localStorage)
-        const current = this.notificationsSubject.value;
-        const currentMap = new Map(current.map(n => [n.id, n]));
-        const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
-        const serverNotifications: Notification[] = [];
-        
-        data.forEach(n => {
-            const srvId = 'srv_' + n.id;
-            const existing = currentMap.get(srvId);
-            
-            if (existing) {
-                // ✅ CRITICAL: Keep existing read state (don't overwrite with server)
+        //  Get current notifications from BehaviorSubject (has read states from localStorage)
+       const current = this.notificationsSubject.value;
+const currentMap = new Map(current.map(n => [n.id, n]));
+const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
+const serverNotifications: Notification[] = [];
+
+// Get locally-deleted IDs
+const deletedIds = this.getDeletedNotificationIds();
+
+data.forEach(n => {
+    const srvId = 'srv_' + n.id;
+    
+    //  Skip notifications the user has dismissed
+    if (deletedIds.has(srvId) || deletedIds.has(String(n.id))) {
+        return;
+    }
+    
+    const existing = currentMap.get(srvId);
+    
+    if (existing) {
+                //  CRITICAL: Keep existing read state (don't overwrite with server)
                 serverNotifications.push(existing);
             } else {
                 // New notification from server - check allReadTimestamp
@@ -420,10 +432,15 @@ private loadNotificationsFromServer(): void {
                 });
             }
             
-            if (n.type === 'message' && !existing?.read && !this.shownToastIds.has(srvId)) {
-                this.shownToastIds.add(srvId);
-                this.showToastPopup('💬 New Message', n.message.substring(0, 60), undefined);
-            }
+           if (
+  n.type === 'message' &&
+  !existing?.read &&
+  !this.shownToastIds.has(srvId) &&
+  this.appInitialized   // ← only toast for new items after boot
+) {
+  this.shownToastIds.add(srvId);
+  this.showToastPopup('💬 New Message', n.message.substring(0, 60), undefined);
+}
         });
         
         const merged = [...serverNotifications, ...localNotifications];
@@ -434,8 +451,34 @@ private loadNotificationsFromServer(): void {
         });
         this.notificationsSubject.next(merged);
         this.saveNotifications(merged);
+        this.appInitialized = true;
     })
     .catch((err) => { console.log('⚠️ Failed to load server notifications:', err.message); });
+}
+private getDeletedKey(): string {
+  try {
+    const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    const userId = user.id || 'anonymous';
+    return `edp_deleted_notifications_${userId}`;
+  } catch {
+    return 'edp_deleted_notifications_anonymous';
+  }
+}
+
+private getDeletedNotificationIds(): Set<string> {
+  if (!this.isBrowser) return new Set();
+  try {
+    const stored = localStorage.getItem(this.getDeletedKey());
+    if (stored) return new Set(JSON.parse(stored));
+  } catch (e) {}
+  return new Set();
+}
+
+private saveDeletedNotificationIds(ids: Set<string>): void {
+  if (!this.isBrowser) return;
+  try {
+    localStorage.setItem(this.getDeletedKey(), JSON.stringify([...ids]));
+  } catch (e) {}
 }
   private loadCurrentUser(): void {
     try {
@@ -789,6 +832,10 @@ dismissNotification(id: string): void {
     
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
+
+    // ✅ Track as deleted so it doesn't come back on next fetch
+    this.deletedNotificationIds.add(id);
+    this.saveDeletedNotificationIds(this.deletedNotificationIds);
     
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
@@ -821,6 +868,32 @@ dismissNotification(id: string): void {
             console.error('❌ Failed to clear ticket notification on server:', err);
         });
     }
+}
+public handleLogout(): void {
+    this.notificationsSubject.next([]);
+    this.shownToastIds.clear();
+    this.deletedNotificationIds.clear();
+    this.notifiedEvents.clear();
+    this.recentlyCreatedActions.clear();
+    this.recentlyCreatedIds.clear();
+    this.currentUserId = null;
+    this.currentUserName = null;
+    this.appInitialized = false;
+
+    // Clear this user's storage keys
+    try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+                key.startsWith('edp_notifications_') ||
+                key.startsWith('edp_deleted_notifications_')
+            )) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
 }
  clearAll(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');

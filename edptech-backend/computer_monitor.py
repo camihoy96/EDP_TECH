@@ -152,10 +152,19 @@ def setup_database():
             bit VARCHAR(10),
             ram VARCHAR(50),
             storage VARCHAR(100),
-            processor VARCHAR(100),
+            processor VARCHAR(100),  -- ✅ ADDED
+            gpu VARCHAR(100),        -- ✅ ADDED
             antivirus VARCHAR(100),
             ms_license_type VARCHAR(50),
+            license_activation DATE,      -- ✅ ADDED
+            license_duration VARCHAR(20), -- ✅ ADDED
             license_expiry DATE,
+            office_activation VARCHAR(50),       -- ✅ ADDED
+            office_activation_date DATE,         -- ✅ ADDED
+            office_duration VARCHAR(20),         -- ✅ ADDED
+            office_expiry DATE,                  -- ✅ ADDED
+            av_last_update DATE,                 -- ✅ ADDED
+            av_next_update DATE,                 -- ✅ ADDED
             open_ports TEXT,
             services TEXT,
             host_type VARCHAR(50),
@@ -165,7 +174,6 @@ def setup_database():
             UNIQUE KEY unique_ip (ip_address)
         )
     ''')
-    
     conn.commit()
     cursor.close()
     conn.close()
@@ -1149,66 +1157,62 @@ def send_expiry_alerts(expiring: List[Dict], expired: List[Dict]):
 # ============================================
 def save_computer_info(info: Dict):
     """Save or update computer information in database."""
+    ip = info.get('ip_address', '')
+    if not ip:
+        logger.warning("Skipping save - no IP address provided")
+        return
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     
-    # Convert services dict to JSON string
-    services_json = ''
-    if 'services' in info and info['services']:
-        services_json = json.dumps(info['services'])
+    # ✅ Check if IP already exists
+    cursor.execute('SELECT id FROM computer_monitoring WHERE ip_address = %s', (ip,))
+    existing = cursor.fetchone()
     
-    open_ports_str = ''
-    if 'open_ports' in info and info['open_ports']:
-        if isinstance(info['open_ports'], list):
-            open_ports_str = ','.join(map(str, info['open_ports']))
-        else:
-            open_ports_str = info['open_ports']
-    
-    cursor.execute('''
-        INSERT INTO computer_monitoring 
-        (computer_name, user_name, department, ip_address, mac_address,
-         mac_vendor, os, os_version, bit, ram, storage, processor, antivirus,
-         ms_license_type, license_expiry, status, open_ports, services, host_type)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON DUPLICATE KEY UPDATE
-            computer_name = VALUES(computer_name),
-            user_name = VALUES(user_name),
-            mac_address = VALUES(mac_address),
-            mac_vendor = VALUES(mac_vendor),
-            os = VALUES(os),
-            os_version = VALUES(os_version),
-            status = VALUES(status),
-            open_ports = VALUES(open_ports),
-            services = VALUES(services),
-            host_type = VALUES(host_type),
-            last_checked = CURRENT_TIMESTAMP
-    ''', (
-        info.get('computer_name', ''),
-        info.get('user_name', ''),
-        info.get('department', ''),
-        info.get('ip_address', ''),
-        info.get('mac_address', ''),
-        info.get('vendor', ''),
-        info.get('os', ''),
-        info.get('os_version', ''),
-        info.get('bit', '64'),
-        info.get('ram', ''),
-        info.get('storage', ''),
-        info.get('processor', ''),
-        info.get('antivirus', ''),
-        info.get('ms_license_type', ''),
-        info.get('license_expiry', None),
-        info.get('status', 'online'),
-        open_ports_str,
-        services_json,
-        info.get('host_type', '')
-    ))
+    if existing:
+        # ✅ Only update status and last_checked, don't touch anything else
+        cursor.execute('''
+            UPDATE computer_monitoring SET
+                status = %s,
+                last_checked = CURRENT_TIMESTAMP
+            WHERE ip_address = %s
+        ''', (info.get('status', 'online'), ip))
+        logger.debug(f"Updated status for existing IP: {ip}")
+    else:
+        # ✅ Insert new record with scan data
+        cursor.execute('''
+            INSERT INTO computer_monitoring 
+            (computer_name, user_name, department, ip_address, mac_address,
+             mac_vendor, os, os_version, bit, ram, storage, processor, gpu, antivirus,
+             ms_license_type, license_expiry, status, open_ports, services, host_type)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ''', (
+            info.get('computer_name', ''),
+            info.get('user_name', ''),
+            info.get('department', ''),
+            ip,
+            info.get('mac_address', ''),
+            info.get('vendor', ''),
+            info.get('os', ''),
+            info.get('os_version', ''),
+            info.get('bit', '64'),
+            info.get('ram', ''),
+            info.get('storage', ''),
+            info.get('processor', ''),
+            info.get('gpu', ''),
+            info.get('antivirus', ''),
+            info.get('ms_license_type', ''),
+            info.get('license_expiry', None),
+            info.get('status', 'online'),
+            '',  # open_ports
+            '',  # services
+            info.get('host_type', '')
+        ))
+        logger.info(f"Inserted new computer with IP: {ip}")
     
     conn.commit()
     cursor.close()
     conn.close()
-
-
 def mark_offline_computers(active_ips: List[str]):
     """Mark computers as offline if they were not found in scan."""
     conn = get_db_connection()
@@ -1503,11 +1507,11 @@ if __name__ == '__main__':
         raise
 
     print("\n🚀 Starting Computer Monitor API server...")
-    print(f"   Local:    http://localhost:5001")
-    print(f"   Network 1: http://192.168.0.10:5001")
-    print(f"   Network 2: http://192.168.5.108:5001")
+    print(f"   Local:    http://localhost:5002")
+    print(f"   Network 1: http://192.168.0.10:5002")
+    print(f"   Network 2: http://192.168.5.108:5002")
 
-    app.run(host='0.0.0.0', port=5001,
+    app.run(host='0.0.0.0', port=5002,
         debug=True,
         use_reloader=False
     )
