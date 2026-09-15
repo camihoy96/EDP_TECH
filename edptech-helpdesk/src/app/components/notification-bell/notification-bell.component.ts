@@ -458,7 +458,7 @@ export class NotificationBellComponent implements OnInit, OnDestroy {
   private clickOutsideHandler: ((e: MouseEvent) => void) | null = null;
   private isBrowser: boolean;
   private previousUnreadCount = 0;
-
+private hasSeenFirstEmission = false;
  constructor(
     private notificationService: NotificationService,
     private router: Router,
@@ -476,49 +476,18 @@ ngOnInit() {
         userTable: currentUser.user_table,
         storageKey: `edp_notifications_${currentUser.id}`
     });
-    this.notificationService.notifications$.subscribe(notifications => {
-        const userId = this.currentUserId;
-        const userTable = this.getCurrentUserTable();
-        const compositeId = userId ? `${userTable}_${userId}` : null;
-        const isAdmin = userTable === 'users';
-        
-        console.log('🔔 Bell - User:', { userId, userTable, compositeId, isAdmin });
-        
-        const relevant = notifications.filter(n => {
-            if (n.countInBadge === false) return false;
-            if (n.read) return false; // Only count unread
-            
-            // ✅ Broadcast notifications (targetUserId = null) → ONLY for admin users
-            if (n.targetUserId == null) {
-                return isAdmin;
-            }
-            
-            // ✅ String composite ID → check for exclude_ prefix
-            if (typeof n.targetUserId === 'string') {
-                // ✅ Exclude notifications meant for others
-                if (n.targetUserId.startsWith('exclude_')) {
-                    const excludeId = n.targetUserId.replace('exclude_', '');
-                    return excludeId !== String(userId);  // Show if NOT the excluded user
-                }
-                return n.targetUserId === compositeId;
-            }
-            
-            // ✅ Numeric ID → match with current user ID (only for admin table)
-            if (typeof n.targetUserId === 'number') {
-                return isAdmin && n.targetUserId === userId;
-            }
-            
-            return false;
-        });
-        
+        this.notificationService.notifications$.subscribe(notifications => {
+        const relevant = notifications.filter(n =>
+            !n.read && this.isRelevantToCurrentUser(n)
+        );
         const newUnread = relevant.length;
-        console.log('🔔 Bell - Unread count:', newUnread, 'of', notifications.length);
-        
-        if (newUnread > this.previousUnreadCount && this.previousUnreadCount >= 0) {
+
+        if (this.hasSeenFirstEmission && newUnread > this.previousUnreadCount) {
             this.triggerWiggle();
         }
+        this.hasSeenFirstEmission = true;
         this.previousUnreadCount = newUnread;
-        
+
         this.notifications = notifications;
         this.unreadCount = newUnread;
     });
@@ -535,54 +504,43 @@ ngOnInit() {
 }
 
 get filteredNotifications(): Notification[] {
-    const userId = this.currentUserId;
-    const userTable = this.getCurrentUserTable();
-    const compositeId = userId ? `${userTable}_${userId}` : null;
-    const isAdmin = userTable === 'users';
-    
-    let list = this.notifications.filter(n => {
-        // Skip notifications that shouldn't appear in the bell
-        if (n.countInBadge === false) return false;
-        
-        // ✅ Broadcast notifications → ONLY for admin users
-        if (n.targetUserId == null) {
-            return isAdmin;
-        }
-        
-        // ✅ String composite ID → exact match
-        if (typeof n.targetUserId === 'string') {
-    // ✅ Exclude notifications meant for others
-    if (n.targetUserId.startsWith('exclude_')) {
-        const excludeId = n.targetUserId.replace('exclude_', '');
-        return excludeId !== String(userId);  // Show if NOT the excluded user
-    }
-    return n.targetUserId === compositeId;
-}
-        
-        // ✅ Numeric ID → match with current user (only for admin table)
-        if (typeof n.targetUserId === 'number') {
-            return isAdmin && n.targetUserId === userId;
-        }
-        
-        return false;
-    });
-    
+    let list = this.notifications.filter(n => this.isRelevantToCurrentUser(n));
     if (this.activeFilter === 'unread') list = list.filter(n => !n.read);
     if (this.activeFilter === 'error') list = list.filter(n => n.type === 'error' || n.type === 'warning');
-    
     return list.slice(0, this.visibleLimit);
 }
 private get currentUserId(): number | undefined {
-    return this.authService.getCurrentUser()?.id;
+  return this.authService.getCurrentUser()?.id;
 }
 
 private getCurrentUserTable(): string {
-    try {
-      const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      // ✅ Check multiple possible fields for user table
-      return user.user_table || user.userTable || user.table || 'new_user';
-    } catch { return 'new_user'; }
+  const u: any = this.authService.getCurrentUser() ?? {};
+  return u.user_table || u.userTable || u.table || 'users';
 }
+private isRelevantToCurrentUser(n: Notification): boolean {
+  if (n.countInBadge === false) return false;
+  const userId = this.currentUserId;
+  const userTable = this.getCurrentUserTable();
+  const compositeId = userId ? `${userTable}_${userId}` : null;
+  const isAdmin = userTable === 'users';
+
+  if (n.targetUserId == null) return isAdmin;
+
+  if (typeof n.targetUserId === 'string') {
+    if (n.targetUserId.startsWith('exclude_')) {
+      const excludeId = n.targetUserId.replace('exclude_', '');
+      return excludeId !== String(userId);
+    }
+    return n.targetUserId === compositeId;
+  }
+
+  if (typeof n.targetUserId === 'number') {
+    return isAdmin && n.targetUserId === userId;
+  }
+
+  return false;
+}
+
   ngOnDestroy() {
     if (this.isBrowser && this.clickOutsideHandler) {
       document.removeEventListener('click', this.clickOutsideHandler);
@@ -633,7 +591,7 @@ cancelClearAll() {
   }
 
 onNotificationClick(notification: Notification) {
-    // ✅ Just mark as read, no navigation
+    //  Just mark as read, no navigation
     this.notificationService.markAsRead(notification.id);
     this.showDropdown = false;
 }
@@ -644,7 +602,7 @@ onNotificationClick(notification: Notification) {
   getIcon(type: string): string {
     const icons: Record<string, string> = {
       info:    'ℹ️',
-      success: '✅',
+      success: '',
       warning: '⚠️',
       error:   '🚨'
     };

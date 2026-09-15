@@ -213,6 +213,7 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
   private clickOutsideHandler: ((e: MouseEvent) => void) | null = null;
   private isBrowser: boolean;
   private previousUnreadCount = 0;
+private hasSeenFirstEmission = false;
 
   constructor(
     private clientNotificationService: ClientNotificationService,
@@ -224,25 +225,27 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit() {
-    this.clientNotificationService.notifications$.subscribe(notifications => {
-      const unread = notifications.filter(n => !n.read);
-      const newUnread = unread.length;
+  this.clientNotificationService.notifications$.subscribe(notifications => {
+    const newUnread = notifications.filter(n => !n.read).length;
 
-      if (newUnread > this.previousUnreadCount && this.previousUnreadCount >= 0) {
-        this.triggerWiggle();
-      }
-      this.previousUnreadCount = newUnread;
-      this.notifications = notifications;
-      this.unreadCount = newUnread;
-    });
-    if (this.isBrowser) {
-      this.clickOutsideHandler = (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (!target.closest('.notif-container')) { this.showDropdown = false; }
-      };
-      document.addEventListener('click', this.clickOutsideHandler);
+    if (this.hasSeenFirstEmission && newUnread > this.previousUnreadCount) {
+      this.triggerWiggle();
     }
+    this.hasSeenFirstEmission = true;
+    this.previousUnreadCount = newUnread;
+
+    this.notifications = notifications;
+    this.unreadCount = newUnread;
+  });
+
+  if (this.isBrowser) {
+    this.clickOutsideHandler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.notif-container')) this.showDropdown = false;
+    };
+    document.addEventListener('click', this.clickOutsideHandler);
   }
+}
 
   get filteredNotifications(): ClientNotification[] {
     let list = this.notifications;
@@ -278,13 +281,12 @@ export class ClientNotificationBellComponent implements OnInit, OnDestroy {
 
   markAllRead() { this.clientNotificationService.markAllAsRead(); }
 
-  clearAll() {
-    if (confirm('Clear all notifications?')) {
-      this.clientNotificationService.clearAll();
-      localStorage.removeItem('client_ticket_notifications');
-      this.showDropdown = false;
-    }
+ clearAll() {
+  if (confirm('Clear all notifications?')) {
+    this.clientNotificationService.clearAll();
+    this.showDropdown = false;
   }
+}
 
   dismissNotification(event: MouseEvent, id: string) {
     event.stopPropagation();

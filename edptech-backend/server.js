@@ -8028,12 +8028,29 @@ app.post('/api/messages', uploadChat.single('file'), async (req, res) => {
 // PUT - Mark a notification as read
 app.put('/api/notifications/:id/read', async (req, res) => {
     try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        
-        const { id } = req.params;
-        await pool.query('UPDATE notifications SET is_read = 1 WHERE id = ?', [id]);
-        res.json({ success: true });
+        if (!req.decodedUser) {
+            console.log('❌ PUT /notifications/:id/read — no decodedUser');
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+
+        // Strip any client-side prefix just in case
+        const id = String(req.params.id).replace(/^srv_/, '').replace(/^ticket_/, '');
+
+        console.log(`📥 PUT /notifications/${id}/read — user: ${req.decodedUser.username}`);
+
+        const [result] = await pool.query(
+            'UPDATE notifications SET is_read = 1 WHERE id = ? AND username = ?',
+            [id, req.decodedUser.username]
+        );
+
+        console.log(`✅ Updated ${result.affectedRows} row(s)`);
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ error: 'Notification not found' });
+        }
+        res.json({ success: true, affectedRows: result.affectedRows });
     } catch (error) {
+        console.error('❌ Error marking notification as read:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -8153,11 +8170,59 @@ app.get('/api/notifications', async (req, res) => {
 app.delete('/api/notifications/:id', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        
-        const id = req.params.id.replace('srv_', '');
-        await pool.query('DELETE FROM notifications WHERE id = ?', [id]);
-        res.json({ success: true });
+
+        const id = String(req.params.id).replace(/^srv_/, '').replace(/^ticket_/, '');
+
+        console.log(`📥 DELETE /notifications/${id} — user: ${req.decodedUser.username}`);
+
+        const [result] = await pool.query(
+            'DELETE FROM notifications WHERE id = ? AND username = ?',
+            [id, req.decodedUser.username]
+        );
+
+        console.log(`✅ Deleted ${result.affectedRows} row(s)`);
+        res.json({ success: true, affectedRows: result.affectedRows });
     } catch (error) {
+        console.error('❌ Error deleting notification:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// PUT - Mark ALL of the current user's notifications as read
+app.put('/api/notifications/mark-all-read', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+
+        console.log(`📥 PUT /notifications/mark-all-read — user: ${req.decodedUser.username}`);
+
+        const [result] = await pool.query(
+            'UPDATE notifications SET is_read = 1 WHERE username = ? AND is_read = 0',
+            [req.decodedUser.username]
+        );
+
+        console.log(`✅ Marked ${result.affectedRows} row(s) as read`);
+        res.json({ success: true, affectedRows: result.affectedRows });
+    } catch (error) {
+        console.error('❌ Error marking all as read:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// PUT - Delete ALL of the current user's notifications
+app.put('/api/notifications/clear-all', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+
+        console.log(`📥 PUT /notifications/clear-all — user: ${req.decodedUser.username}`);
+
+        const [result] = await pool.query(
+            'DELETE FROM notifications WHERE username = ?',
+            [req.decodedUser.username]
+        );
+
+        console.log(`✅ Cleared ${result.affectedRows} row(s)`);
+        res.json({ success: true, affectedRows: result.affectedRows });
+    } catch (error) {
+        console.error('❌ Error clearing notifications:', error);
         res.status(500).json({ error: error.message });
     }
 });

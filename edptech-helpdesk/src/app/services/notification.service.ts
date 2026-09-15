@@ -35,25 +35,126 @@ export class NotificationService {
   private currentUserName: string | null = null;
   private serverPolling: any;
   private appInitialized = false;
-  private deletedNotificationIds: Set<string> = new Set();
-private DELETED_KEY = 'edp_deleted_notifications';
+  private audioCtx: AudioContext | null = null;
+  private audioUnlocked = false;
+  private readonly NOTIF_SOUND_URL = 'assets/sounds/notification.wav';
   private recentlyCreatedActions: Set<string> = new Set();
-  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
-    this.isBrowser = isPlatformBrowser(this.platformId);
-    if (this.isBrowser) {
-      this.injectToastStyles();
-      this.createToastContainer();
-      this.loadCurrentUser();
-      this.startPopupInterval();
-      this.loadNotifications();
-      this.loadNotificationsFromServer();
-      this.serverPolling = setInterval(() => this.loadNotificationsFromServer(), 5000);
-      setInterval(() => this.loadTicketNotificationsFromServer(), 5000);
+constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+  this.isBrowser = isPlatformBrowser(this.platformId);
+  if (this.isBrowser) {
+    this.purgeLegacyStorage();
+    this.injectToastStyles();
+    this.createToastContainer();
+    this.loadCurrentUser();
+    this.startPopupInterval();
+
+    // 🔊 Unlock audio on first user interaction (browser autoplay policy)
+    const unlock = () => this.unlockAudio();
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    document.addEventListener('touchstart', unlock, { once: true });
+
+    setTimeout(() => {
+      this.loadAllNotificationsFromServer().then(() => {
+        this.appInitialized = true;
+      });
+      this.serverPolling = setInterval(() => this.loadAllNotificationsFromServer(), 5000);
+    }, 1500);
+  }
+}
+
+  private purgeLegacyStorage(): void {
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('edp_notifications_') || k.startsWith('edp_deleted_notifications_'))) {
+          keys.push(k);
+        }
+      }
+      keys.forEach(k => localStorage.removeItem(k));
+      localStorage.removeItem('edp_notifications_all_read_timestamp');
+    } catch {}
+  }
+
+  private async loadAllNotificationsFromServer(): Promise<void> {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+
+    try {
+      const [notifRes, ticketRes] = await Promise.all([
+        fetch(`${environment.apiUrl}/api/notifications`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${environment.apiUrl}/api/ticket-notifications`, { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      const notifData: any[] = notifRes.ok ? await notifRes.json() : [];
+      const ticketData: any[] = ticketRes.ok ? await ticketRes.json() : [];
+      const current = this.notificationsSubject.value;
+      const currentMap = new Map(current.map(n => [n.id, n]));
+      const seen = new Set<string>();
+      const merged: Notification[] = [];
+      (Array.isArray(notifData) ? notifData : []).forEach(n => {
+        const srvId = 'srv_' + n.id;
+        if (seen.has(srvId)) return;
+        seen.add(srvId);
+        const existing = currentMap.get(srvId);
+        const mapped: Notification = {
+          id: srvId,
+          type: n.type || 'info',
+          title: n.title,
+          message: n.message,
+          ticketId: n.ticket_id,
+          ticketNumber: n.ticket_number,
+          jobOrderId: n.job_order_id,
+          jobOrderNumber: n.job_order_number,
+          targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
+          countInBadge: true,
+          timestamp: new Date(n.created_at),
+          read: n.is_read === 1,
+        };
+        if (existing) mapped.read = mapped.read || existing.read;
+        merged.push(mapped);
+        if (this.appInitialized && !mapped.read && !this.shownToastIds.has(srvId)) {
+          this.shownToastIds.add(srvId);
+          this.showToastPopup(mapped.title, mapped.message, mapped.ticketId || mapped.jobOrderId);
+        }
+      });
+      (Array.isArray(ticketData) ? ticketData : []).forEach(n => {
+        if (n.cleared_at) return;
+        const tId = 'ticket_' + n.id;
+        if (seen.has(tId)) return;
+        seen.add(tId);
+        const existing = currentMap.get(tId);
+        const mapped: Notification = {
+          id: tId,
+          type: n.type || 'info',
+          title: n.title,
+          message: n.message,
+          ticketId: n.ticket_id,
+          ticketNumber: n.ticket_number,
+          targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : (n.user_id === null && n.user_table === null ? null : undefined),
+          countInBadge: true,
+          timestamp: new Date(n.created_at),
+          read: n.is_read === 1,
+        };
+        if (existing) mapped.read = mapped.read || existing.read;
+        merged.push(mapped);
+      });
+      current
+        .filter(n => !n.id.startsWith('srv_') && !n.id.startsWith('ticket_'))
+        .forEach(n => {
+          if (!seen.has(n.id)) {
+            seen.add(n.id);
+            merged.push(n);
+          }
+        });
+      merged.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      this.notificationsSubject.next(merged);
+    } catch (err: any) {
+      console.warn('⚠️ Notification fetch failed:', err.message);
     }
   }
 
   // ── JOB ORDER NOTIFICATIONS ──
-
   /**
    * Called when a new Job Order is submitted
    * Notifies: Admin users (broadcast)
@@ -62,7 +163,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-new-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'info',
@@ -73,13 +173,43 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     // Show toast popup for admin users
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('📋 New Job Order', `${submittedByName} submitted #${jo.job_order_number}`, undefined);
     }
   }
+/** Unlock audio on the first user interaction (browser autoplay policy). */
+private unlockAudio(): void {
+  if (!this.isBrowser || this.audioUnlocked) return;
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
 
+    if (!this.audioCtx) {
+      this.audioCtx = new Ctx() as AudioContext;
+    }
+    const ctx = this.audioCtx;
+    if (!ctx) return;              // ← explicit guard
+
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+
+    this.audioUnlocked = true;
+  } catch {}
+}
+
+/** Play the notification sound (short, non-blocking, safe if it fails). */
+private playNotificationSound(): void {
+  if (!this.isBrowser) return;
+  try {
+    const audio = new Audio(this.NOTIF_SOUND_URL);
+    audio.volume = 0.5;
+    audio.play().catch(() => {
+      // Autoplay might be blocked before first user gesture; ignore.
+    });
+  } catch {}
+}
   /**
    * Called when a Job Order is forwarded
    * Notifies: Admin users (broadcast) + Creator (status update)
@@ -88,7 +218,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-forwarded-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the submitter (creator)
     if (submittedById) {
       this.addBellNotification({
@@ -101,7 +230,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'info',
@@ -112,7 +240,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('📤 Job Order Forwarded', `${forwardedByName} forwarded #${jo.job_order_number} to ${toBranchName} - ${toDeptName}`, undefined);
     }
@@ -126,7 +253,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-received-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the submitter (creator)
     if (submittedById) {
       this.addBellNotification({
@@ -139,7 +265,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'success',
@@ -150,7 +275,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('📥 Job Order Received', `${receivedByName} received #${jo.job_order_number}`, undefined);
     }
@@ -164,7 +288,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-assigned-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the submitter (creator)
     if (submittedById) {
       this.addBellNotification({
@@ -177,7 +300,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'info',
@@ -188,7 +310,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('👤 Job Order Assigned', `${assignedByName} assigned #${jo.job_order_number} to ${assignedToNames}`, undefined);
     }
@@ -202,7 +323,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-reassigned-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the submitter (creator)
     if (submittedById) {
       this.addBellNotification({
@@ -215,7 +335,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'info',
@@ -226,7 +345,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('🔄 Job Order Reassigned', `${reassignedByName} reassigned #${jo.job_order_number} to ${assignedToNames}`, undefined);
     }
@@ -240,7 +358,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-done-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the submitter (creator)
     if (submittedById) {
       this.addBellNotification({
@@ -253,7 +370,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'success',
@@ -264,7 +380,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('✅ Job Order Completed', `${doneByName} marked #${jo.job_order_number} as Done`, undefined);
     }
@@ -278,7 +393,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-fwd-assigned-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the forwarding department (original creator)
     if (forwardingSubmittedById) {
       this.addBellNotification({
@@ -291,7 +405,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'info',
@@ -302,7 +415,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('👤 Forwarded Job Order Assigned', `${assignedByName} assigned forwarded #${jo.job_order_number} to ${assignedToNames}`, undefined);
     }
@@ -316,7 +428,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
     const key = `jo-fwd-done-${jo.id || jo.job_order_number}`;
     if (this.notifiedEvents.has(key)) return;
     this.notifiedEvents.add(key);
-
     // Notify the forwarding department (original creator)
     if (forwardingSubmittedById) {
       this.addBellNotification({
@@ -329,7 +440,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
         countInBadge: true,
       });
     }
-
     // Broadcast for admin users
     this.addBellNotification({
       type: 'success',
@@ -340,14 +450,12 @@ private DELETED_KEY = 'edp_deleted_notifications';
       targetUserId: null,
       countInBadge: true,
     });
-
     if (this.getCurrentUserTable() === 'users') {
       this.showToastPopup('✅ Forwarded Job Order Completed', `${doneByName} marked forwarded #${jo.job_order_number} as Done`, undefined);
     }
   }
 
   // ── EXISTING METHODS (unchanged) ──
-
   private getStorageKey(): string {
     try {
       const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -367,94 +475,6 @@ private DELETED_KEY = 'edp_deleted_notifications';
 
   private shownToastIds: Set<string> = new Set();
 
-private loadNotificationsFromServer(): void {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) return;
-    
-    // ✅ Track if user has marked all as read
-    const allReadTimestamp = localStorage.getItem('edp_notifications_all_read_timestamp');
-    
-    fetch(`${environment.apiUrl}/api/notifications`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => { if (!res.ok) throw new Error('Failed to fetch'); return res.json(); })
-    .then((data: any[]) => {
-        if (!Array.isArray(data)) { console.log('📭 Server returned no notifications array'); return; }
-        console.log('📥 Server notifications received:', data.length);
-        
-        //  Get current notifications from BehaviorSubject (has read states from localStorage)
-       const current = this.notificationsSubject.value;
-const currentMap = new Map(current.map(n => [n.id, n]));
-const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
-const serverNotifications: Notification[] = [];
-
-// Get locally-deleted IDs
-const deletedIds = this.getDeletedNotificationIds();
-
-data.forEach(n => {
-    const srvId = 'srv_' + n.id;
-    
-    //  Skip notifications the user has dismissed
-    if (deletedIds.has(srvId) || deletedIds.has(String(n.id))) {
-        return;
-    }
-    
-    const existing = currentMap.get(srvId);
-    
-    if (existing) {
-                //  CRITICAL: Keep existing read state (don't overwrite with server)
-                serverNotifications.push(existing);
-            } else {
-                // New notification from server - check allReadTimestamp
-                let isRead = n.is_read === 1;
-                if (allReadTimestamp) {
-                    const createdAt = new Date(n.created_at).getTime();
-                    const allReadTime = parseInt(allReadTimestamp);
-                    // If notification was created before "mark all read", mark it as read
-                    if (createdAt <= allReadTime) {
-                        isRead = true;
-                    }
-                }
-                
-                serverNotifications.push({
-                    id: srvId,
-                    type: n.type || 'info',
-                    title: n.title,
-                    message: n.message,
-                    ticketId: n.ticket_id,
-                    ticketNumber: n.ticket_number,
-                    jobOrderId: n.job_order_id,
-                    jobOrderNumber: n.job_order_number,
-                    targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : null,
-                    countInBadge: true,
-                    timestamp: new Date(n.created_at),
-                    read: isRead,
-                });
-            }
-            
-           if (
-  n.type === 'message' &&
-  !existing?.read &&
-  !this.shownToastIds.has(srvId) &&
-  this.appInitialized   // ← only toast for new items after boot
-) {
-  this.shownToastIds.add(srvId);
-  this.showToastPopup('💬 New Message', n.message.substring(0, 60), undefined);
-}
-        });
-        
-        const merged = [...serverNotifications, ...localNotifications];
-        console.log('🔔 Merged notifications:', { 
-            server: serverNotifications.length, 
-            local: localNotifications.length, 
-            total: merged.length 
-        });
-        this.notificationsSubject.next(merged);
-        this.saveNotifications(merged);
-        this.appInitialized = true;
-    })
-    .catch((err) => { console.log('⚠️ Failed to load server notifications:', err.message); });
-}
 private getDeletedKey(): string {
   try {
     const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -813,12 +833,9 @@ public addBellNotification(notif: Partial<Notification>): void {
     const isDuplicate = current.find(n => n.id === newNotif.id || (n.title === newNotif.title && n.message === newNotif.message && n.ticketId === newNotif.ticketId));
     if (isDuplicate) { console.log('⚠️ Duplicate notification skipped:', newNotif.title); return; }
     console.log('🔔 ADDING BELL NOTIFICATION:', { id: newNotif.id, title: newNotif.title, targetUserId: newNotif.targetUserId });
-    const updated = [newNotif, ...current].slice(0, 100);
+   const updated = [newNotif, ...current].slice(0, 100);
     this.notificationsSubject.next(updated);
-    this.saveNotifications(updated);
-    
-    // ✅ Save to server for ALL notifications EXCEPT exclude_ ones
-    // null (broadcast), string (targeted), and number (targeted) should all be saved
+ 
     const targetId = newNotif.targetUserId;
     if (!targetId || !String(targetId).startsWith('exclude_')) {
         this.saveNotificationToServer(newNotif);
@@ -830,49 +847,26 @@ dismissNotification(id: string): void {
     // ✅ Remove from local state
     const updated = current.filter(n => n.id !== id);
     
-    this.notificationsSubject.next(updated);
-    this.saveNotifications(updated);
+       this.notificationsSubject.next(updated);
 
-    // ✅ Track as deleted so it doesn't come back on next fetch
-    this.deletedNotificationIds.add(id);
-    this.saveDeletedNotificationIds(this.deletedNotificationIds);
-    
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
-    
-    // ✅ DELETE from server (not just mark as read - since it's user-specific)
+
     if (id.startsWith('srv_')) {
-        const serverId = id.replace('srv_', '');
-        fetch(`${environment.apiUrl}/api/notifications/${serverId}`, { 
-            method: 'DELETE', 
-            headers: { 'Authorization': `Bearer ${token}` } 
-        }).then(() => {
-            console.log('✅ Server notification deleted:', serverId);
-        }).catch(err => {
-            console.error('❌ Failed to delete notification on server:', err);
-        });
-    }
-    
-    if (id.startsWith('ticket_')) {
-        const ticketNotifId = id.replace('ticket_', '');
-        fetch(`${environment.apiUrl}/api/ticket-notifications/${ticketNotifId}/read`, { 
-            method: 'PUT',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ cleared: true })
-        }).then(() => {
-            console.log('✅ Ticket notification cleared on server:', ticketNotifId);
-        }).catch(err => {
-            console.error('❌ Failed to clear ticket notification on server:', err);
-        });
+      fetch(`${environment.apiUrl}/api/notifications/${id.replace('srv_', '')}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.error('❌ delete failed:', err));
+    } else if (id.startsWith('ticket_')) {
+      fetch(`${environment.apiUrl}/api/ticket-notifications/${id.replace('ticket_', '')}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.error('❌ delete failed:', err));
     }
 }
 public handleLogout(): void {
     this.notificationsSubject.next([]);
     this.shownToastIds.clear();
-    this.deletedNotificationIds.clear();
     this.notifiedEvents.clear();
     this.recentlyCreatedActions.clear();
     this.recentlyCreatedIds.clear();
@@ -895,35 +889,24 @@ public handleLogout(): void {
         keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (e) {}
 }
- clearAll(): void {
+   clearAll(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-     localStorage.removeItem('edp_notifications_all_read_timestamp');
     if (token) {
-        // Mark all ticket notifications as cleared for THIS user
-        fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, { 
-            method: 'PUT', 
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        }).then(() => {
-            console.log('✅ Clear-all request sent to server');
-        }).catch(err => {
-            console.error('❌ Clear-all failed:', err);
-        });
+      fetch(`${environment.apiUrl}/api/notifications/clear-all`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.error('❌ notifications clear-all failed:', err));
+
+      fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.error('❌ ticket-notifications clear-all failed:', err));
     }
-    
-    // Clear localStorage for this user
-    localStorage.removeItem(this.getStorageKey());
-    
-    // Clear the BehaviorSubject immediately
     this.notificationsSubject.next([]);
-    
-    // Clear all tracked sets
     this.notifiedEvents.clear();
     this.recentlyCreatedActions.clear();
     this.shownToastIds.clear();
-}
+  }
 
 // Helper method to check if a notification belongs to the current user
 private notificationBelongsToCurrentUser(n: Notification): boolean {
@@ -950,9 +933,12 @@ private notificationBelongsToCurrentUser(n: Notification): boolean {
   // ── TOAST POPUP ──
 
   private showToastPopup(title: string, message: string, ticketId?: number): void {
-    if (!this.isBrowser) return;
-    if (!this.toastContainer) this.createToastContainer();
-    if (!this.toastContainer) return;
+  if (!this.isBrowser) return;
+  if (document.hidden) {
+    this.playNotificationSound();
+  }
+  if (!this.toastContainer) this.createToastContainer();
+  if (!this.toastContainer) return;
     const toast = document.createElement('div');
     toast.className = 'notif-toast';
     toast.style.position = 'relative';
@@ -1052,81 +1038,7 @@ private saveNotificationToServer(notif: Notification): void {
         })
     }).catch(err => console.log('Failed to save ticket notification:', err));
 }
-private loadTicketNotificationsFromServer(): void {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token) return;
-    
-    // ✅ Track if user has marked all as read
-    const allReadTimestamp = localStorage.getItem('edp_notifications_all_read_timestamp');
-    
-    fetch(`${environment.apiUrl}/api/ticket-notifications`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => res.json())
-    .then((data: any[]) => {
-        if (!Array.isArray(data)) return;
-        
-        console.log('📥 Server ticket notifications received:', data.length);
-        
-        const current = this.notificationsSubject.value;
-        const currentMap = new Map(current.map(n => [n.id, n]));
-        const newNotifications: Notification[] = [];
-        
-        data.forEach(n => {
-            if (n.cleared_at) {
-                console.log('⏭️ Skipping cleared notification:', n.id);
-                return;
-            }
-            
-            const tId = 'ticket_' + n.id;
-            
-            // ✅ CRITICAL: Check if already exists locally (preserve read state)
-            const existing = currentMap.get(tId);
-            if (existing) {
-                newNotifications.push(existing);
-                return;
-            }
-            
-            if (this.recentlyCreatedActions.has(`status-${n.ticket_id}-${n.type || 'info'}`)) {
-                return;
-            }
-            if (this.recentlyCreatedIds.has(tId)) return;
-            
-            // ✅ Check if it was created after "mark all read" timestamp
-            let isRead = n.is_read === 1;
-            if (allReadTimestamp && !isRead) {
-                const createdAt = new Date(n.created_at).getTime();
-                const allReadTime = parseInt(allReadTimestamp);
-                if (createdAt <= allReadTime) {
-                    isRead = true;
-                }
-            }
-            
-            newNotifications.push({
-                id: tId,
-                type: n.type || 'info',
-                title: n.title,
-                message: n.message,
-                ticketId: n.ticket_id,
-                ticketNumber: n.ticket_number,
-                targetUserId: n.user_table && n.user_id ? `${n.user_table}_${n.user_id}` : (n.user_id === null && n.user_table === null ? null : undefined),
-                countInBadge: true,
-                timestamp: new Date(n.created_at),
-                read: isRead,
-            });
-        });
-        
-        // ✅ Keep other local notifications (non-server ones)
-        const localOnly = current.filter(n => 
-            !n.id.startsWith('ticket_') && !n.id.startsWith('srv_')
-        );
-        
-        const updated = [...newNotifications, ...localOnly].slice(0, 100);
-        this.notificationsSubject.next(updated);
-        this.saveNotifications(updated);
-    })
-    .catch(err => console.log('Failed to load ticket notifications:', err));
-}
+
   // In your notification service
 getComputerMonitoringNotifications(): number {
   const notifications = JSON.parse(localStorage.getItem('computer_notifications') || '[]');
@@ -1134,46 +1046,44 @@ getComputerMonitoringNotifications(): number {
 }
   // ── PUBLIC MUTATIONS ──
 
-  markAsRead(id: string): void { 
-    const current = this.notificationsSubject.value; 
-    const idx = current.findIndex(n => n.id === id); 
-    if (idx === -1) return; 
-    const updated = [...current]; 
-    updated[idx] = { ...updated[idx], read: true }; 
-    this.notificationsSubject.next(updated); 
-    this.saveNotifications(updated); 
-  }
+   markAsRead(id: string): void {
+    const current = this.notificationsSubject.value;
+    const idx = current.findIndex(n => n.id === id);
+    if (idx === -1) return;
+    const updated = [...current];
+    updated[idx] = { ...updated[idx], read: true };
+    this.notificationsSubject.next(updated);
 
-markAllAsRead(): void {
-    // Store timestamp of when "mark all read" was clicked
-    if (this.isBrowser) {
-        localStorage.setItem('edp_notifications_all_read_timestamp', Date.now().toString());
-    }
-    
-    const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true })); 
-    this.notificationsSubject.next(updated); 
-    this.saveNotifications(updated); 
-    
-    // ✅ Also mark all as read on the server
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
-    
+    if (id.startsWith('srv_')) {
+      fetch(`${environment.apiUrl}/api/notifications/${id.replace('srv_', '')}/read`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    } else if (id.startsWith('ticket_')) {
+      fetch(`${environment.apiUrl}/api/ticket-notifications/${id.replace('ticket_', '')}/read`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
+    }
+  }
+
+  markAllAsRead(): void {
+    const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true }));
+    this.notificationsSubject.next(updated);
+
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
     fetch(`${environment.apiUrl}/api/notifications/mark-all-read`, {
-        method: 'PUT',
-        headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        }
-    }).catch(err => console.log('Failed to mark server notifications as read:', err));
-    
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => {});
     fetch(`${environment.apiUrl}/api/ticket-notifications/mark-all-read`, {
-        method: 'PUT',
-        headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        }
-    }).catch(err => console.log('Failed to mark ticket notifications as read:', err));
-}
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(() => {});
+  }
   getUnreadCount(): number { 
     return this.notificationsSubject.value.filter(n => !n.read && n.countInBadge !== false).length; 
   }

@@ -41,21 +41,44 @@ export class ClientNotificationService {
   private deletedNotificationIds: Set<string> = new Set();
 private readonly DELETED_KEY = 'client_deleted_notifications';
  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
-    this.isBrowser = isPlatformBrowser(this.platformId);
-    if (this.isBrowser) {
-      this.injectToastStyles();
-      this.createToastContainer();
-      this.loadCurrentUser();
-      this.loadShownToastIds(); // ✅ Add this
-      this.loadNotificationsFromStorage();
-      setTimeout(() => {
+  this.isBrowser = isPlatformBrowser(this.platformId);
+  if (this.isBrowser) {
+    // One-time cleanup of legacy localStorage keys
+    this.purgeLegacyStorage();
+
+    this.injectToastStyles();
+    this.createToastContainer();
+    this.loadCurrentUser();
+
+    // NO storage hydration. Fetch from DB only.
+    setTimeout(() => {
+      this.loadNotificationsFromServer().then(() => {
+        this.appInitialized = true;  // only AFTER first successful DB load
+      });
+      this.serverPolling = setInterval(() => {
+        this.loadCurrentUser();
         this.loadNotificationsFromServer();
-        this.serverPolling = setInterval(() => {
-          this.loadCurrentUser();
-          this.loadNotificationsFromServer();
-        }, 30000);
-      }, 2000);
+      }, 30000);
+    }, 1500);
+  }
+}
+
+private purgeLegacyStorage(): void {
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && (
+        k.startsWith('client_notifications_') ||
+        k.startsWith('client_ticket_notifications_') ||
+        k.startsWith('client_deleted_notifications') ||
+        k === 'client_shown_toast_ids'
+      )) {
+        keysToRemove.push(k);
+      }
     }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch {}
 }
   // ── CURRENT USER ──
 private loadCurrentUser(): void {
@@ -124,8 +147,6 @@ public handleLogout(): void {
     this.ticketNotifications = [];
     this.shownToastIds.clear();
     this.deletedNotificationIds.clear();
-    this.saveShownToastIds();
-    this.saveDeletedNotificationIds(this.deletedNotificationIds);
     this.currentUserId = null;
     this.currentUserDeptId = null;
     this.currentUserBranchId = null;
@@ -159,20 +180,8 @@ updateCurrentUser(userId: number): void {
 }
 public refreshForCurrentUser(): void {
   if (!this.isBrowser) return;
-  
-  // Reload user context from localStorage
   this.loadCurrentUser();
-  
-  // Reload shown toast IDs for this user
-  this.loadShownToastIds();
-  
-  // Reload notifications from localStorage first (instant UI feedback)
-  this.loadNotificationsFromStorage();
-  
-  // Then fetch fresh from server (respects deletion set)
-  if (this.currentUserId) {
-    this.loadNotificationsFromServer();
-  }
+  if (this.currentUserId) this.loadNotificationsFromServer();
 }
   // ── TICKET NOTIFICATIONS (EXISTING METHODS) ──
 
@@ -921,104 +930,57 @@ public refreshForCurrentUser(): void {
 
   // ── SERVER POLLING ──
 
-  private loadNotificationsFromServer(): void {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (!token || !this.currentUserId) return;
+  private async loadNotificationsFromServer(): Promise<void> {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (!token || !this.currentUserId) return;
 
-    fetch(`${environment.apiUrl}/api/client-notifications/${this.currentUserId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to fetch');
-      return res.json();
-    })
-    .then((data: any[]) => {
-      if (!Array.isArray(data)) return;
+  try {
+    const res = await fetch(
+      `${environment.apiUrl}/api/client-notifications/${this.currentUserId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: any[] = await res.json();
+    if (!Array.isArray(data)) return;
 
-      // ✅ Get locally deleted notification IDs
-      const deletedIds = this.getDeletedNotificationIds();
-      
-      const current = this.notificationsSubject.value;
-      const currentMap = new Map(current.map(n => [n.id, n]));
-      const localNotifications = current.filter(n => !n.id.startsWith('srv_'));
-      const serverNotifications: ClientNotification[] = [];
+    const serverNotifications: ClientNotification[] = data.map(n => ({
+      id: 'srv_' + n.id,
+      type: n.type || 'info',
+      title: n.title,
+      message: n.message,
+      ticketId: n.ticket_id,
+      ticketNumber: n.ticket_number,
+      jobOrderId: n.job_order_id,
+      jobOrderNumber: n.job_order_number,
+      announcementId: n.announcement_id,
+      targetUserId: n.user_id,
+      targetDeptId: n.department_id,
+      targetBranchId: n.branch_id,
+      creatorUserId: n.creator_user_id,
+      creatorDeptId: n.creator_dept_id,
+      creatorBranchId: n.creator_branch_id,
+      timestamp: new Date(n.created_at),
+      read: n.is_read === 1,
+      notificationType: n.notification_type || 'incoming',
+    }));
 
-      data.forEach(n => {
-        const srvId = 'srv_' + n.id;
-        
-        // ✅ SKIP if this notification was deleted locally
-        if (deletedIds.has(srvId) || deletedIds.has(String(n.id))) {
-          return;
-        }
-        
-        const existing = currentMap.get(srvId);
-        if (existing) {
-          existing.read = existing.read || (n.is_read === 1);
-          serverNotifications.push(existing);
-        } else {
-          const localDuplicate = localNotifications.find(
-            ln => ln.title === n.title && ln.message === n.message && ln.ticketId === n.ticket_id
-          );
-          if (localDuplicate) {
-            localDuplicate.read = localDuplicate.read || (n.is_read === 1);
-            serverNotifications.push(localDuplicate);
-          } else {
-            const alreadyExists = serverNotifications.find(sn => sn.id === srvId);
-            if (!alreadyExists) {
-              const newNotif: ClientNotification = {
-                id: srvId,
-                type: n.type || 'info',
-                title: n.title,
-                message: n.message,
-                ticketId: n.ticket_id,
-                ticketNumber: n.ticket_number,
-                jobOrderId: n.job_order_id,
-                jobOrderNumber: n.job_order_number,
-                announcementId: n.announcement_id,
-                targetUserId: n.user_id,
-                targetDeptId: n.department_id,
-                targetBranchId: n.branch_id,
-                creatorUserId: n.creator_user_id,
-                creatorDeptId: n.creator_dept_id,
-                creatorBranchId: n.creator_branch_id,
-                timestamp: new Date(n.created_at),
-                read: n.is_read === 1,
-                notificationType: n.notification_type || 'incoming'
-              };
-              serverNotifications.push(newNotif);
-
-              // ✅ Only show toast for NEW unread notifications
-              const toastKey = `toast-${srvId}`;
-if (
-  !this.shownToastIds.has(toastKey) &&
-  n.is_read === 0 &&
-  this.appInitialized  // ← NEW: skip toasts during initial boot
-) {
-  this.shownToastIds.add(toastKey);
-  this.saveShownToastIds();
-  this.showToastPopup(
-    newNotif.title,
-    newNotif.message,
-    newNotif.ticketId || newNotif.jobOrderId
-  );
-}
-            }
-          }
-        }
+    // Fire toasts ONLY for genuinely new unread items, and ONLY after boot
+    if (this.appInitialized) {
+      serverNotifications.forEach(n => {
+        if (n.read) return;
+        if (this.shownToastIds.has(n.id)) return;
+        this.shownToastIds.add(n.id);
+        this.showToastPopup(n.title, n.message, n.ticketId || n.jobOrderId);
       });
+    } else {
+      // On first load, mark everything as "already shown" so reloads don't pop
+      serverNotifications.forEach(n => this.shownToastIds.add(n.id));
+    }
 
-      // ✅ Filter out local notifications that were deleted
-      const filteredLocal = localNotifications.filter(n => !deletedIds.has(n.id));
-      
-      const merged = [...serverNotifications, ...filteredLocal];
-      const deduped = this.removeDuplicates(merged);
-      this.notificationsSubject.next(deduped);
-      this.saveNotifications(deduped);
-      this.appInitialized = true;
-    })
-    .catch((err) => {
-      console.log('⚠️ Client notifications fetch failed:', err.message);
-    });
+    this.notificationsSubject.next(serverNotifications);
+  } catch (err: any) {
+    console.warn('⚠️ Client notifications fetch failed:', err.message);
+  }
 }
 private getDeletedKey(): string {
   return `client_deleted_notifications_${this.currentUserId || 'anonymous'}`;
@@ -1143,30 +1105,26 @@ private loadShownToastIds(): void {
   }
 
   markAsRead(id: string): void {
-    const current = this.notificationsSubject.value;
-    const idx = current.findIndex(n => n.id === id);
-    if (idx === -1) return;
+  const current = this.notificationsSubject.value;
+  const idx = current.findIndex(n => n.id === id);
+  if (idx === -1) return;
 
-    const updated = [...current];
-    updated[idx] = { ...updated[idx], read: true };
-    this.notificationsSubject.next(updated);
-    this.saveNotifications(updated);
+  const updated = [...current];
+  updated[idx] = { ...updated[idx], read: true };
+  this.notificationsSubject.next(updated);
 
-    if (id.startsWith('srv_')) {
-      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-      if (token) {
-        const numericId = id.replace('srv_', '');
-       fetch(`${environment.apiUrl}/api/client-notifications/mark-all-read/${this.currentUserId}`, {
-  method: 'PUT',
-  headers: { 'Authorization': `Bearer ${token}` }
-})
-.then(res => {
-  if (!res.ok) console.warn(`⚠️ markAllAsRead failed: HTTP ${res.status}`);
-})
-.catch(err => console.warn('⚠️ markAllAsRead network error:', err));
-      }
+  if (id.startsWith('srv_')) {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const numericId = id.replace('srv_', '');
+    if (token) {
+      // ✅ Per-item endpoint — adjust to match your actual backend route
+      fetch(`${environment.apiUrl}/api/client-notifications/read/${numericId}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(() => {});
     }
   }
+}
 markAllAsRead(): void {
     const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true }));
     this.notificationsSubject.next(updated);
@@ -1204,38 +1162,25 @@ markAllAsRead(): void {
     }
 }
 clearAll(): void {
-    const current = this.notificationsSubject.value;
-    
-    // ✅ Track all as deleted
-    current.forEach(n => {
-        this.deletedNotificationIds.add(n.id);
-    });
-    this.saveDeletedNotificationIds(this.deletedNotificationIds);
-    
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    if (token) {
-      current.forEach(n => {
-        if (n.id.startsWith('srv_')) {
-          const numericId = n.id.replace('srv_', '');
-          fetch(`${environment.apiUrl}/api/client-notifications/${numericId}`, {
-  method: 'DELETE',
-  headers: { 'Authorization': `Bearer ${token}` }
-})
-.then(res => {
-  if (!res.ok) console.warn(`⚠️ clearAll failed for ${numericId}: HTTP ${res.status}`);
-})
-.catch(err => console.warn('⚠️ clearAll network error:', err));
-        }
-      });
-    }
-    this.ticketNotifications = [];
-    localStorage.removeItem(this.getTicketNotifKey());
-    this.shownToastIds.clear();
-    this.saveShownToastIds();
-    this.notificationsSubject.next([]);
-    localStorage.removeItem(this.getStorageKey());
-}
+  const current = this.notificationsSubject.value;
+  current.forEach(n => this.deletedNotificationIds.add(n.id));
 
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  if (token) {
+    current.forEach(n => {
+      if (!n.id.startsWith('srv_')) return;
+      const numericId = n.id.replace('srv_', '');
+      fetch(`${environment.apiUrl}/api/client-notifications/${numericId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.warn('⚠️ clearAll network error:', err));
+    });
+  }
+
+  this.ticketNotifications = [];
+  this.shownToastIds.clear();
+  this.notificationsSubject.next([]);
+}
   getUnreadCount(): number {
     return this.notificationsSubject.value.filter(n => !n.read).length;
   }
