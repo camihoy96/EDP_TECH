@@ -758,14 +758,12 @@ loadBranchesAndDepartments() {
    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const headers = { 'Authorization': `Bearer ${token}` };
   const user: any = this.authService.getCurrentUser();
-  
   // Load branches
    this.http.get<any[]>(`${environment.apiUrl}/api/public/branches`).subscribe({
     next: (branches) => {
       this.branches = branches || [];
       this.userBranch = this.branches.find(b => b.id == user?.branch_id);
       this.mainBranches = this.branches.filter(b => this.mainBranchIds.includes(b.id));
-      
       // Load departments
       this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
         next: (depts) => {
@@ -777,7 +775,6 @@ loadBranchesAndDepartments() {
               branch_name: branch?.name
             };
           });
-          
           // Filter EDP/IT departments only
           this.allDepartments = (depts || []).map(d => {
   const branch = this.branches.find(b => b.id == d.branch_id);
@@ -1530,37 +1527,37 @@ submitRequisition() {
         hasApprovedDate: !!payload.approved_date,
         fullPayload: JSON.stringify(payload, null, 2)
     });
-    
     const request = this.editMode 
         ? this.http.put(url, payload, { headers })
         : this.http.post(url, payload, { headers });
-
     request.subscribe({
     next: (response: any) => {
         console.log('✅ Success response:', response);
         this.submitting = false;
-        
         const currentUser = this.authService.getCurrentUser();
         const userName = currentUser?.fullname || currentUser?.username || 'User';
-        
-        // ❌ REMOVE THIS - Do NOT broadcast to admin users
-        // this.notificationService.addBellNotification({ ... targetUserId: null ... });
-        
         // ✅ CLIENT SIDE ONLY: Notify the RECIPIENT department only
         if (!this.editMode) {
-            const reqData = {
-                id: response.id,
-                requisition_number: this.reqNumber,
-                submitted_by: currentUser?.id
-            };
-            this.clientNotificationService.handleNewRequisition(
-                reqData,
-                userName,
-                this.selectedBranchId!,      // Recipient branch
-                this.reqData.department_id   // Recipient department
-            );
-        }
-        
+    const reqData = {
+        id: response.id,
+        requisition_number: this.reqNumber,
+        submitted_by: currentUser?.id
+    };
+    // client_notifications table (for EDP/IT recipient dept)
+    this.clientNotificationService.handleNewRequisition(
+        reqData,
+        userName,
+        this.selectedBranchId!,
+        this.reqData.department_id
+    );
+    // ✅ NEW: admin bell broadcast
+    this.notificationService.handleNewRequisition(
+        reqData,
+        userName,
+        this.selectedBranchId!,
+        this.reqData.department_id
+    );
+}
         this.showToastMsg(this.editMode ? '✅ Requisition updated!' : '✅ Requisition submitted!', 'success');
         this.router.navigate(['/client/request']);
     },

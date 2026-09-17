@@ -37,9 +37,10 @@ export class NotificationService {
   private appInitialized = false;
   private audioCtx: AudioContext | null = null;
   private audioUnlocked = false;
+  private notificationAudio: HTMLAudioElement | null = null;
   private readonly NOTIF_SOUND_URL = 'assets/sounds/notification.wav';
   private recentlyCreatedActions: Set<string> = new Set();
-constructor(@Inject(PLATFORM_ID) private platformId: Object) {
+  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
   this.isBrowser = isPlatformBrowser(this.platformId);
   if (this.isBrowser) {
     this.purgeLegacyStorage();
@@ -118,10 +119,11 @@ constructor(@Inject(PLATFORM_ID) private platformId: Object) {
           this.showToastPopup(mapped.title, mapped.message, mapped.ticketId || mapped.jobOrderId);
         }
       });
-      (Array.isArray(ticketData) ? ticketData : []).forEach(n => {
+        (Array.isArray(ticketData) ? ticketData : []).forEach(n => {
         if (n.cleared_at) return;
         const tId = 'ticket_' + n.id;
         if (seen.has(tId)) return;
+        if (this.locallyDismissed.has(tId)) return;
         seen.add(tId);
         const existing = currentMap.get(tId);
         const mapped: Notification = {
@@ -138,6 +140,10 @@ constructor(@Inject(PLATFORM_ID) private platformId: Object) {
         };
         if (existing) mapped.read = mapped.read || existing.read;
         merged.push(mapped);
+        if (this.appInitialized && !mapped.read && !this.shownToastIds.has(tId)) {
+          this.shownToastIds.add(tId);
+          this.showToastPopup(mapped.title, mapped.message, mapped.ticketId || mapped.jobOrderId);
+        }
       });
       current
         .filter(n => !n.id.startsWith('srv_') && !n.id.startsWith('ticket_'))
@@ -165,50 +171,81 @@ constructor(@Inject(PLATFORM_ID) private platformId: Object) {
     this.notifiedEvents.add(key);
     // Broadcast for admin users
     this.addBellNotification({
-      type: 'info',
-      title: '📋 New Job Order',
-      message: `${submittedByName} submitted Job Order #${jo.job_order_number}`,
-      jobOrderId: jo.id,
-      jobOrderNumber: jo.job_order_number,
-      targetUserId: null,
-      countInBadge: true,
+        type: 'info',
+        title: '📋 New Job Order',
+        message: `${submittedByName} submitted Job Order #${jo.job_order_number}`,
+        jobOrderId: jo.id,
+        jobOrderNumber: jo.job_order_number,
+        targetUserId: null,           // ← broadcast to all admins
+        countInBadge: true,
     });
     // Show toast popup for admin users
     if (this.getCurrentUserTable() === 'users') {
-      this.showToastPopup('📋 New Job Order', `${submittedByName} submitted #${jo.job_order_number}`, undefined);
+        this.showToastPopup('📋 New Job Order', `${submittedByName} submitted #${jo.job_order_number}`, undefined);
     }
-  }
+}
 /** Unlock audio on the first user interaction (browser autoplay policy). */
 private unlockAudio(): void {
   if (!this.isBrowser || this.audioUnlocked) return;
   try {
     const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return;
-
     if (!this.audioCtx) {
       this.audioCtx = new Ctx() as AudioContext;
     }
     const ctx = this.audioCtx;
-    if (!ctx) return;              // ← explicit guard
-
-    if (ctx.state === 'suspended') {
+    if (ctx && ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
     }
-
+    // Pre-load the notification sound so first play works after the gesture
+    const audio = this.getNotificationAudio();
+    if (audio) {
+      // Prime a silent play to satisfy the browser's gesture requirement
+      const prevVol = audio.volume;
+      audio.volume = 0;
+      audio.play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = prevVol || 0.5;
+        })
+        .catch(() => {
+          audio.volume = prevVol || 0.5;
+        });
+    }
     this.audioUnlocked = true;
   } catch {}
+}
+/** Lazily create and reuse a single Audio element. */
+private getNotificationAudio(): HTMLAudioElement | null {
+  if (!this.isBrowser) return null;
+  if (!this.notificationAudio) {
+    try {
+      this.notificationAudio = new Audio(this.NOTIF_SOUND_URL);
+      this.notificationAudio.volume = 0.5;
+      this.notificationAudio.preload = 'auto';
+      this.notificationAudio.load();
+    } catch (e) {
+      console.error('🔊 Failed to init notification audio:', e);
+      return null;
+    }
+  }
+  return this.notificationAudio;
 }
 
 /** Play the notification sound (short, non-blocking, safe if it fails). */
 private playNotificationSound(): void {
   if (!this.isBrowser) return;
+  const audio = this.getNotificationAudio();
+  if (!audio) return;
   try {
-    const audio = new Audio(this.NOTIF_SOUND_URL);
-    audio.volume = 0.5;
-    audio.play().catch(() => {
-      // Autoplay might be blocked before first user gesture; ignore.
-    });
-  } catch {}
+    audio.currentTime = 0;   // rewind so repeat plays work
+    audio.play()
+      .then(() => console.log('🔊 sound played OK'))
+      .catch((err) => console.warn('🔊 sound failed:', err));
+  } catch (e) {
+    console.error('🔊 play exception:', e);
+  }
 }
   /**
    * Called when a Job Order is forwarded
@@ -841,27 +878,27 @@ public addBellNotification(notif: Partial<Notification>): void {
         this.saveNotificationToServer(newNotif);
     }
 }
+private locallyDismissed: Set<string> = new Set();
+
 dismissNotification(id: string): void {
+    this.locallyDismissed.add(id);
     const current = this.notificationsSubject.value;
-    
-    // ✅ Remove from local state
     const updated = current.filter(n => n.id !== id);
-    
-       this.notificationsSubject.next(updated);
+    this.notificationsSubject.next(updated);
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
 
     if (id.startsWith('srv_')) {
-      fetch(`${environment.apiUrl}/api/notifications/${id.replace('srv_', '')}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('❌ delete failed:', err));
+        fetch(`${environment.apiUrl}/api/notifications/${id.replace('srv_', '')}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => console.error('❌ delete failed:', err));
     } else if (id.startsWith('ticket_')) {
-      fetch(`${environment.apiUrl}/api/ticket-notifications/${id.replace('ticket_', '')}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('❌ delete failed:', err));
+        fetch(`${environment.apiUrl}/api/ticket-notifications/${id.replace('ticket_', '')}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+        }).catch(err => console.error('❌ delete failed:', err));
     }
 }
 public handleLogout(): void {
@@ -873,7 +910,7 @@ public handleLogout(): void {
     this.currentUserId = null;
     this.currentUserName = null;
     this.appInitialized = false;
-
+    this.locallyDismissed.clear();
     // Clear this user's storage keys
     try {
         const keysToRemove: string[] = [];
@@ -889,25 +926,110 @@ public handleLogout(): void {
         keysToRemove.forEach(k => localStorage.removeItem(k));
     } catch (e) {}
 }
-   clearAll(): void {
+ clearAll(): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
-      fetch(`${environment.apiUrl}/api/notifications/clear-all`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('❌ notifications clear-all failed:', err));
-
-      fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('❌ ticket-notifications clear-all failed:', err));
+      fetch(`${environment.apiUrl}/api/notifications/clear-all`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } })
+        .catch(err => console.error('❌ notifications clear-all failed:', err));
+      fetch(`${environment.apiUrl}/api/ticket-notifications/clear-all`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } })
+        .catch(err => console.error('❌ ticket-notifications clear-all failed:', err));
     }
     this.notificationsSubject.next([]);
     this.notifiedEvents.clear();
     this.recentlyCreatedActions.clear();
     this.shownToastIds.clear();
-  }
+}
+/**
+ * Called when a CLIENT creates a new requisition.
+ * Notifies: EDP/IT admins in the recipient department + all admins (broadcast).
+ */
+handleNewRequisition(req: any, submittedByName: string, recipientBranchId: number, recipientDeptId: number): void {
+    const key = `requisition-new-${req.id || req.requisition_number}`;
+    if (this.notifiedEvents.has(key)) return;
+    this.notifiedEvents.add(key);
 
+    const branchName = this.getBranchNameFromCache(recipientBranchId) || 'Branch';
+    const deptName = this.getDeptNameFromCache(recipientDeptId) || 'Department';
+
+    // ✅ 1. Save to client_notifications so the EDP/IT recipient dept sees it
+    this.saveNewRequisitionToClientNotifications(
+        req, submittedByName, recipientBranchId, recipientDeptId
+    );
+
+    // ✅ 2. Broadcast to ALL admins (targetUserId: null) so bell shows it everywhere
+    this.addBellNotification({
+        type: 'info',
+        title: '📩 New Requisition',
+        message: `${submittedByName} submitted Requisition #${req.requisition_number} to ${branchName} - ${deptName}`,
+        ticketNumber: req.requisition_number,
+        targetUserId: null,
+        countInBadge: true,
+    });
+
+    // ✅ 3. Toast for the current user IF they're an admin/EDP user
+    if (this.getCurrentUserTable() === 'users') {
+        this.showToastPopup(
+            '📩 New Requisition',
+            `${submittedByName} submitted #${req.requisition_number} to ${branchName} - ${deptName}`,
+            undefined
+        );
+    }
+}
+
+// ✅ ADD THESE THREE HELPER METHODS:
+
+private getBranchNameFromCache(branchId: number): string | null {
+    if (!this.isBrowser || !branchId) return null;
+    try {
+        const cached = sessionStorage.getItem('branches_cache') 
+            || localStorage.getItem('branches_cache');
+        if (!cached) return null;
+        const branches = JSON.parse(cached);
+        if (!Array.isArray(branches)) return null;
+        const branch = branches.find((b: any) => b.id == branchId);
+        return branch?.name || null;
+    } catch {
+        return null;
+    }
+}
+
+private getDeptNameFromCache(deptId: number): string | null {
+    if (!this.isBrowser || !deptId) return null;
+    try {
+        const cached = sessionStorage.getItem('departments_cache') 
+            || localStorage.getItem('departments_cache');
+        if (!cached) return null;
+        const depts = JSON.parse(cached);
+        if (!Array.isArray(depts)) return null;
+        const dept = depts.find((d: any) => d.id == deptId);
+        return dept?.name || null;
+    } catch {
+        return null;
+    }
+}
+
+private saveNewRequisitionToClientNotifications(
+    req: any, submittedByName: string, branchId: number, deptId: number
+): void {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
+
+    fetch(`${environment.apiUrl}/api/client-notifications/requisition`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            branch_id: branchId,
+            department_id: deptId,
+            type: 'info',
+            title: '📩 New Requisition',
+            message: `${submittedByName} submitted Requisition #${req.requisition_number}`,
+            ticket_number: req.requisition_number,
+        })
+    }).catch(err => console.error('❌ Failed to save requisition client-notification:', err));
+}
 // Helper method to check if a notification belongs to the current user
 private notificationBelongsToCurrentUser(n: Notification): boolean {
     if (!n.targetUserId) {
@@ -932,11 +1054,9 @@ private notificationBelongsToCurrentUser(n: Notification): boolean {
 
   // ── TOAST POPUP ──
 
-  private showToastPopup(title: string, message: string, ticketId?: number): void {
+ private showToastPopup(title: string, message: string, ticketId?: number): void {
   if (!this.isBrowser) return;
-  if (document.hidden) {
-    this.playNotificationSound();
-  }
+  this.playNotificationSound();
   if (!this.toastContainer) this.createToastContainer();
   if (!this.toastContainer) return;
     const toast = document.createElement('div');
@@ -1003,24 +1123,22 @@ private saveNotifications(notifications: Notification[]): void {
         console.warn('⚠️ Storage full, saved only 50 notifications');
     }
 }
-  // In notification.service.ts, update the save method
+
 private saveNotificationToServer(notif: Notification): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token) return;
-    
+
     let userId: number | null = null;
     let userTable: string | null = null;
-    
+
     if (typeof notif.targetUserId === 'string' && notif.targetUserId.includes('_')) {
         const parts = notif.targetUserId.split('_');
-        // ✅ Only save to server for 'new_user' (clients) and 'null' (broadcast)
-        // Skip 'users_*' and 'exclude_*' - these are handled locally
         if (parts[0] === 'exclude') return;
-        if (parts[0] === 'users') return;  // ✅ Don't save admin-to-admin notifications
+        if (parts[0] === 'users') return;
         userTable = parts[0];
         userId = parseInt(parts[1]) || null;
     }
-    
+
     fetch(`${environment.apiUrl}/api/ticket-notifications`, {
         method: 'POST',
         headers: {
@@ -1031,14 +1149,15 @@ private saveNotificationToServer(notif: Notification): void {
             type: notif.type,
             title: notif.title,
             message: notif.message,
-            ticket_id: notif.ticketId,
-            ticket_number: notif.ticketNumber,
+            ticket_id: notif.ticketId || null,
+            ticket_number: notif.ticketNumber || null,
+            job_order_id: notif.jobOrderId || null,           // ← ADD
+            job_order_number: notif.jobOrderNumber || null,   // ← ADD
             user_id: userId,
             user_table: userTable
         })
     }).catch(err => console.log('Failed to save ticket notification:', err));
 }
-
   // In your notification service
 getComputerMonitoringNotifications(): number {
   const notifications = JSON.parse(localStorage.getItem('computer_notifications') || '[]');

@@ -560,7 +560,6 @@ populateFormFromJobOrder(jo: any) {
         this.branches = branches || [];
         this.userBranch = this.branches.find(b => b.id == user?.branch_id);
         this.mainBranches = this.branches.filter(b => this.mainBranchIds.includes(b.id));
-        
         this.http.get<any[]>(`${environment.apiUrl}/api/public/departments`).subscribe({
           next: (depts) => {
             this.allDepartments = (depts || []).map(d => {
@@ -570,14 +569,16 @@ populateFormFromJobOrder(jo: any) {
                 displayName: `${d.name} — ${branch?.name || 'Unknown'} (${branch?.company_name || 'N/A'})` 
               };
             });
-            
             if (!this.editMode) {
-              const userBranchId = Number(user?.branch_id);
-              const userDeptId = Number(user?.dept_id);
-              this.selectedBranchId = userBranchId;
-              this.joData.department_id = userDeptId;
-            }
-            this.onBranchChange();
+    // ✅ Don't auto-select the admin's own branch — force explicit recipient choice
+    this.selectedBranchId = null;
+    this.joData.department_id = null;
+    this.filteredDepartments = [];
+    this.attnUsers = [];
+    this.joData.attn = '';
+    return; // skip onBranchChange since there's nothing selected yet
+}
+this.onBranchChange();
           },
           error: (err) => { console.error('Failed to load departments:', err); }
         });
@@ -963,15 +964,18 @@ submitJobOrder() {
       });
       return;
     }
-    
     // Normal submit/edit mode
-    if (!this.joData.request_from || !this.joData.attn || !this.joData.department_id) {
-      this.showToastMsg('Please fill in all required fields', 'warning');
-      return;
-    }
-    
+if (!this.joData.request_from || !this.joData.attn || !this.joData.department_id) {
+    this.showToastMsg('Please fill in all required fields', 'warning');
+    return;
+}
+
+// ✅ NEW: Ensure recipient branch is explicitly selected
+if (!this.selectedBranchId) {
+    this.showToastMsg('Please select a Recipient branch.', 'warning');
+    return;
+}
     this.submitting = true;
-    
     const formatDate = (val: any): string => {
       if (!val) return new Date().toISOString().split('T')[0];
       if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return val;
@@ -979,7 +983,6 @@ submitJobOrder() {
         return new Date(val).toISOString().split('T')[0];
       } catch { return new Date().toISOString().split('T')[0]; }
     };
-    
     const payload: any = {
       job_order_number: this.joNumber,
       ctrl_no: this.joCtrlNumber,
@@ -1004,47 +1007,50 @@ submitJobOrder() {
       submitted_by: this.authService.getCurrentUser()?.id || null,
       status: 'pending'
     };
-
     console.log('📤 Submitting payload:', payload);
-
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    
     // ✅ FIXED: Use ADMIN endpoint
     const url = this.editMode 
       ? `${environment.apiUrl}/api/admin/job-orders/${this.editReqId}` 
       : `${environment.apiUrl}/api/admin/job-orders`;  // ← /api/admin/job-orders
-
     const request = this.editMode 
       ? this.http.put(url, payload, { headers })
       : this.http.post(url, payload, { headers });
-
-    request.subscribe({
+  request.subscribe({
     next: (res: any) => {
         console.log('✅ Server response:', res);
         this.joNumber = res.job_order_number || this.joNumber;
         this.joCtrlNumber = res.ctrl_no || this.joCtrlNumber;
-        
-        // ✅ ADD: Notify recipient department about new job order
+
+        // ✅ Notify ONLY the recipient client department
         if (!this.editMode && res.id) {
             const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+            const userName = currentUser.fullname || currentUser.username || 'Admin';
+
             this.clientNotificationService.handleNewJobOrder(
-                { id: res.id, job_order_number: this.joNumber, submitted_by: currentUser.id },
-                currentUser.fullname || 'Admin',
+                {
+                    id: res.id,
+                    job_order_number: this.joNumber,
+                    submitted_by: currentUser.id,
+                    branch_id: this.selectedBranchId,
+                    department_id: this.joData.department_id,
+                },
+                userName,
                 this.selectedBranchId!,
                 this.joData.department_id
             );
         }
-        
+
         this.showToastMsg(this.editMode ? 'Job Order updated!' : 'Job Order submitted successfully!', 'success');
         setTimeout(() => this.cancel(), 1500);
     },
-      error: (err) => {
+    error: (err) => {
         this.showToastMsg('Failed to save Job Order', 'error');
         console.error('❌ Error:', err);
         this.submitting = false;
-      }
-    });
+    }
+});
 }
 getDepartmentName(deptId: number): string {
     if (!deptId) return '';

@@ -381,7 +381,7 @@ import { ReportModalComponent } from './report-modal.component';
       </div>  
       <!-- Toolbar -->
       <div class="toolbar">
-       <button class="toolbar-btn" (click)="toggleSidebar()" title="Toggle Sidebar">
+       <button class="toolbar-btn toggle-sidebar-btn" (click)="toggleSidebar()" title="Toggle Sidebar">
     <span>
   <!-- Hamburger icon (when sidebar is hidden) -->
   <svg *ngIf="sidebarHidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
@@ -389,16 +389,19 @@ import { ReportModalComponent } from './report-modal.component';
     <line x1="3" y1="12" x2="21" y2="12"/>
     <line x1="3" y1="18" x2="21" y2="18"/>
   </svg>
-  
   <!-- X (close) icon (when sidebar is visible) -->
   <svg *ngIf="!sidebarHidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
     <line x1="18" y1="6" x2="6" y2="18"/>
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>
 </span>
-    <span class="badge" *ngIf="(pendingJobOrdersCount + requisitionsNotificationCount) > 0">
-        {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 ? '99+' : (pendingJobOrdersCount + requisitionsNotificationCount) }}
-    </span>
+    <span class="tbadge" 
+        *ngIf="sidebarHidden && (pendingJobOrdersCount + requisitionsNotificationCount) > 0"
+        [title]="'Job Orders: ' + pendingJobOrdersCount + ' | Requisitions: ' + requisitionsNotificationCount">
+    {{ (pendingJobOrdersCount + requisitionsNotificationCount) > 99 
+       ? '99+' 
+       : (pendingJobOrdersCount + requisitionsNotificationCount) }}
+  </span>
 </button>
         <div class="toolbar-separator"></div>
         <div class="toolbar-separator"></div>
@@ -1444,6 +1447,26 @@ import { ReportModalComponent } from './report-modal.component';
     ::-webkit-scrollbar-thumb:hover{background:#a0a0a0}
     .sidebar-link {
   position: relative;
+}
+  .toolbar-btn.toggle-sidebar-btn {
+  position: relative;
+}
+  .tbadge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #cc0000;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.4;
+  border: 1px solid #fff;
+  z-index: 10;
+  pointer-events: none;
 }
 .logout-confirm-modal {
   background: #fff;

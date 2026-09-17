@@ -934,23 +934,23 @@ submitJobOrder() {
 
     this.submitting = true;
 
-  const payload: any = {
-    date: this.joData.date,
-    time: this.joData.time,
-    request_dept: this.joData.request_from,
-    department: this.getDepartmentNameForSubmission(this.joData.department_id),
-    branch_id: this.selectedBranchId,
-    department_id: this.joData.department_id,
-    particulars: this.joData.remarks,
-    job_order_for: this.joData.attn,
-    requested_name: this.joData.prepared_name,
-    requested_date: this.joData.prepared_date,  // ✅ Already correct
-    requested_signature: this.preparedSignature,
-    approved_name: this.joData.approved_name || null,
-    approved_date: this.joData.approved_date || null,  // ✅ ADD THIS
-    approved_signature: this.approvedSignature || null,
-    submitted_by: this.authService.getCurrentUser()?.id || null,
-};
+    const payload: any = {
+      date: this.joData.date,
+      time: this.joData.time,
+      request_dept: this.joData.request_from,
+      department: this.getDepartmentNameForSubmission(this.joData.department_id),
+      branch_id: this.selectedBranchId,
+      department_id: this.joData.department_id,
+      particulars: this.joData.remarks,
+      job_order_for: this.joData.attn,
+      requested_name: this.joData.prepared_name,
+      requested_date: this.joData.prepared_date,
+      requested_signature: this.preparedSignature,
+      approved_name: this.joData.approved_name || null,
+      approved_date: this.joData.approved_date || null,
+      approved_signature: this.approvedSignature || null,
+      submitted_by: this.authService.getCurrentUser()?.id || null,
+    };
 
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -963,27 +963,41 @@ submitJobOrder() {
       ? this.http.put(url, payload, { headers })
       : this.http.post(url, payload, { headers });
 
- request.subscribe({
-    next: (response: any) => {
+    request.subscribe({
+      next: (response: any) => {
         this.submitting = false;
         this.joNumber = response.job_order_number || this.joNumber;
         this.joCtrlNumber = response.job_order_number || this.joCtrlNumber;
-        
-        // ✅ ADD: Notify recipient department about new job order
+
+        // ✅ Notify BOTH the recipient client department AND the admin bell
         if (!this.editMode && response.id) {
-            const currentUser = this.authService.getCurrentUser();
-            const userName = currentUser?.fullname || currentUser?.username || 'User';
-            this.clientNotificationService.handleNewJobOrder(
-                { id: response.id, job_order_number: this.joNumber, submitted_by: currentUser?.id },
-                userName,
-                this.selectedBranchId!,
-                this.joData.department_id
-            );
+          const currentUser = this.authService.getCurrentUser();
+          const userName = currentUser?.fullname || currentUser?.username || 'User';
+
+          const joData = {
+            id: response.id,
+            job_order_number: this.joNumber,
+            submitted_by: currentUser?.id,
+            branch_id: this.selectedBranchId,
+            department_id: this.joData.department_id,
+          };
+
+          // 1. Client-side notification → writes to client_notifications table
+          this.clientNotificationService.handleNewJobOrder(
+            joData,
+            userName,
+            this.selectedBranchId!,
+            this.joData.department_id
+          );
+
+          // 2. Admin-side notification → triggers NotificationService.handleNewJobOrder
+          //    → POST /api/ticket-notifications → admin bell picks it up
+          this.notificationService.handleNewJobOrder(joData, userName);
         }
-        
+
         this.showToastMsg(this.editMode ? '✅ Job Order updated!' : '✅ Job Order submitted!', 'success');
         this.router.navigate(['/client/job-orders']);
-    },
+      },
       error: (err) => {
         this.submitting = false;
         const errorMsg = err.error?.error || err.message || 'Unknown error';

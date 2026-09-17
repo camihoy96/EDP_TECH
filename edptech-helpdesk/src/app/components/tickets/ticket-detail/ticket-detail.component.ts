@@ -982,31 +982,25 @@ private getHeaders(): any {
 }
 loadAvailableAgents() {
   const currentUserId = this.currentUser?.id;
-  const headers = this.getHeaders();  // Add headers
-  
-  // Load from both tables
-  this.http.get<any[]>(`${environment.apiUrl}/api/users`, { headers }).subscribe({
+  const currentUserBranch = this.currentUser?.branch_id;
+
+  if (!currentUserId || !currentUserBranch) {
+    setTimeout(() => this.loadAvailableAgents(), 300);
+    return;
+  }
+
+  const headers = this.getHeaders();
+
+  this.http.get<any[]>(`${environment.apiUrl}/api/edp-users`, { headers }).subscribe({
     next: (users) => {
-      // Load new_user table too
-      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
-        next: (newUsers) => {
-          // Combine both user tables
-          const allUsers = [...users, ...newUsers];
-          
-          // Filter: show all users EXCEPT current user
-          this.availableAgents = allUsers.filter(u => 
-            u.id !== currentUserId  // Just exclude self, show everyone else
-          );
-          console.log('Available agents:', this.availableAgents.length, this.availableAgents);
-        },
-        error: () => {
-          // Fallback: just show users table
-          this.availableAgents = users.filter(u => u.id !== currentUserId);
-        }
-      });
+      this.availableAgents = users.filter(u =>
+        Number(u.branch_id) === Number(currentUserBranch) &&
+        u.id !== currentUserId
+      );
+      console.log('✅ [TicketDetail] EDP/IT agents:', this.availableAgents.length, this.availableAgents.map(a => a.fullname));
     },
     error: (err) => {
-      console.error('Error loading agents:', err);
+      console.error('❌ [TicketDetail] Error loading agents:', err);
       this.availableAgents = [];
     }
   });

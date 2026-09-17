@@ -11,6 +11,7 @@ export interface ClientNotification {
   ticketId?: number;
   ticketNumber?: string;
   jobOrderId?: number;
+  targetUserTable?: 'new_user' | 'users'; 
   jobOrderNumber?: string;
   targetUserId?: number;
   targetDeptId?: number;
@@ -38,31 +39,85 @@ export class ClientNotificationService {
   private shownToastIds: Set<string> = new Set();
   private previousUserId: number | null = null;
   private appInitialized = false;
+  private notificationAudio: HTMLAudioElement | null = null;
+  private audioUnlocked = false;
+  private readonly NOTIF_SOUND_URL = 'assets/sounds/notification.wav';
   private deletedNotificationIds: Set<string> = new Set();
-private readonly DELETED_KEY = 'client_deleted_notifications';
+  private readonly DELETED_KEY = 'client_deleted_notifications';
  constructor(@Inject(PLATFORM_ID) private platformId: Object) {
   this.isBrowser = isPlatformBrowser(this.platformId);
   if (this.isBrowser) {
-    // One-time cleanup of legacy localStorage keys
     this.purgeLegacyStorage();
-
     this.injectToastStyles();
     this.createToastContainer();
     this.loadCurrentUser();
+    // 🔊 Unlock audio on first user interaction
+    const unlock = () => this.unlockAudio();
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    document.addEventListener('touchstart', unlock, { once: true });
 
-    // NO storage hydration. Fetch from DB only.
     setTimeout(() => {
       this.loadNotificationsFromServer().then(() => {
-        this.appInitialized = true;  // only AFTER first successful DB load
+        this.appInitialized = true;
       });
       this.serverPolling = setInterval(() => {
         this.loadCurrentUser();
         this.loadNotificationsFromServer();
-      }, 30000);
+      }, 5000);
     }, 1500);
   }
 }
+private unlockAudio(): void {
+  if (!this.isBrowser || this.audioUnlocked) return;
+  try {
+    const audio = this.getNotificationAudio();
+    if (audio) {
+      const prevVol = audio.volume;
+      audio.volume = 0;
+      audio.play()
+        .then(() => {
+          audio.pause();
+          audio.currentTime = 0;
+          audio.volume = prevVol || 0.5;
+        })
+        .catch(() => {
+          audio.volume = prevVol || 0.5;
+        });
+    }
+    this.audioUnlocked = true;
+  } catch {}
+}
 
+private getNotificationAudio(): HTMLAudioElement | null {
+  if (!this.isBrowser) return null;
+  if (!this.notificationAudio) {
+    try {
+      this.notificationAudio = new Audio(this.NOTIF_SOUND_URL);
+      this.notificationAudio.volume = 0.5;
+      this.notificationAudio.preload = 'auto';
+      this.notificationAudio.load();
+    } catch (e) {
+      console.error('🔊 [client] Failed to init audio:', e);
+      return null;
+    }
+  }
+  return this.notificationAudio;
+}
+
+private playNotificationSound(): void {
+  if (!this.isBrowser) return;
+  const audio = this.getNotificationAudio();
+  if (!audio) return;
+  try {
+    audio.currentTime = 0;
+    audio.play()
+      .then(() => console.log('🔊 [client] sound played OK'))
+      .catch((err) => console.warn('🔊 [client] sound failed:', err));
+  } catch (e) {
+    console.error('🔊 [client] play exception:', e);
+  }
+}
 private purgeLegacyStorage(): void {
   try {
     const keysToRemove: string[] = [];
@@ -85,13 +140,13 @@ private loadCurrentUser(): void {
     try {
       const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
       const newUserId = user.id || null;
-      
+
       // ✅ Detect user change and clear data
       if (newUserId !== this.previousUserId && this.previousUserId !== null) {
         console.log('🔄 ClientNotificationService - User changed! Clearing notifications...');
         this.clearAllNotificationData();
       }
-      
+
       this.previousUserId = newUserId;
       this.currentUserId = newUserId;
       this.currentUserDeptId = user.department_id || user.dept_id || null;
@@ -831,11 +886,9 @@ public refreshForCurrentUser(): void {
       exclude_user_id: notificationData.excludeUserId || null,
       notification_type: notificationData.notificationType || 'incoming',
     };
-
     if (notificationData.targetUserId) {
       payload.user_id = notificationData.targetUserId;
     }
-
     fetch(`${environment.apiUrl}/api/client-notifications/job-order`, {
       method: 'POST',
       headers: {
@@ -845,9 +898,7 @@ public refreshForCurrentUser(): void {
       body: JSON.stringify(payload),
     }).catch(err => console.log('⚠️ Failed to save job order notification:', err));
   }
-
   // ── STORAGE METHODS ──
-
   private getStorageKey(): string {
     try {
       const user = JSON.parse(localStorage.getItem('currentUser') || '{}');
@@ -927,22 +978,24 @@ public refreshForCurrentUser(): void {
       this.ticketNotifications = [];
     }
   }
-
-  // ── SERVER POLLING ──
-
-  private async loadNotificationsFromServer(): Promise<void> {
+// ── SERVER POLLING ──
+private async loadNotificationsFromServer(): Promise<void> {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (!token || !this.currentUserId) return;
-
+  // ✅ Read current user's table so we filter correctly
+  let userTable = 'new_user';
+  try {
+    const u = JSON.parse(localStorage.getItem('currentUser') || '{}');
+    userTable = u.user_table || 'new_user';
+  } catch {}
   try {
     const res = await fetch(
-      `${environment.apiUrl}/api/client-notifications/${this.currentUserId}`,
+      `${environment.apiUrl}/api/client-notifications/${this.currentUserId}?userTable=${userTable}`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: any[] = await res.json();
     if (!Array.isArray(data)) return;
-
     const serverNotifications: ClientNotification[] = data.map(n => ({
       id: 'srv_' + n.id,
       type: n.type || 'info',
@@ -963,20 +1016,18 @@ public refreshForCurrentUser(): void {
       read: n.is_read === 1,
       notificationType: n.notification_type || 'incoming',
     }));
-
-    // Fire toasts ONLY for genuinely new unread items, and ONLY after boot
-    if (this.appInitialized) {
-      serverNotifications.forEach(n => {
-        if (n.read) return;
-        if (this.shownToastIds.has(n.id)) return;
-        this.shownToastIds.add(n.id);
-        this.showToastPopup(n.title, n.message, n.ticketId || n.jobOrderId);
-      });
-    } else {
-      // On first load, mark everything as "already shown" so reloads don't pop
-      serverNotifications.forEach(n => this.shownToastIds.add(n.id));
-    }
-
+    const BOOT_TOAST_WINDOW_MS = 60_000;  // 60 seconds
+    const now = Date.now();
+    serverNotifications.forEach(n => {
+  if (n.read) return;
+  if (this.shownToastIds.has(n.id)) return;
+  const ageMs = now - n.timestamp.getTime();
+  if (ageMs > BOOT_TOAST_WINDOW_MS) return;
+  this.shownToastIds.add(n.id);
+  this.playNotificationSound();
+  console.log('  ✅ TOAST:', n.id, n.title, '(age', Math.round(ageMs / 1000), 's)');
+  this.showToastPopup(n.title, n.message, n.ticketId || n.jobOrderId);
+});
     this.notificationsSubject.next(serverNotifications);
   } catch (err: any) {
     console.warn('⚠️ Client notifications fetch failed:', err.message);
@@ -1012,7 +1063,6 @@ private saveShownToastIds(): void {
 }
 private loadShownToastIds(): void {
     if (!this.isBrowser) return;
-    
     try {
         const stored = localStorage.getItem('client_shown_toast_ids');
         if (stored) {
@@ -1022,7 +1072,6 @@ private loadShownToastIds(): void {
     } catch (e) {}
 }
   // ── NOTIFICATION CRUD ──
-
   private addLocalNotification(notif: ClientNotification): void {
     const current = this.notificationsSubject.value;
     const isDuplicate = current.find(
@@ -1043,7 +1092,6 @@ private loadShownToastIds(): void {
       (n.title === notif.title && n.message === notif.message && n.ticketId === notif.ticketId)
     );
     if (isDuplicate) return;
-
     const updated = [notif, ...current].slice(0, 100);
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
@@ -1054,14 +1102,12 @@ private loadShownToastIds(): void {
     if (notification.targetUserId && notification.targetUserId !== this.currentUserId) {
       return;
     }
-
     const newNotif: ClientNotification = {
       id: 'ticket_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
       timestamp: new Date(),
       read: false,
       ...notification
     };
-
     this.ticketNotifications.unshift(newNotif);
     this.saveTicketNotifications();
     this.emitAllNotifications();
@@ -1075,44 +1121,77 @@ private loadShownToastIds(): void {
     const allNotifs = [...relevantTicketNotifs, ...current];
     this.notificationsSubject.next(allNotifs);
   }
+private saveNewRequisitionToClientNotifications(
+    req: any, submittedByName: string, branchId: number, deptId: number
+): void {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) return;
 
+    fetch(`${environment.apiUrl}/api/client-notifications/requisition`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            branch_id: branchId,
+            department_id: deptId,
+            type: 'info',
+            title: '📩 New Requisition',
+            message: `${submittedByName} submitted Requisition #${req.requisition_number}`,
+            ticket_number: req.requisition_number,
+        })
+    }).catch(err => console.error('Failed to save requisition client-notification:', err));
+}
+
+private getBranchNameFromCache(branchId: number): string | null {
+    try {
+        const cached = JSON.parse(sessionStorage.getItem('branches_cache') || '[]');
+        return cached.find((b: any) => b.id == branchId)?.name || null;
+    } catch { return null; }
+}
+
+private getDeptNameFromCache(deptId: number): string | null {
+    try {
+        const cached = JSON.parse(sessionStorage.getItem('departments_cache') || '[]');
+        return cached.find((d: any) => d.id == deptId)?.name || null;
+    } catch { return null; }
+}
   private saveToServer(notif: ClientNotification): void {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (!token || !notif.targetUserId) return;
-
     fetch(`${environment.apiUrl}/api/client-notifications`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        user_id: notif.targetUserId,
-        type: notif.type,
-        title: notif.title,
-        message: notif.message,
-        ticket_id: notif.ticketId || null,
-        ticket_number: notif.ticketNumber || null,
-        job_order_id: notif.jobOrderId || null,
-        job_order_number: notif.jobOrderNumber || null,
-        notification_type: notif.notificationType || 'incoming',
-        department_id: notif.targetDeptId || null,
-        branch_id: notif.targetBranchId || null,
-      }),
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            user_id: notif.targetUserId,
+            user_table: notif.targetUserTable || 'new_user',   
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            ticket_id: notif.ticketId || null,
+            ticket_number: notif.ticketNumber || null,
+            job_order_id: notif.jobOrderId || null,
+            job_order_number: notif.jobOrderNumber || null,
+            notification_type: notif.notificationType || 'incoming',
+            department_id: notif.targetDeptId || null,
+            branch_id: notif.targetBranchId || null,
+        }),
     })
     .then(res => res.json())
     .catch(err => console.log('⚠️ Failed to save notification to server:', err));
-  }
+}
 
   markAsRead(id: string): void {
   const current = this.notificationsSubject.value;
   const idx = current.findIndex(n => n.id === id);
   if (idx === -1) return;
-
   const updated = [...current];
   updated[idx] = { ...updated[idx], read: true };
   this.notificationsSubject.next(updated);
-
   if (id.startsWith('srv_')) {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const numericId = id.replace('srv_', '');
@@ -1129,7 +1208,6 @@ markAllAsRead(): void {
     const updated = this.notificationsSubject.value.map(n => ({ ...n, read: true }));
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
-    
     // ✅ Sync with backend
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token && this.currentUserId) {
@@ -1143,11 +1221,9 @@ markAllAsRead(): void {
     const updated = this.notificationsSubject.value.filter(n => n.id !== id);
     this.notificationsSubject.next(updated);
     this.saveNotifications(updated);
-
     // ✅ Track as deleted
     this.deletedNotificationIds.add(id);
     this.saveDeletedNotificationIds(this.deletedNotificationIds);
-
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token && id.startsWith('srv_')) {
       const numericId = id.replace('srv_', '');
@@ -1164,7 +1240,6 @@ markAllAsRead(): void {
 clearAll(): void {
   const current = this.notificationsSubject.value;
   current.forEach(n => this.deletedNotificationIds.add(n.id));
-
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   if (token) {
     current.forEach(n => {
@@ -1176,7 +1251,6 @@ clearAll(): void {
       }).catch(err => console.warn('⚠️ clearAll network error:', err));
     });
   }
-
   this.ticketNotifications = [];
   this.shownToastIds.clear();
   this.notificationsSubject.next([]);
@@ -1184,14 +1258,12 @@ clearAll(): void {
   getUnreadCount(): number {
     return this.notificationsSubject.value.filter(n => !n.read).length;
   }
-
   // ── TOAST POPUP ──
-
   private showToastPopup(title: string, message: string, ticketId?: number): void {
     if (!this.isBrowser) return;
+    this.playNotificationSound(); 
     if (!this.toastContainer) this.createToastContainer();
     if (!this.toastContainer) return;
-
     const toast = document.createElement('div');
     toast.className = 'client-notif-toast';
     toast.style.position = 'relative';
@@ -1206,15 +1278,12 @@ clearAll(): void {
       <button class="client-toast-close" title="Dismiss">✕</button>
       <div class="client-toast-progress"></div>
     `;
-
     this.toastContainer.appendChild(toast);
-
     const closeBtn = toast.querySelector('.client-toast-close');
     closeBtn?.addEventListener('click', (e) => {
       e.stopPropagation();
       this.removeToast(toast);
     });
-
     if (ticketId) {
       toast.addEventListener('click', () => {
         window.dispatchEvent(new CustomEvent('navigate-client-ticket', { detail: { ticketId } }));
@@ -1222,7 +1291,6 @@ clearAll(): void {
       });
       toast.style.cursor = 'pointer';
     }
-
     const timer = setTimeout(() => this.removeToast(toast), 6000);
     toast.addEventListener('mouseenter', () => {
       clearTimeout(timer);
@@ -1242,7 +1310,6 @@ clearAll(): void {
   }
 
   // ── HELPERS ──
-
   private generateId(): string {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
   }

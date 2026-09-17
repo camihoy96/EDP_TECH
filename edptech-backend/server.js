@@ -8156,14 +8156,12 @@ app.put('/api/messages/read/:fromUsername', async (req, res) => {
 });
 
 app.get('/api/notifications', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        
-        const [notifications] = await pool.query('SELECT * FROM notifications WHERE username = ? ORDER BY created_at DESC LIMIT 50', [req.decodedUser.username]);
-        res.json(notifications);
-    } catch (error) {
-        res.json([]);
-    }
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const [notifications] = await pool.query(
+        'SELECT * FROM notifications WHERE username = ? ORDER BY created_at DESC LIMIT 50',
+        [req.decodedUser.username]
+    );
+    res.json(notifications);
 });
 
 // DELETE - Delete a notification
@@ -8187,6 +8185,8 @@ app.delete('/api/notifications/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+
+
 // PUT - Mark ALL of the current user's notifications as read
 app.put('/api/notifications/mark-all-read', async (req, res) => {
     try {
@@ -8234,16 +8234,25 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
         if (!branch_id || !department_id) {
             return res.status(400).json({ error: 'branch_id and department_id are required' });
         }
-        // ✅ Only get users from new_user table (clients) in the specific branch+department
-        let newUserQuery = 'SELECT id FROM new_user WHERE branch_id = ? AND department_id = ?';
+
+        // Recipients from new_user
+        let newUserQuery = 'SELECT id, username FROM new_user WHERE branch_id = ? AND department_id = ?';
         let newUserParams = [branch_id, department_id];
-        
         if (exclude_user_id) {
             newUserQuery += ' AND id != ?';
             newUserParams.push(exclude_user_id);
         }
         const [newUsers] = await pool.query(newUserQuery, newUserParams);
-        // Insert notification for each client user
+
+        // Recipients from users
+        let adminQuery = 'SELECT id, username FROM users WHERE branch_id = ? AND department_id = ?';
+        let adminParams = [branch_id, department_id];
+        if (exclude_user_id) {
+            adminQuery += ' AND id != ?';
+            adminParams.push(exclude_user_id);
+        }
+        const [adminUsers] = await pool.query(adminQuery, adminParams);
+
         let insertCount = 0;
         for (const user of newUsers) {
             await pool.query(
@@ -8254,7 +8263,16 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
             );
             insertCount++;
         }
-        console.log('✅ Saved', insertCount, 'client requisition notifications for branch', branch_id, 'dept', department_id);
+        for (const user of adminUsers) {
+            await pool.query(
+                `INSERT INTO client_notifications 
+                (user_id, user_table, type, title, message, ticket_number, department_id, branch_id, notification_type, is_read, created_at) 
+                VALUES (?, 'users', ?, ?, ?, ?, ?, ?, 'requisition', 0, NOW())`,
+                [user.id, type || 'info', title, message, ticket_number || null, department_id, branch_id]
+            );
+            insertCount++;
+        }
+
         res.json({ success: true, count: insertCount });
     } catch (error) {
         console.error('POST /api/client-notifications/requisition error:', error);
@@ -8265,74 +8283,74 @@ app.post('/api/client-notifications/requisition', async (req, res) => {
 app.get('/api/client-notifications/:userId', async (req, res) => {
     try {
         const userId = parseInt(req.params.userId);
-        // Get user's branch and department
-        let userBranchId = null;
-        let userDeptId = null;
-        const [userInfo] = await pool.query(
-            'SELECT branch_id, department_id FROM users WHERE id = ?', [userId]
-        );
-        if (userInfo.length > 0) {
-            userBranchId = userInfo[0].branch_id;
-            userDeptId = userInfo[0].department_id;
+        const userTable = req.query.userTable;
+
+        let query, params;
+        if (userTable) {
+            query = `SELECT * FROM client_notifications 
+                     WHERE user_id = ? AND user_table = ?
+                     ORDER BY created_at DESC LIMIT 50`;
+            params = [userId, userTable];
         } else {
-            const [newUserInfo] = await pool.query(
-                'SELECT branch_id, department_id FROM new_user WHERE id = ?', [userId]
-            );
-            if (newUserInfo.length > 0) {
-                userBranchId = newUserInfo[0].branch_id;
-                userDeptId = newUserInfo[0].department_id;
-            }
+            query = `SELECT * FROM client_notifications 
+                     WHERE user_id = ?
+                     ORDER BY created_at DESC LIMIT 50`;
+            params = [userId];
         }
-        // Get notifications for this specific user
-        const [notifications] = await pool.query(
-            `SELECT * FROM client_notifications 
-             WHERE user_id = ? 
-             ORDER BY created_at DESC 
-             LIMIT 50`,
-            [userId]
-        );
+
+        const [notifications] = await pool.query(query, params);
         res.json(notifications);
     } catch (error) {
         console.error('GET /api/client-notifications/:userId error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // POST - Create a new client notification
 app.post('/api/client-notifications', async (req, res) => {
     try {
-       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-const decoded = req.decodedUser;
-        
-        const { user_id, type, title, message, ticket_id, ticket_number } = req.body;
-        
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+
+        const {
+            user_id, user_table, type, title, message,
+            ticket_id, ticket_number,
+            job_order_id, job_order_number,
+            notification_type, department_id, branch_id
+        } = req.body;
+
         if (!user_id || !title) {
             return res.status(400).json({ error: 'user_id and title are required' });
         }
-        
+
         const [result] = await pool.query(
-            `INSERT INTO client_notifications (user_id, type, title, message, ticket_id, ticket_number)
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [user_id, type || 'info', title, message || null, ticket_id || null, ticket_number || null]
+            `INSERT INTO client_notifications 
+             (user_id, user_table, type, title, message,
+              ticket_id, ticket_number,
+              job_order_id, job_order_number,
+              notification_type, department_id, branch_id,
+              is_read, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+            [
+                user_id,
+                user_table || 'new_user',
+                type || 'info',
+                title,
+                message || null,
+                ticket_id || null,
+                ticket_number || null,
+                job_order_id || null,
+                job_order_number || null,
+                notification_type || 'incoming',
+                department_id || null,
+                branch_id || null
+            ]
         );
-        
-        res.status(201).json({
-            id: result.insertId,
-            user_id,
-            type: type || 'info',
-            title,
-            message,
-            ticket_id,
-            ticket_number,
-            is_read: 0,
-            created_at: new Date().toISOString()
-        });
+
+        res.status(201).json({ success: true, id: result.insertId });
     } catch (error) {
         console.error('Error creating client notification:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // PUT - Mark notification as read
 app.put('/api/client-notifications/:id/read', async (req, res) => {
     try {
@@ -8457,7 +8475,114 @@ app.get('/api/new-users', async (req, res) => {
         res.json([]);  // Return empty array instead of error
     }
 });
+app.post('/api/client-notifications/job-order', async (req, res) => {
+    try {
+        const { branch_id, department_id, type, title, message,
+                job_order_id, job_order_number,
+                exclude_user_id, notification_type } = req.body;
 
+        if (!branch_id || !department_id) {
+            return res.status(400).json({ error: 'branch_id and department_id are required' });
+        }
+
+        // Recipients from new_user
+        let newUserQuery = 'SELECT id FROM new_user WHERE branch_id = ? AND department_id = ?';
+        let newUserParams = [branch_id, department_id];
+        if (exclude_user_id) {
+            newUserQuery += ' AND id != ?';
+            newUserParams.push(exclude_user_id);
+        }
+        const [newUsers] = await pool.query(newUserQuery, newUserParams);
+
+        // Recipients from users (admins in that dept too)
+        let adminQuery = 'SELECT id FROM users WHERE branch_id = ? AND department_id = ?';
+        let adminParams = [branch_id, department_id];
+        if (exclude_user_id) {
+            adminQuery += ' AND id != ?';
+            adminParams.push(exclude_user_id);
+        }
+        const [adminUsers] = await pool.query(adminQuery, adminParams);
+
+        let count = 0;
+
+        for (const u of newUsers) {
+            await pool.query(
+                `INSERT INTO client_notifications 
+                 (user_id, user_table, type, title, message,
+                  job_order_id, job_order_number,
+                  branch_id, department_id, notification_type, is_read, created_at)
+                 VALUES (?, 'new_user', ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+                [u.id, type || 'info', title, message,
+                 job_order_id || null, job_order_number || null,
+                 branch_id, department_id, notification_type || 'incoming']
+            );
+            count++;
+        }
+
+        for (const u of adminUsers) {
+            await pool.query(
+                `INSERT INTO client_notifications 
+                 (user_id, user_table, type, title, message,
+                  job_order_id, job_order_number,
+                  branch_id, department_id, notification_type, is_read, created_at)
+                 VALUES (?, 'users', ?, ?, ?, ?, ?, ?, ?, ?, 0, NOW())`,
+                [u.id, type || 'info', title, message,
+                 job_order_id || null, job_order_number || null,
+                 branch_id, department_id, notification_type || 'incoming']
+            );
+            count++;
+        }
+
+        res.json({ success: true, count });
+    } catch (error) {
+        console.error('POST /api/client-notifications/job-order error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET - Get EDP/IT agents from the users table only (for assign dropdowns)
+app.get('/api/edp-users', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+
+        const [rows] = await pool.query(`
+            SELECT 
+                u.id,
+                u.username,
+                u.fullname,
+                u.email,
+                u.role,
+                u.department,
+                u.department_id,
+                u.branch_id,
+                u.avatar_color,
+                u.photo_url,
+                u.workDays,
+                u.dayOff,
+                u.workStart,
+                u.workEnd,
+                u.lunchStart,
+                u.lunchEnd,
+                u.leaveEntries,
+                u.created_at,
+                u.last_activity,
+                'users' AS user_table,
+                b.name AS branch_name,
+                b.company_name,
+                d.name AS department_name
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            LEFT JOIN departments d ON u.department_id = d.id
+            WHERE u.department_id IN (1, 14, 23)
+              AND LOWER(COALESCE(u.role, '')) <> 'admin'
+            ORDER BY u.fullname ASC
+        `);
+
+        res.json(rows);
+    } catch (error) {
+        console.error('❌ GET /api/edp-users error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // ============================================
 // ENHANCED LOGGING SYSTEM
 // ============================================
@@ -9782,15 +9907,24 @@ app.delete('/api/ticket-notifications/:id', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-
         const { id } = req.params;
-        await pool.query('DELETE FROM ticket_notifications WHERE id = ?', [id]);
+        const currentUserId = decoded.id;
+        const currentUserTable = decoded.userTable || 'users';
+
+        // Mark cleared for THIS user only (upsert handles both cases)
+        await pool.query(
+            `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at)
+             VALUES (?, ?, ?, 1, NOW())
+             ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = NOW()`,
+            [id, currentUserId, currentUserTable]
+        );
+
         res.json({ success: true });
     } catch (error) {
+        console.error('Delete ticket notification error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-
 // ============================================
 // track which users have read/cleared each notification
 // ============================================
@@ -9800,22 +9934,87 @@ app.put('/api/ticket-notifications/:id/read', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-        
         const { id } = req.params;
         const { cleared } = req.body;
-        
+
+        // Track per-user read state
         await pool.query(
             `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at) 
              VALUES (?, ?, ?, 1, ?) 
              ON DUPLICATE KEY UPDATE is_read = 1, cleared_at = ?`,
             [id, decoded.id, decoded.userTable || 'users', cleared ? new Date() : null, cleared ? new Date() : null]
         );
+
+        // ALSO mark the row itself read (this is what the client reads)
+        await pool.query(
+            'UPDATE ticket_notifications SET is_read = 1 WHERE id = ?',
+            [id]
+        );
+
         res.json({ success: true });
     } catch (error) {
+        console.error('Mark read error:', error);
         res.status(500).json({ error: error.message });
     }
 });
+// PUT - Mark all ticket-notifications as read for current user
+app.put('/api/ticket-notifications/mark-all-read', async (req, res) => {
+    try {
+        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+        const decoded = req.decodedUser;
 
+        const currentUserId = decoded.id;
+        const currentUserTable = decoded.userTable || 'users';
+
+        console.log(`📥 PUT /ticket-notifications/mark-all-read — user: ${currentUserId} (${currentUserTable})`);
+
+        // 1) Insert per-user read markers for every notification this user can see
+        //    (is_read = 1, cleared_at stays NULL so it remains visible but marked read)
+        const [insertResult] = await pool.query(
+            `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at)
+             SELECT tn.id, ?, ?, 1, NULL
+             FROM ticket_notifications tn
+             LEFT JOIN ticket_notification_reads tnr
+                ON tn.id = tnr.notification_id
+                AND tnr.user_id = ?
+                AND tnr.user_table = ?
+             WHERE tnr.id IS NULL
+               AND (
+                   (tn.user_id IS NULL AND tn.user_table IS NULL AND ? = 'users')
+                   OR
+                   (tn.user_id = ? AND tn.user_table = ?)
+               )
+             ON DUPLICATE KEY UPDATE is_read = 1`,
+            [currentUserId, currentUserTable, currentUserId, currentUserTable,
+             currentUserTable, currentUserId, currentUserTable]
+        );
+
+        // 2) Also flip the row-level is_read so the client's `read: n.is_read === 1`
+        //    mapping picks it up on the next poll
+        const [updateResult] = await pool.query(
+            `UPDATE ticket_notifications
+             SET is_read = 1
+             WHERE is_read = 0
+               AND (
+                   (user_id IS NULL AND user_table IS NULL AND ? = 'users')
+                   OR
+                   (user_id = ? AND user_table = ?)
+               )`,
+            [currentUserTable, currentUserId, currentUserTable]
+        );
+
+        console.log(`✅ Marked ${updateResult.affectedRows} ticket-notification row(s) read`);
+
+        res.json({
+            success: true,
+            inserted: insertResult.affectedRows,
+            updated: updateResult.affectedRows
+        });
+    } catch (error) {
+        console.error('❌ Error marking all ticket-notifications as read:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 // PUT - Mark all notifications as cleared for current user
 app.put('/api/ticket-notifications/clear-all', async (req, res) => {
     try {
@@ -9826,27 +10025,41 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
         const currentUserTable = decoded.userTable || 'users';
         
         console.log('🗑️ Clear all for user:', currentUserId, 'table:', currentUserTable);
-        
-        await pool.query(
+
+        // 1) Update existing read rows for this user → set cleared_at = NOW()
+        const [updateResult] = await pool.query(
+            `UPDATE ticket_notification_reads
+             SET cleared_at = NOW(), is_read = 1
+             WHERE user_id = ?
+               AND user_table = ?
+               AND cleared_at IS NULL
+               AND notification_id IN (
+                   SELECT id FROM ticket_notifications
+                   WHERE (user_id IS NULL AND user_table IS NULL AND ? = 'users')
+                      OR (user_id = ? AND user_table = ?)
+               )`,
+            [currentUserId, currentUserTable, currentUserTable, currentUserId, currentUserTable]
+        );
+
+        // 2) Insert rows for notifications that have no tracking row yet
+        const [insertResult] = await pool.query(
             `INSERT INTO ticket_notification_reads (notification_id, user_id, user_table, is_read, cleared_at)
-             SELECT tn.id, ?, ?, 1, NOW() 
+             SELECT tn.id, ?, ?, 1, NOW()
              FROM ticket_notifications tn
-             LEFT JOIN ticket_notification_reads tnr 
-                ON tn.id = tnr.notification_id 
-                AND tnr.user_id = ? 
+             LEFT JOIN ticket_notification_reads tnr
+                ON tn.id = tnr.notification_id
+                AND tnr.user_id = ?
                 AND tnr.user_table = ?
              WHERE tnr.id IS NULL
                AND (
                    (tn.user_id IS NULL AND tn.user_table IS NULL AND ? = 'users')
-                   OR 
-                   (tn.user_id = ? AND tn.user_table = ?)
-               )
-             ON DUPLICATE KEY UPDATE cleared_at = NOW()`,
+                   OR (tn.user_id = ? AND tn.user_table = ?)
+               )`,
             [currentUserId, currentUserTable, currentUserId, currentUserTable, currentUserTable, currentUserId, currentUserTable]
         );
-        
-        console.log('✅ All notifications cleared for user:', currentUserId);
-        res.json({ success: true, message: 'All notifications cleared for user' });
+
+        console.log(`✅ Updated ${updateResult.affectedRows}, inserted ${insertResult.affectedRows}`);
+        res.json({ success: true, updated: updateResult.affectedRows, inserted: insertResult.affectedRows });
     } catch (error) {
         console.error('Clear all error:', error);
         res.status(500).json({ error: error.message });

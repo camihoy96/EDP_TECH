@@ -1398,6 +1398,7 @@ Clear all
       flex-shrink: 0;
       font-family: var(--font);
       transition: all 0.15s;
+      position: relative; 
     }
     .toolbar-btn:hover {
       background: var(--bg);
