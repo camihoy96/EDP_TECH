@@ -18,45 +18,117 @@ import { Subscription } from 'rxjs';
         <div class="req-list-container">
           <!-- Header -->
           <div class="view-header">
-      <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
+      <h2 style="display: inline-flex; align-items: center; gap: 8px;">
+  <!-- Outgoing (Our Requisitions) -->
+  <svg *ngIf="viewMode === 'our'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+  <!-- Incoming (Request Management) -->
+  <svg *ngIf="viewMode !== 'our'" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+  {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}
+</h2>
     <div class="header-actions">
-        <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
-          📤 Our Requests
-          <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
-        </button>
-        <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
-          📥 Request Management
-          <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
-        </button>
-        <button class="classic-btn primary" routerLink="/client/request/new">
-          <span>➕</span> New Requisition
-        </button>
+      <!-- Our Requests (Outgoing) -->
+<button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+  Our Requests
+  <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
+</button>
+
+<!-- Request Management (Incoming) -->
+<button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+  Request Management
+  <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
+</button>
+
+<!-- New Requisition (Add) -->
+<button class="classic-btn primary" routerLink="/client/request/new">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+  New Requisition
+</button>
       </div>
     </div>
 
-        <div class="status-tabs-bar">
-      <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-        📋 All <span class="tab-count">{{ getStatusCount('all') }}</span>
-    </button>
-      <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
-        ⏳ Pending <span class="tab-count pending-count">{{ getStatusCount('pending') }}</span>
-      </button>
-      <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
-        📥 Accepted <span class="tab-count approved-count">{{ getStatusCount('approved') }}</span>
-      </button>
-        <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
-      📤 Forwarded <span class="tab-count forwarded-count">{{ getStatusCount('forwarded') }}</span>
-    </button>
-      <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
-        ⚙️ On Process <span class="tab-count processing-count">{{ getStatusCount('processing') }}</span>
-      </button>
-      <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
-        📦 Released <span class="tab-count released-count">{{ getStatusCount('released') }}</span>
-      </button>
-      <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
-        ❌ Rejected <span class="tab-count rejected-count">{{ getStatusCount('rejected') }}</span>
-      </button>
-    </div>
+      <div class="status-tabs-bar">
+  <!-- All -->
+  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+    </svg>
+    All <span class="tab-count">{{ getStatusCount('all') }}</span>
+  </button>
+
+  <!-- Pending -->
+  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    Pending <span class="tab-count pending-count">{{ getStatusCount('pending') }}</span>
+  </button>
+
+  <!-- Accepted -->
+  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+      <polyline points="22 4 12 14.01 9 11.01"/>
+    </svg>
+    Accepted <span class="tab-count approved-count">{{ getStatusCount('approved') }}</span>
+  </button>
+
+  <!-- Forwarded -->
+  <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"/>
+      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </svg>
+    Forwarded <span class="tab-count forwarded-count">{{ getStatusCount('forwarded') }}</span>
+  </button>
+
+  <!-- On Process -->
+  <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+    On Process <span class="tab-count processing-count">{{ getStatusCount('processing') }}</span>
+  </button>
+
+  <!-- Released -->
+  <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+    Released <span class="tab-count released-count">{{ getStatusCount('released') }}</span>
+  </button>
+
+  <!-- Rejected -->
+  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="15" y1="9" x2="9" y2="15"/>
+      <line x1="9" y1="9" x2="15" y2="15"/>
+    </svg>
+    Rejected <span class="tab-count rejected-count">{{ getStatusCount('rejected') }}</span>
+  </button>
+</div>
     <!-- Filter Bar -->
     <div class="filter-bar">
     <div class="filter-group">
@@ -85,7 +157,12 @@ import { Subscription } from 'rxjs';
       </div>
       
       <button class="classic-btn" (click)="clearFilters()">
-        <span>🔄</span> Clear
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="23 4 23 10 17 10"/>
+  <polyline points="1 20 1 14 7 14"/>
+  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+</svg>
+Clear
       </button>
     </div>
         <!-- Status Bar -->
@@ -105,23 +182,48 @@ import { Subscription } from 'rxjs';
         <label class="select-all-label">
           <input type="checkbox" [checked]="isAllSelected()" (change)="toggleSelectAll()"> Select All
         </label>
-        <button class="classic-btn primary" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" 
-                (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
-          ⚙️ Process ({{ selectedReqIds.length }})
-        </button>
-        <button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
-                (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
-          ⚙️ Process ({{ selectedReqIds.length }})
-        </button>
-        <!-- Delete for forwarded, released, rejected -->
-        <button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
-                (click)="bulkDeleteForwarded()" style="font-size: 12px; padding: 3px 10px;">
-          🗑️ Delete ({{ selectedReqIds.length }})
-        </button>
-        <button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
-                (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 12px; padding: 3px 10px;">
-          📦 Release ({{ selectedReqIds.length }})
-        </button>
+        <!-- Process (approved) -->
+<button class="classic-btn primary" *ngIf="activeTab === 'approved' && selectedReqIds.length > 0" 
+        (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  Process ({{ selectedReqIds.length }})
+</button>
+
+<!-- Process (forwarded) -->
+<button class="classic-btn primary" *ngIf="activeTab === 'forwarded' && selectedReqIds.length > 0" 
+        (click)="bulkProcess()" style="background: #cc6600; border-color: #cc6600; font-size: 12px; padding: 3px 10px;">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  Process ({{ selectedReqIds.length }})
+</button>
+
+<!-- Bulk Delete -->
+<button class="classic-btn danger" *ngIf="(activeTab === 'forwarded' || activeTab === 'released' || activeTab === 'rejected') && selectedReqIds.length > 0" 
+        (click)="bulkDeleteForwarded()" style="font-size: 12px; padding: 3px 10px;">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+  Delete ({{ selectedReqIds.length }})
+</button>
+
+<!-- Bulk Release -->
+<button class="classic-btn primary" *ngIf="activeTab === 'processing' && selectedReqIds.length > 0" 
+        (click)="bulkRelease()" style="background: #0066cc; border-color: #0066cc; font-size: 12px; padding: 3px 10px;">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+  Release ({{ selectedReqIds.length }})
+</button>
     </ng-container>
     </div>
 
@@ -237,52 +339,126 @@ import { Subscription } from 'rxjs';
       </div>
     <td class="action-cell" (click)="$event.stopPropagation()">
           <!-- Creator can edit their own pending -->
-          <button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">✏️</button>
-          
-        <!-- Forward button - only in Request Management (incoming) view -->
-    <button class="action-btn forward-btn" 
-      *ngIf="viewMode === 'incoming' && req.status === 'approved' && canForward(req)" 
-      (click)="openForwardModal(req)" 
-      title="Forward">📤</button>
-          
-          <!-- Accept button - only show when request has been approved (approved_name is filled) -->
-    <button class="action-btn accept-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="acceptRequisition(req)" title="Accept">✅</button>
+        <!-- Edit -->
+<button class="action-btn edit-btn" *ngIf="canModify(req)" (click)="editRequisition(req)" title="Edit">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+</button>
 
-    <!-- Reject button - only show when request has been approved (approved_name is filled) -->
-    <button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">❌</button>
-          <button class="action-btn process-btn" 
-      *ngIf="viewMode === 'incoming' && !req.is_forwarded && req.status === 'approved' && isHeadOrSupervisor() && req.branch_id === currentUser?.branch_id && req.department_id === currentUser?.department_id" 
-      (click)="processRequisition(req)" 
-      title="Process">⚙️</button>
-    <!-- 🔑 Process button for FORWARDED requests in incoming view - only when NOT yet processed -->
-        <button class="action-btn process-btn" 
-      *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && req.forwarded_status === 'forwarded' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
-      (click)="processRequisition(req)" 
-      title="Process Forwarded">⚙️</button>
-            
-          <!-- 🔑 Release button for FORWARDED requests in incoming view (after processing) -->
-          <button class="action-btn release-btn" 
-            *ngIf="viewMode === 'incoming' && req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
-            (click)="releaseRequisition(req)" 
-            title="Release Forwarded">📦</button>
-            
-          <!-- 🔑 Release button for NORMAL requests in incoming view -->
-          <button class="action-btn release-btn" 
-            *ngIf="viewMode === 'incoming' && !req.is_forwarded && canRelease(req)" 
-            (click)="releaseRequisition(req)" 
-            title="Release">📦</button>
+<!-- Forward -->
+<button class="action-btn forward-btn" 
+  *ngIf="viewMode === 'incoming' && req.status === 'approved' && canForward(req)" 
+  (click)="openForwardModal(req)" 
+  title="Forward">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+</button>
 
-          <!-- 🔑 Forwarding dept FINAL Release - only when forwarded_status is 'released' -->
-          <button class="action-btn release-btn" 
-            *ngIf="viewMode === 'our' && req.is_forwarded && canReleaseForwarded(req)" 
-            (click)="releaseForwardedRequisition(req)" 
-            title="Final Release">📦✓</button>
-          
-          <button class="action-btn print-btn" (click)="printRequisition(req)" title="Print">🖨️</button>
-          <button class="action-btn view-btn" (click)="openViewModal(req)" title="View Details">📋</button>
-          
-          <!-- Delete button -->
-          <button class="action-btn delete-btn" *ngIf="canDelete(req)" (click)="deleteRequisition(req)" title="Delete">🗑️</button>
+<!-- Accept -->
+<button class="action-btn accept-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="acceptRequisition(req)" title="Accept">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+</button>
+
+<!-- Reject -->
+<button class="action-btn reject-btn" *ngIf="canAcceptReject(req) && req.approved_name" (click)="rejectRequisition(req)" title="Reject">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  </svg>
+</button>
+
+<!-- Process (normal approved) -->
+<button class="action-btn process-btn" 
+  *ngIf="viewMode === 'incoming' && !req.is_forwarded && req.status === 'approved' && isHeadOrSupervisor() && req.branch_id === currentUser?.branch_id && req.department_id === currentUser?.department_id" 
+  (click)="processRequisition(req)" 
+  title="Process">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</button>
+
+<!-- Process (forwarded) -->
+<button class="action-btn process-btn" 
+  *ngIf="viewMode === 'incoming' && req.is_forwarded && req.status === 'forwarded' && req.forwarded_status === 'forwarded' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+  (click)="processRequisition(req)" 
+  title="Process Forwarded">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+</button>
+
+<!-- Release (forwarded processing) -->
+<button class="action-btn release-btn" 
+  *ngIf="viewMode === 'incoming' && req.is_forwarded && req.forwarded_status === 'processing' && isHeadOrSupervisor() && req.forwarded_to_branch_id === currentUser?.branch_id && req.forwarded_to_department_id === currentUser?.department_id" 
+  (click)="releaseRequisition(req)" 
+  title="Release Forwarded">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+</button>
+
+<!-- Release (normal) -->
+<button class="action-btn release-btn" 
+  *ngIf="viewMode === 'incoming' && !req.is_forwarded && canRelease(req)" 
+  (click)="releaseRequisition(req)" 
+  title="Release">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+  </svg>
+</button>
+
+<!-- Final Release (forwarded) -->
+<button class="action-btn release-btn" 
+  *ngIf="viewMode === 'our' && req.is_forwarded && canReleaseForwarded(req)" 
+  (click)="releaseForwardedRequisition(req)" 
+  title="Final Release">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+    <line x1="12" y1="22.08" x2="12" y2="12"/>
+    <polyline points="9 7 12 10 15 7"/>
+  </svg>
+</button>
+
+<!-- Print -->
+<button class="action-btn print-btn" (click)="printRequisition(req)" title="Print">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 6 2 18 2 18 9"/>
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+    <rect x="6" y="14" width="12" height="8"/>
+  </svg>
+</button>
+
+<!-- View -->
+<button class="action-btn view-btn" (click)="openViewModal(req)" title="View Details">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+</button>
+
+<!-- Delete -->
+<button class="action-btn delete-btn" *ngIf="canDelete(req)" (click)="deleteRequisition(req)" title="Delete">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+</button>
         </td>
       
     <tr *ngIf="filteredRequisitions.length === 0">

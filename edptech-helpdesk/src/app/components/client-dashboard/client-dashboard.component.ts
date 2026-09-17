@@ -522,7 +522,6 @@ interface ClientTicket {
   {{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}
   <span class="tbadge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
 </button>
-
 <button class="toolbar-btn" [class.active-btn]="isChatRoute" (click)="goToChat()" *ngIf="isEDPUser()">
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -675,6 +674,20 @@ interface ClientTicket {
   </svg>
   <span class="nav-label">{{ isEDPUser() ? 'Contact LSP IT' : 'Contact IT' }}</span>
   <span class="nav-badge" *ngIf="messageNotificationCount > 0">{{ messageNotificationCount > 99 ? '99+' : messageNotificationCount }}</span>
+</a>
+<a routerLink="/client/computer-monitoring"
+   routerLinkActive="active"
+   class="sidebar-link"
+   *ngIf="isEDPUserInOtherBranch()">
+  <svg class="nav-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2"/>
+    <line x1="8" y1="21" x2="16" y2="21"/>
+    <line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+  <span class="nav-label">Computer Monitoring</span>
+  <span class="nav-badge" *ngIf="computerMonitoringNotifCount > 0">
+    {{ computerMonitoringNotifCount > 99 ? '99+' : computerMonitoringNotifCount }}
+  </span>
 </a>
           </div>
 
@@ -2691,6 +2704,7 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   systemLogoSafe: SafeUrl | null = null;
   showLogoutWarning = false;
   logoutCountdown = 60;
+  computerMonitoringNotifCount: number = 0;
   allTicketsNotificationCount: number = 0;
   myTicketsNotificationCount: number = 0;
   previousTicketStates: Map<number, string> = new Map(); // ticketId -> last known status
@@ -2928,7 +2942,28 @@ loadToolbarAiAvatar() {
     this.pendingRequests.set(pendingKey, promise);
     return promise;
   }
+isEDPUserInOtherBranch(): boolean {
+  if (!this.currentUser) return false;
 
+  // 1. Must be in an EDP/IT department
+  if (!this.isEDPUser()) return false;
+
+  // 2. Must NOT be in a main branch (1 or 5)
+  const userBranchId = Number(this.currentUser.branch_id);
+  if ([1, 5].includes(userBranchId)) return false;
+
+  return true;
+}
+/** Route helper for the Computer Monitoring button */
+get isComputerMonitoringRoute(): boolean {
+  return this.router.url.startsWith('/client/computer-monitoring');
+}
+
+/** Navigate to the client-side Computer Monitoring page */
+goToComputerMonitoring(): void {
+  this.router.navigate(['/client/computer-monitoring']);
+  this.activeMenu = null;
+}
   // ✅ Clear specific cache entry
   private clearCacheEntry(url: string): void {
     const signature = this.getRequestSignature('GET', url);

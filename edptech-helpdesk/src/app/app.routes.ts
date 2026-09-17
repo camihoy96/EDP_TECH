@@ -30,6 +30,7 @@ import { AuthCallbackComponent } from './components/auth-callback/auth-callback.
 import { ClientFeaturesComponent } from './components/client/features/features.component';
 import { AnnouncementsComponent } from './components/admin/admin-panel/announcements.component';
 import {AiKnowledgeManagementComponent} from './components/admin/admin-panel/ai-knowledge-management.component';
+
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
   { path: 'signup', component: SignupPageComponent },
@@ -213,6 +214,11 @@ export const routes: Routes = [
         path: 'feedback',
         loadComponent: () => import('./components/client-feedback/client-feedback.component').then(m => m.ClientFeedbackComponent)
       },
+      {
+  path: 'computer-monitoring',
+  loadComponent: () => import('./components/client-dashboard/cleint-computer-monitoring.component')
+    .then(m => m.ClientComputerMonitoringComponent)
+},
       {
         path: 'chat',
         loadComponent: () => import('./components/client-dashboard/client-chat.component').then(m => m.ClientChatComponent)

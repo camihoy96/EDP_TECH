@@ -19,9 +19,21 @@ import { ClientNotificationService } from '../../../services/client-notification
       
      <!-- Classic Windows-style header -->
 <div class="retro-header">
-  <h2>🎫 Ticket Management</h2>
+  <h2 style="display: inline-flex; align-items: center; gap: 8px;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+      <line x1="9" y1="9" x2="9" y2="15"/>
+    </svg>
+    Ticket Management
+  </h2>
   <button class="retro-btn primary" (click)="newTicket()">
-    <span>📄</span> New Ticket
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="12" y1="18" x2="12" y2="12"/>
+      <line x1="9" y1="15" x2="15" y2="15"/>
+    </svg>
+    New Ticket
   </button>
 </div>
 
@@ -30,45 +42,72 @@ import { ClientNotificationService } from '../../../services/client-notification
   <button class="status-tab" 
           [class.active]="activeTab === 'all'" 
           (click)="setActiveTab('all')">
-    📋 All
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle; margin-right: 4px;">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+  </svg> All
     <span class="tab-count">{{ tickets.length }}</span>
   </button>
   <button class="status-tab" 
-          [class.active]="activeTab === 'new'" 
-          (click)="setActiveTab('new')">
-    🆕 New
-    <span class="tab-count new-count">{{ getStatusCount('new') }}</span>
-  </button>
+        [class.active]="activeTab === 'new'" 
+        (click)="setActiveTab('new')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="16"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+  </svg>
+  New
+  <span class="tab-count new-count">{{ getStatusCount('new') }}</span>
+</button>
   <button class="status-tab" 
-          [class.active]="activeTab === 'assigned'" 
-          (click)="setActiveTab('assigned')">
-    📌 Assigned
-    <span class="tab-count">{{ getStatusCount('assigned') }}</span>
-  </button>
+        [class.active]="activeTab === 'assigned'" 
+        (click)="setActiveTab('assigned')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="17" x2="12" y2="22"/>
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+  </svg>
+  Assigned
+  <span class="tab-count">{{ getStatusCount('assigned') }}</span>
+</button>
   <button class="status-tab" 
-          [class.active]="activeTab === 'in_progress'" 
-          (click)="setActiveTab('in_progress')">
-    ⚙️ In Progress
-    <span class="tab-count progress-count">{{ getStatusCount('in_progress') }}</span>
-  </button>
+        [class.active]="activeTab === 'in_progress'" 
+        (click)="setActiveTab('in_progress')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  In Progress
+  <span class="tab-count progress-count">{{ getStatusCount('in_progress') }}</span>
+</button>
   <button class="status-tab" 
-          [class.active]="activeTab === 'pending'" 
-          (click)="setActiveTab('pending')">
-    ⏳ Pending
-    <span class="tab-count">{{ getStatusCount('pending') }}</span>
-  </button>
-  <button class="status-tab" 
-          [class.active]="activeTab === 'resolved'" 
-          (click)="setActiveTab('resolved')">
-    ✅ Resolved
-    <span class="tab-count resolved-count">{{ getStatusCount('resolved') }}</span>
-  </button>
-  <button class="status-tab" 
-          [class.active]="activeTab === 'closed'" 
-          (click)="setActiveTab('closed')">
-    🔒 Closed
-    <span class="tab-count">{{ getStatusCount('closed') }}</span>
-  </button>
+        [class.active]="activeTab === 'pending'" 
+        (click)="setActiveTab('pending')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+  Pending
+  <span class="tab-count">{{ getStatusCount('pending') }}</span>
+</button>
+ <button class="status-tab" 
+        [class.active]="activeTab === 'resolved'" 
+        (click)="setActiveTab('resolved')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  Resolved
+  <span class="tab-count resolved-count">{{ getStatusCount('resolved') }}</span>
+</button>
+ <button class="status-tab" 
+        [class.active]="activeTab === 'closed'" 
+        (click)="setActiveTab('closed')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+  Closed
+  <span class="tab-count">{{ getStatusCount('closed') }}</span>
+</button>
 </div>
 
 <!-- Filter bar -->
@@ -106,16 +145,19 @@ import { ClientNotificationService } from '../../../services/client-notification
       <option value="low">Low</option>
     </select>
   </div>
-  
   <div class="filter-group search-group">
     <label>Search:</label>
     <input type="text" class="retro-input" placeholder="Ticket #, title..." 
            [(ngModel)]="searchTerm" (input)="applyFilters()">
   </div>
-  
   <button class="retro-btn" (click)="clearFilters()">
-    <span>🔄</span> Clear
-  </button>
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  Clear
+</button>
 </div>
 <!-- Status bar info -->
 <div class="retro-status-bar">
@@ -123,19 +165,48 @@ import { ClientNotificationService } from '../../../services/client-notification
   <span>|</span>
   <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
 </div>
-
 <!-- View Toggle -->
 <div class="view-toggle" style="display:flex; gap:4px; align-items:center; margin-bottom:4px;">
   <span style="font-size:10px;color:#666;">View:</span>
-  <button class="view-btn" [class.active]="viewMode === 'list'" (click)="setView('list')" title="List View">📋</button>
-  <button class="view-btn" [class.active]="viewMode === 'grid'" (click)="setView('grid')" title="Grid View">🔲</button>
-  <button class="view-btn" [class.active]="viewMode === 'kanban'" (click)="setView('kanban')" title="Kanban View">📊</button>
-  
+  <!-- List View -->
+<button class="view-btn" [class.active]="viewMode === 'list'" (click)="setView('list')" title="List View">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/>
+    <line x1="8" y1="12" x2="21" y2="12"/>
+    <line x1="8" y1="18" x2="21" y2="18"/>
+    <line x1="3" y1="6" x2="3.01" y2="6"/>
+    <line x1="3" y1="12" x2="3.01" y2="12"/>
+    <line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+</button>
+<!-- Grid View -->
+<button class="view-btn" [class.active]="viewMode === 'grid'" (click)="setView('grid')" title="Grid View">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="7" height="7"/>
+    <rect x="14" y="3" width="7" height="7"/>
+    <rect x="14" y="14" width="7" height="7"/>
+    <rect x="3" y="14" width="7" height="7"/>
+  </svg>
+</button>
+<!-- Kanban View -->
+<button class="view-btn" [class.active]="viewMode === 'kanban'" (click)="setView('kanban')" title="Kanban View">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="5" height="18" rx="1"/>
+    <rect x="10" y="3" width="5" height="12" rx="1"/>
+    <rect x="17" y="3" width="5" height="15" rx="1"/>
+  </svg>
+</button>
   <!-- Bulk Delete Button -->
   <div style="margin-left: auto;" *ngIf="selectedTicketIds.length > 0">
     <button class="retro-btn danger" (click)="bulkDeleteTickets()" style="background: #cc0000; color: white; border-color: #cc0000;">
-      🗑️ Delete ({{ selectedTicketIds.length }})
-    </button>
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+  Delete ({{ selectedTicketIds.length }})
+</button>
   </div>
 </div>
 
@@ -207,11 +278,47 @@ import { ClientNotificationService } from '../../../services/client-notification
     <td class="date-cell">{{ ticket.created_at | date:'MMM d, h:mm a' }}</td>
     <!-- Actions -->
     <td class="action-cell" (click)="$event.stopPropagation()">
-      <button class="action-btn" (click)="viewTicket(ticket)" title="View">📋</button>
-      <button *ngIf="canEditTicket(ticket)" class="action-btn" (click)="editTicket(ticket.id)" title="Edit">✏️</button>
-      <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" [title]="ticket.assigned_to ? 'Reassign' : 'Assign'">{{ ticket.assigned_to ? '🔄' : '👤' }}</button>
-      <button *ngIf="canResolveTicket(ticket)" class="action-btn resolve-btn" (click)="resolveTicket(ticket)" title="Mark as Resolved">✅</button>
-      <button *ngIf="canDeleteFromList(ticket)" class="action-btn delete-list-btn" (click)="deleteTicketFromList(ticket)" title="Delete">🗑️</button>
+     <button class="action-btn view-btn" (click)="viewTicket(ticket)" title="View">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+</button>
+      <button *ngIf="canEditTicket(ticket)" class="action-btn edit-btn" (click)="editTicket(ticket.id)" title="Edit">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+</button>
+     <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" [title]="ticket.assigned_to ? 'Reassign' : 'Assign'">
+  <!-- Reassign icon (two arrows in a circle) -->
+  <svg *ngIf="ticket.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  <!-- Assign icon (user with plus) -->
+  <svg *ngIf="!ticket.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg>
+</button>
+    <button *ngIf="canResolveTicket(ticket)" class="action-btn resolve-btn" (click)="resolveTicket(ticket)" title="Mark as Resolved">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+    <polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+</button>
+  <button *ngIf="canDeleteFromList(ticket)" class="action-btn delete-list-btn" (click)="deleteTicketFromList(ticket)" title="Delete">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+</button>
     </td>
   </tr>
   <tr *ngIf="filteredTickets.length === 0">
@@ -292,14 +399,34 @@ import { ClientNotificationService } from '../../../services/client-notification
 <div class="modal-overlay" *ngIf="showAssignModal" (click)="closeAssignModal()">
   <div class="modal-window" (click)="$event.stopPropagation()">
     <div class="modal-titlebar" (mousedown)="startDrag($event)" style="cursor: grab;">
-      <span>{{ assignTicketData?.assigned_to ? '🔄 Reassign' : '👤 Assign' }} Ticket: {{ assignTicketData?.ticket_number }}</span>
+     <span style="display: inline-flex; align-items: center; gap: 6px;">
+  <!-- Reassign icon -->
+  <svg *ngIf="assignTicketData?.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  <!-- Assign icon -->
+  <svg *ngIf="!assignTicketData?.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg>
+  {{ assignTicketData?.assigned_to ? 'Reassign' : 'Assign' }} Ticket: {{ assignTicketData?.ticket_number }}
+</span>
       <button type="button" (click)="closeAssignModal()" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
       
       <div class="current-assign" *ngIf="assignTicketData?.assigned_to && assignTicketData?.agent_name">
         <span class="current-label">Currently assigned to:</span>
-        <span class="current-agent">👤 {{ getAssignedNames(assignTicketData) }}</span>
+        <span class="current-agent"> <svg *ngIf="!assignTicketData?.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg> {{ getAssignedNames(assignTicketData) }}</span>
       </div>
 
       <p class="assign-info">
@@ -392,7 +519,16 @@ import { ClientNotificationService } from '../../../services/client-notification
           <p>Ticket: <strong>#{{ successTicketNumber }}</strong></p>
 <p class="resolve-title">"{{ successTicketTitle }}"</p>
 <p *ngIf="successAssignedNames.length > 0" class="assigned-to-info">
-  Assigned to: <strong>👥 {{ successAssignedNames }}</strong>
+  Assigned to:
+  <strong style="display: inline-flex; align-items: center; gap: 4px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+    {{ successAssignedNames }}
+  </strong>
 </p>
         </div>
       </div>
@@ -501,33 +637,135 @@ import { ClientNotificationService } from '../../../services/client-notification
     .search-group .retro-input { width: 140px; }
     .retro-status-bar { background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-top: none; padding: 2px 8px; font-size: 12px; color: #333; display: flex; gap: 8px; margin-bottom: 6px; }
     .retro-table-container { border: 2px solid; border-color: #fff #808080 #808080 #fff; background: #f0f0f0; overflow-x: auto; }
-    .retro-table { width: 100%; border-collapse: collapse; font-size: 12px; background: #fff; }
-    .retro-table th { background: linear-gradient(180deg, #1c5fb5, #0a3a8c); color: #fff; padding: 4px 8px; text-align: center; font-weight: bold; font-size: 12px; border-bottom: 1px solid #808080; border-right: 1px solid #ccc; }
-    .retro-table th:last-child { border-right: none; }
-    .retro-table td { padding: 6px 8px; text-align: center; border-bottom: 1px solid #ddd; vertical-align: middle; color: #000; }
+    .retro-table { width: 100%; border-collapse: collapse; font-size: 11px; background: #fff; table-layout: fixed; }
+   .retro-table th { 
+  background: linear-gradient(180deg, #1c5fb5, #0a3a8c); 
+  color: #fff; 
+  padding: 6px 6px; 
+  text-align: center; 
+  font-weight: bold; 
+  font-size: 11px; 
+  border-bottom: 1px solid #808080; 
+  border-right: 1px solid #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+   .retro-table th:last-child { border-right: none; }
+.retro-table td { 
+  padding: 6px 6px; 
+  text-align: center; 
+  border-bottom: 1px solid #ddd; 
+  vertical-align: middle; 
+  color: #000;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0ff; }
     /* Ticket Code & Creator */
     .ticket-cell { text-align: center; }
-    .ticket-code { font-family: monospace; color: #0a3a8c; font-weight: bold; font-size: 12px; }
-    .ticket-creator { font-size: 11px; color: #555; margin-top: 2px; align-items: center;  gap: 2px;}
-    .ticket-title { font-weight: bold; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-    .ticket-meta { font-size: 11px; color: #666; margin-top: 1px; }
-    .date-cell { font-family: monospace; font-size: 12px; white-space: nowrap; color: #666; }
-    .priority-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+    .ticket-cell { text-align: center; overflow: hidden; }
+.ticket-code { 
+  font-family: monospace; 
+  color: #0a3a8c; 
+  font-weight: bold; 
+  font-size: 11px; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ticket-creator { 
+  font-size: 10px; 
+  color: #555; 
+  margin-top: 2px; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ticket-title { 
+  font-weight: bold; 
+  font-size: 11px; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+  text-align: left;
+  padding-left: 4px;
+  max-width: 100%;
+}
+.ticket-meta { 
+  font-size: 10px; 
+  color: #666; 
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.date-cell { 
+  font-family: monospace; 
+  font-size: 10px; 
+  white-space: nowrap; 
+  color: #666; 
+}
+   .priority-badge { 
+  display: inline-block; 
+  padding: 2px 6px; 
+  border-radius: 2px; 
+  font-size: 9px; 
+  font-weight: bold; 
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.3;
+}
     .priority-critical { background: #cc0000; color: white; }
     .priority-high { background: #ff6600; color: white; }
     .priority-medium { background: #ffcc00; color: #333; }
     .priority-low { background: #008800; color: white; }
-    .status-badge { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 11px; text-transform: uppercase; }
+    .status-badge { 
+  display: inline-block; 
+  padding: 2px 6px; 
+  border-radius: 2px; 
+  font-size: 9px; 
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.3;
+}
     .status-new { background: #cde8f5; color: #0066cc; }
     .status-assigned { background: #e0e0e0; color: #666; }
     .status-in_progress { background: #fff0cc; color: #cc6600; }
     .status-pending { background: #ffe0cc; color: #cc6600; }
     .status-resolved { background: #ccffcc; color: #008800; }
     .status-closed { background: #f0f0f0; color: #666; }
-    .action-cell { text-align: center; white-space: nowrap; display: flex; justify-content: center; align-items: center; gap: 3px; }
-    .action-btn { text-align: center; background: #f0f0f0; border: 2px solid; border-color: #fff #808080 #808080 #fff; cursor: pointer; font-size: 11px; padding: 1px 6px; border-radius: 2px; }
+    .action-cell { 
+  text-align: center; 
+  white-space: nowrap; 
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  gap: 2px;
+  overflow: hidden;
+}
+.action-btn { 
+  text-align: center; 
+  background: #f0f0f0; 
+  border: 2px solid; 
+  border-color: #fff #808080 #808080 #fff; 
+  cursor: pointer; 
+  font-size: 11px; 
+  padding: 2px 5px; 
+  border-radius: 2px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+  .retro-table td input[type="checkbox"],
+.retro-table th input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  vertical-align: middle;
+  margin: 0;
+}
     .action-btn:hover { background: #e8f0ff; }
     .action-btn:active { border-color: #808080 #fff #fff #808080; }
     .empty-row td { text-align: center; padding: 30px; background: #f9f9f9; }
@@ -636,13 +874,14 @@ import { ClientNotificationService } from '../../../services/client-notification
     ::-webkit-scrollbar-thumb { background: #a0a0a0; border: 2px solid #d4d0c8; border-radius: 6px; }
     ::-webkit-scrollbar-thumb:hover { background: #808080; }
     /* Origin Column */
-    .origin-cell { max-width: 130px; }
-    .origin-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      align-items: center;
-    }
+    .origin-cell { max-width: 140px; overflow: hidden; }
+.origin-info { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 2px; 
+  align-items: center;
+  overflow: hidden;
+}
     .origin-dept {
       font-size: 11px;
       color: #555;
@@ -650,15 +889,19 @@ import { ClientNotificationService } from '../../../services/client-notification
       padding: 1px 4px;
       border-radius: 2px;
     }
-    .origin-branch {
-      font-size: 12px;
-      color: #0a3a8c;
-      background: #f0f4ff;
-      padding: 1px 5px;
-      border-radius: 3px;
-      border: 1px solid #b8c8e8;
-      white-space: nowrap;
-    }
+    .origin-branch { 
+  font-size: 10px; 
+  color: #0a3a8c; 
+  background: #f0f4ff; 
+  padding: 1px 5px; 
+  border-radius: 3px; 
+  border: 1px solid #b8c8e8; 
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: inline-block;
+}
   `]
 })
 export class TicketListComponent implements OnInit {

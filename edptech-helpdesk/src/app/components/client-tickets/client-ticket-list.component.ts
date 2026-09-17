@@ -25,26 +25,60 @@ import { ClientNotificationService } from '../../services/client-notification.se
       <!-- Status Tabs -->
       <div class="status-tabs-bar">
         <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-          📋 All <span class="tab-count">{{ myTickets.length }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'new'" (click)="setActiveTab('new')">
-          🆕 New <span class="tab-count new-count">{{ getStatusCount('new') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
-          📌 Assigned <span class="tab-count">{{ getStatusCount('assigned') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'in_progress'" (click)="setActiveTab('in_progress')">
-          ⚙️ In Progress <span class="tab-count progress-count">{{ getStatusCount('in_progress') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
-          ⏳ Pending <span class="tab-count">{{ getStatusCount('pending') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'resolved'" (click)="setActiveTab('resolved')">
-          ✅ Resolved <span class="tab-count resolved-count">{{ getStatusCount('resolved') }}</span>
-        </button>
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+  </svg>
+  All <span class="tab-count">{{ myTickets.length }}</span>
+</button>
+
+<button class="status-tab" [class.active]="activeTab === 'new'" (click)="setActiveTab('new')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="12" y1="8" x2="12" y2="16"/>
+    <line x1="8" y1="12" x2="16" y2="12"/>
+  </svg>
+  New <span class="tab-count new-count">{{ getStatusCount('new') }}</span>
+</button>
+
+<button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="17" x2="12" y2="22"/>
+    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+  </svg>
+  Assigned <span class="tab-count">{{ getStatusCount('assigned') }}</span>
+</button>
+
+<button class="status-tab" [class.active]="activeTab === 'in_progress'" (click)="setActiveTab('in_progress')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="3"/>
+    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+  In Progress <span class="tab-count progress-count">{{ getStatusCount('in_progress') }}</span>
+</button>
+
+<button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+  Pending <span class="tab-count">{{ getStatusCount('pending') }}</span>
+</button>
+
+<button class="status-tab" [class.active]="activeTab === 'resolved'" (click)="setActiveTab('resolved')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  Resolved <span class="tab-count resolved-count">{{ getStatusCount('resolved') }}</span>
+</button>
         <button class="status-tab" [class.active]="activeTab === 'closed'" (click)="setActiveTab('closed')">
-          🔒 Closed <span class="tab-count">{{ getStatusCount('closed') }}</span>
-        </button>
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+  </svg>
+  Closed
+  <span class="tab-count">{{ getStatusCount('closed') }}</span>
+</button>
       </div>
 
       <!-- Filter Bar -->
@@ -60,24 +94,32 @@ import { ClientNotificationService } from '../../services/client-notification.se
     </select>
   </div>
   
-<!-- ✅ Filter toggles - only for non-main branch EDP/IT users -->
+<!--  Filter toggles - only for non-main branch EDP/IT users -->
 <div class="filter-group" *ngIf="isEDPUser() && !isMainBranch">
+ <button 
+  class="classic-btn filter-toggle-btn" 
+  [class.active]="showTicketsManagement"
+  (click)="toggleTicketsManagement()">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/>
+    <line x1="9" y1="9" x2="9" y2="15"/>
+  </svg>
+  Tickets Management
+  <span class="filter-count">{{ ticketsManagementCount }}</span>
+  <span class="filter-indicator" *ngIf="showTicketsManagement">✓</span>
+</button>
   <button 
-    class="classic-btn filter-toggle-btn" 
-    [class.active]="showTicketsManagement"
-    (click)="toggleTicketsManagement()">
-    🎫 Tickets Management
-    <span class="filter-count">{{ ticketsManagementCount }}</span>
-    <span class="filter-indicator" *ngIf="showTicketsManagement">✓</span>
-  </button>
-  <button 
-    class="classic-btn filter-toggle-btn" 
-    [class.active]="showSentToMainOnly"
-    (click)="toggleSentToMainFilter()">
-    📤 Sent to LSP Main
-    <span class="filter-count">{{ sentToMainCount }}</span>
-    <span class="filter-indicator" *ngIf="showSentToMainOnly">✓</span>
-  </button>
+  class="classic-btn filter-toggle-btn" 
+  [class.active]="showSentToMainOnly"
+  (click)="toggleSentToMainFilter()">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+  Sent to LSP Main
+  <span class="filter-count">{{ sentToMainCount }}</span>
+  <span class="filter-indicator" *ngIf="showSentToMainOnly">✓</span>
+</button>
 </div>
   
   <div class="filter-group search-group">
@@ -87,7 +129,11 @@ import { ClientNotificationService } from '../../services/client-notification.se
   </div>
   
   <button class="classic-btn" (click)="clearFilters()">
-    <span>🔄</span> Clear
+   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+  <polyline points="23 4 23 10 17 10"/>
+  <polyline points="1 20 1 14 7 14"/>
+  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+</svg> Clear
   </button>
 </div>
 
@@ -135,9 +181,18 @@ import { ClientNotificationService } from '../../services/client-notification.se
     <td class="sendto-cell">
       <div class="sendto-info-small">
         <span class="dept-name-small">{{ ticket.department_name || '—' }}</span>
-        <span class="branch-tag-tiny" *ngIf="ticket.branch_name">
-          🏢 {{ ticket.branch_name }}
-        </span>
+        <span class="branch-tag-tiny" *ngIf="ticket.branch_name" style="display: inline-flex; align-items: center; gap: 4px;">
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 21h18"/>
+    <path d="M5 21V7l8-4v18"/>
+    <path d="M19 21V11l-6-4"/>
+    <line x1="9" y1="9" x2="9.01" y2="9"/>
+    <line x1="9" y1="12" x2="9.01" y2="12"/>
+    <line x1="9" y1="15" x2="9.01" y2="15"/>
+    <line x1="9" y1="18" x2="9.01" y2="18"/>
+  </svg>
+  {{ ticket.branch_name }}
+</span>
       </div>
     </td>
     <td class="status-cell">
@@ -157,26 +212,64 @@ import { ClientNotificationService } from '../../services/client-notification.se
     </td>
     <!-- ✅ ONLY ONE assigned-cell td -->
     <td class="assigned-cell">
-      <span *ngIf="ticket.assigned_to" class="agent-name-display">
-        👤 {{ getAssignedNamesDisplay(ticket) }}
-      </span>
+      <span *ngIf="ticket.assigned_to" class="agent-name-display" style="display: inline-flex; align-items: center; gap: 4px;">
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+  {{ getAssignedNamesDisplay(ticket) }}
+</span>
       <span *ngIf="!ticket.assigned_to" class="unassigned">—</span>
           </td>
     <td class="date-cell">{{ ticket.created_at | date:'MMM d, h:mm a' }}</td>
     <td class="action-cell" (click)="$event.stopPropagation()">
-      <button class="action-btn view-btn" (click)="viewTicket(ticket.id)" title="View">📋</button>
-      <button *ngIf="canEditTicket(ticket)" class="action-btn edit-btn" (click)="editTicket(ticket.id)" title="Edit">✏️</button>
-      <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" 
-              [title]="ticket.assigned_to ? 'Reassign' : 'Assign Agent'">
-        {{ ticket.assigned_to ? '🔄' : '👤' }}
-      </button>
-      <button *ngIf="canDeleteTicket(ticket)" class="action-btn delete-btn" (click)="deleteTicket(ticket)" title="Delete">🗑️</button>
+     <button class="action-btn view-btn" (click)="viewTicket(ticket.id)" title="View">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+</button>
+      <button *ngIf="canEditTicket(ticket)" class="action-btn edit-btn" (click)="editTicket(ticket.id)" title="Edit">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+</button>
+  <button *ngIf="canAssignTicket(ticket)" class="action-btn assign-btn" (click)="assignTicket(ticket)" 
+        [title]="ticket.assigned_to ? 'Reassign' : 'Assign Agent'">
+  <!-- Reassign icon (two refresh arrows) -->
+  <svg *ngIf="ticket.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  <!-- Assign icon (user with +) -->
+  <svg *ngIf="!ticket.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg>
+</button>
+ <button *ngIf="canDeleteTicket(ticket)" class="action-btn delete-btn" (click)="deleteTicket(ticket)" title="Delete">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+</button>
     </td>
   </tr>
   <tr *ngIf="filteredTickets.length === 0">
     <td colspan="8" class="empty-row">
       <div class="empty-state">
-        <span class="empty-icon">📭</span>
+       <span class="empty-icon">
+  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+</span>
         <p>No tickets found</p>
         <button class="classic-btn" (click)="newTicket()">Create your first ticket</button>
       </div>
@@ -190,7 +283,22 @@ import { ClientNotificationService } from '../../services/client-notification.se
 <div class="modal-overlay" *ngIf="showAssignModal" (click)="closeAssignModal()">
   <div class="modal-window assign-modal" (click)="$event.stopPropagation()">
     <div class="modal-titlebar">
-      <span>{{ assignTicketData?.assigned_to ? '🔄 Reassign' : '👤 Assign' }} Ticket: {{ assignTicketData?.ticket_number }}</span>
+      <span style="display: inline-flex; align-items: center; gap: 6px;">
+  <!-- Reassign icon -->
+  <svg *ngIf="assignTicketData?.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="23 4 23 10 17 10"/>
+    <polyline points="1 20 1 14 7 14"/>
+    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  </svg>
+  <!-- Assign icon -->
+  <svg *ngIf="!assignTicketData?.assigned_to" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="8.5" cy="7" r="4"/>
+    <line x1="20" y1="8" x2="20" y2="14"/>
+    <line x1="23" y1="11" x2="17" y2="11"/>
+  </svg>
+  {{ assignTicketData?.assigned_to ? 'Reassign' : 'Assign' }} Ticket: {{ assignTicketData?.ticket_number }}
+</span>
       <button type="button" (click)="closeAssignModal()" class="modal-close">✕</button>
     </div>
     <div class="modal-body">
@@ -279,7 +387,15 @@ import { ClientNotificationService } from '../../services/client-notification.se
     <div class="modal-overlay" *ngIf="showDeleteConfirm" (click)="cancelDelete()">
       <div class="modal-window" (click)="$event.stopPropagation()">
         <div class="modal-titlebar danger">
-          <span>🗑️ Delete Ticket</span>
+          <span style="display: inline-flex; align-items: center; gap: 6px;">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg>
+  Delete Ticket
+</span>
           <button type="button" (click)="cancelDelete()" class="modal-close">✕</button>
         </div>
         <div class="modal-body">
@@ -294,7 +410,12 @@ import { ClientNotificationService } from '../../services/client-notification.se
           </div>
           <div class="modal-actions">
             <button class="classic-btn" (click)="cancelDelete()">Cancel</button>
-            <button class="classic-btn danger" (click)="confirmDelete()">🗑️ Yes, Delete</button>
+            <button class="classic-btn danger" (click)="confirmDelete()"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    <line x1="10" y1="11" x2="10" y2="17"/>
+    <line x1="14" y1="11" x2="14" y2="17"/>
+  </svg> Yes, Delete</button>
           </div>
         </div>
       </div>

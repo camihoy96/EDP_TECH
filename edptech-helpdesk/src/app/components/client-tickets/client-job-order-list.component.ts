@@ -31,27 +31,68 @@ import { NotificationService } from '../../services/notification.service';
 
       <!-- Status Tabs -->
       <div class="status-tabs-bar" *ngIf="allOrders.length > 0">
-        <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-          📋 All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
-          ⏳ Pending <span class="tab-count pending-count">{{ getFilteredStatusCount('pending') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
-          📥 Received <span class="tab-count approved-count">{{ getFilteredStatusCount('approved') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
-          👤 Assigned <span class="tab-count assigned-count">{{ getFilteredStatusCount('assigned') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
-          📤 Forwarded <span class="tab-count forwarded-count">{{ getFilteredStatusCount('forwarded') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'done'" (click)="setActiveTab('done')">
-          ✅ Done <span class="tab-count done-count">{{ getFilteredStatusCount('done') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
-          ❌ Rejected <span class="tab-count rejected-count">{{ getFilteredStatusCount('rejected') }}</span>
-        </button>
+       <!-- All -->
+<button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+  </svg>
+  All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
+</button>
+
+<!-- Pending -->
+<button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <polyline points="12 6 12 12 16 14"/>
+  </svg>
+  Pending <span class="tab-count pending-count">{{ getFilteredStatusCount('pending') }}</span>
+</button>
+
+<!-- Received -->
+<button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+    <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+  </svg>
+  Received <span class="tab-count approved-count">{{ getFilteredStatusCount('approved') }}</span>
+</button>
+
+<!-- Assigned -->
+<button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+  Assigned <span class="tab-count assigned-count">{{ getFilteredStatusCount('assigned') }}</span>
+</button>
+
+<!-- Forwarded -->
+<button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/>
+    <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+  Forwarded <span class="tab-count forwarded-count">{{ getFilteredStatusCount('forwarded') }}</span>
+</button>
+
+<!-- Done -->
+<button class="status-tab" [class.active]="activeTab === 'done'" (click)="setActiveTab('done')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+  Done <span class="tab-count done-count">{{ getFilteredStatusCount('done') }}</span>
+</button>
+
+<!-- Rejected -->
+<button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="15" y1="9" x2="9" y2="15"/>
+    <line x1="9" y1="9" x2="15" y2="15"/>
+  </svg>
+  Rejected <span class="tab-count rejected-count">{{ getFilteredStatusCount('rejected') }}</span>
+</button>
       </div>
 
     <!-- Filter Bar -->
@@ -89,7 +130,6 @@ import { NotificationService } from '../../services/notification.service';
   Refresh
 </button>
 </div>
-
       <!-- Status Bar -->
       <div class="classic-status-bar">
         <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Job Orders' : '📥 J.O. Management' }}</strong></span>
@@ -98,7 +138,6 @@ import { NotificationService } from '../../services/notification.service';
         <span class="status-sep">|</span>
         <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
       </div>
-
       <!-- Table -->
       <div class="classic-table-container">
         <table class="classic-table" *ngIf="filteredOrders.length > 0">
