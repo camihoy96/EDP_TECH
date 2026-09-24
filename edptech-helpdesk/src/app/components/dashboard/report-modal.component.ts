@@ -1,5 +1,7 @@
 import { Component, Input, Output, EventEmitter, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 @Component({
   selector: 'app-report-modal',
@@ -14,9 +16,10 @@ import { CommonModule } from '@angular/common';
         <div class="report-modal-header modal-header-handle" (mousedown)="startDrag($event)">
           <h3>{{ title }}</h3>
           <div class="modal-actions">
-            <button class="btn btn-sm" (click)="print()">🖨️ Print</button>
-            <button class="modal-close-btn" (click)="close()">✕</button>
-          </div>
+  <button class="btn btn-sm" (click)="print()">🖨️ Print</button>
+  <button class="btn btn-sm" (click)="exportToExcel()">📊 Export Excel</button>
+  <button class="modal-close-btn" (click)="close()">✕</button>
+</div>
         </div>
         
         <div class="report-modal-body">
@@ -536,20 +539,660 @@ export class ReportModalComponent {
   hasBeenDragged = false; 
   private dragOffsetX = 0;
   private dragOffsetY = 0;
-
+constructor(private http: HttpClient) {}
   close(): void {
     this.closed.emit();
   }
 
   print(): void {
-    window.print();
-    this.printed.emit();
+  const printWindow = window.open('', '_blank', 'width=900,height=700');
+  if (!printWindow) {
+    alert('Please allow popups to print the report');
+    return;
   }
 
-  retry(): void {
-    this.retryRequest.emit();
+  const html = this.buildPrintHtml();
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+  this.printed.emit();
+}
+
+private buildPrintHtml(): string {
+  const data = this.reportData || {};
+  const now = new Date().toLocaleString();
+  const title = this.title || 'Report';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${title}</title>
+      <style>
+        @page { size: A4 portrait; margin: 12mm 10mm; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          font-size: 11px;
+          color: #222;
+        }
+        h1 { color: #0a246a; font-size: 20px; margin-bottom: 4px; }
+        .subtitle { color: #666; font-size: 11px; margin-bottom: 14px; }
+        h4 {
+          color: #0a246a;
+          font-size: 12px;
+          margin: 14px 0 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #ddd;
+        }
+        .report-summary {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 8px;
+          margin-bottom: 12px;
+        }
+        .report-stat {
+          border: 1px solid #ccc;
+          border-left: 3px solid #0a246a;
+          padding: 8px;
+          text-align: center;
+        }
+        .report-stat.open     { border-left-color: #0066cc; }
+        .report-stat.resolved { border-left-color: #008800; }
+        .report-stat.critical { border-left-color: #cc0000; }
+        .stat-value { font-size: 18px; font-weight: 700; color: #333; }
+        .stat-label { font-size: 9px; color: #888; text-transform: uppercase; margin-top: 3px; }
+        .p-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+        .p-label { width: 70px; font-size: 10px; }
+        .p-track { flex: 1; height: 8px; background: #f0f0f0; }
+        .p-fill  { height: 100%; }
+        .p-count { width: 80px; text-align: right; font-size: 10px; color: #666; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 10px;
+          margin-bottom: 10px;
+        }
+        th {
+          background: #f0f4f8;
+          padding: 6px 8px;
+          text-align: left;
+          border: 1px solid #ccc;
+          font-size: 9px;
+          text-transform: uppercase;
+        }
+        td { padding: 5px 8px; border: 1px solid #e0e0e0; }
+        tr { page-break-inside: avoid; }
+        thead { display: table-header-group; }
+        code {
+          font-family: monospace;
+          font-size: 9px;
+          background: #f5f5f5;
+          padding: 1px 4px;
+        }
+        .badge {
+          padding: 2px 5px;
+          font-size: 9px;
+          font-weight: 600;
+          text-transform: capitalize;
+        }
+        .badge-critical { background: #ffecec; color: #cc0000; }
+        .badge-high     { background: #fff0e8; color: #cc5500; }
+        .badge-medium   { background: #fffae8; color: #886600; }
+        .badge-low      { background: #eeffee; color: #006600; }
+        .footer {
+          margin-top: 20px;
+          padding-top: 8px;
+          border-top: 1px solid #ddd;
+          text-align: center;
+          font-size: 9px;
+          color: #888;
+        }
+      </style>
+    </head>
+    <body>
+      <h1> ${title}</h1>
+      <div class="subtitle">Generated: ${now}</div>
+
+      ${data.periodLabel ? `<div class="subtitle">Period: ${data.periodLabel}</div>` : ''}
+
+      ${this.buildSummarySection(data)}
+      ${this.buildPrioritySection(data)}
+      ${this.buildDepartmentSection(data)}
+      ${this.buildRecentTicketsSection(data)}
+      ${this.buildRequisitionsSection(data)}
+      ${this.buildJobOrdersSection(data)}
+
+      <div class="footer">EDPtech Helpdesk · Confidential · ${now}</div>
+
+      <script>
+        window.onload = function() {
+          window.print();
+          setTimeout(function() { window.close(); }, 500);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+private buildSummarySection(data: any): string {
+  if (data.totalTickets === undefined) return '';
+  return `
+    <h4>📋 Ticket Summary</h4>
+    <div class="report-summary">
+      <div class="report-stat"><div class="stat-value">${data.totalTickets ?? 0}</div><div class="stat-label">Total</div></div>
+      <div class="report-stat open"><div class="stat-value">${data.openTickets ?? 0}</div><div class="stat-label">Open</div></div>
+      <div class="report-stat resolved"><div class="stat-value">${data.resolvedTickets ?? 0}</div><div class="stat-label">Resolved</div></div>
+      <div class="report-stat critical"><div class="stat-value">${data.criticalTickets ?? 0}</div><div class="stat-label">Critical</div></div>
+      <div class="report-stat"><div class="stat-value">${data.avgResolutionTime || '—'}</div><div class="stat-label">Avg Resolution</div></div>
+      <div class="report-stat"><div class="stat-value">${data.slaCompliance ?? 0}%</div><div class="stat-label">SLA</div></div>
+    </div>
+  `;
+}
+
+private buildPrioritySection(data: any): string {
+  if (!data.priorityData?.length) return '';
+  return `
+    <h4>📊 Priority Distribution</h4>
+    ${data.priorityData.map((p: any) => `
+      <div class="p-bar">
+        <span class="p-label">${p.label}</span>
+        <div class="p-track">
+          <div class="p-fill" style="width:${p.percentage}%;background:${p.color}"></div>
+        </div>
+        <span class="p-count">${p.count} (${p.percentage}%)</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+private buildDepartmentSection(data: any): string {
+  if (!data.departmentData?.length) return '';
+  return `
+    <h4>🏢 Department Performance</h4>
+    <table>
+      <thead><tr><th>Department</th><th>Total</th><th>Open</th><th>Resolved</th><th>SLA</th></tr></thead>
+      <tbody>
+        ${data.departmentData.map((d: any) => `
+          <tr>
+            <td>${d.name}</td>
+            <td>${d.total}</td>
+            <td>${d.open}</td>
+            <td>${d.resolved}</td>
+            <td>${d.sla}%</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+private buildRecentTicketsSection(data: any): string {
+  if (!data.recentTickets?.length) return '';
+  return `
+    <h4>🕐 Recent Tickets</h4>
+    <table>
+      <thead><tr><th>Ticket Code</th><th>Title</th><th>Priority</th><th>Status</th></tr></thead>
+      <tbody>
+        ${data.recentTickets.slice(0, 10).map((t: any) => `
+          <tr>
+            <td><code>${t.ticket_number}</code></td>
+            <td>${t.title}</td>
+            <td><span class="badge badge-${t.priority}">${t.priority}</span></td>
+            <td>${t.status}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+exportToExcel(): void {
+  if (!this.reportData) {
+    alert('No report data to export');
+    return;
   }
 
+  const html = this.buildReportExcelHtml(this.reportData);
+  const safeTitle = (this.title || 'Report').replace(/[^a-zA-Z0-9]/g, '_');
+  const filename = `${safeTitle}_${new Date().toISOString().split('T')[0]}.xls`;
+  this.downloadHtml(html, filename);
+}
+
+private buildReportExcelHtml(data: any): string {
+  const now = new Date();
+  const title = this.title || 'Report';
+
+  let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:x="urn:schemas-microsoft-com:office:excel"
+          xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>${this.escapeHtml(title)}</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        .report-title {
+          font-size: 20pt;
+          font-weight: bold;
+          color: #0a246a;
+          text-align: center;
+          font-family: Arial, sans-serif;
+          padding: 10px 0;
+        }
+        .report-subtitle {
+          font-size: 14pt;
+          font-weight: bold;
+          color: #333333;
+          text-align: center;
+          font-family: Arial, sans-serif;
+        }
+        .report-meta {
+          font-size: 10pt;
+          color: #555555;
+          text-align: center;
+          font-family: Arial, sans-serif;
+          padding: 5px 0 15px 0;
+          border-bottom: 2px solid #0a246a;
+          margin-bottom: 15px;
+        }
+        .report-meta span {
+          margin: 0 15px;
+        }
+        .section-header {
+          font-size: 14pt;
+          font-weight: bold;
+          color: #ffffff;
+          background-color: #0a246a;
+          text-align: center;
+          padding: 8px 10px;
+          font-family: Arial, sans-serif;
+        }
+        .main-header {
+          font-size: 10pt;
+          font-weight: bold;
+          color: #ffffff;
+          background-color: #1a3a8a;
+          text-align: center;
+          padding: 6px 8px;
+          font-family: Arial, sans-serif;
+          border: 1px solid #0a246a;
+        }
+        .data-cell {
+          font-size: 9pt;
+          color: #333333;
+          padding: 4px 6px;
+          font-family: Arial, sans-serif;
+          border: 1px solid #cccccc;
+          text-align: left;
+          vertical-align: middle;
+        }
+        .data-cell-center { text-align: center; }
+        .data-cell-right  { text-align: right; }
+        .stat-label {
+          font-size: 10pt;
+          color: #555555;
+          font-weight: bold;
+          text-align: left;
+          padding: 6px 10px;
+          border: 1px solid #cccccc;
+          background-color: #f0f4f8;
+          font-family: Arial, sans-serif;
+        }
+        .stat-value {
+          font-size: 12pt;
+          color: #0a246a;
+          font-weight: bold;
+          text-align: center;
+          padding: 6px 10px;
+          border: 1px solid #cccccc;
+          background-color: #ffffff;
+          font-family: Arial, sans-serif;
+        }
+        .status-active  { color: #008800; font-weight: bold; }
+        .status-expiring { color: #cc6600; font-weight: bold; }
+        .status-expired { color: #cc0000; font-weight: bold; }
+        .row-even { background-color: #f8f9fa; }
+        .row-odd  { background-color: #ffffff; }
+        .report-footer {
+          font-size: 10pt;
+          font-weight: bold;
+          color: #0a246a;
+          text-align: center;
+          padding: 10px 0;
+          border-top: 2px solid #0a246a;
+          margin-top: 15px;
+          font-family: Arial, sans-serif;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          margin-bottom: 15px;
+        }
+        .separator-row td { border: none; padding: 5px 0; }
+      </style>
+    </head>
+    <body>
+  `;
+
+  // ─── TITLE BLOCK ───
+  html += `
+    <div class="report-title"> ${this.escapeHtml(title).toUpperCase()}</div>
+    <div class="report-subtitle">EDPTech Helpdesk System</div>
+    <div class="report-meta">
+      <span>📅 Generated: ${now.toLocaleDateString()} at ${now.toLocaleTimeString()}</span>
+      ${data.periodLabel ? `<span>🗓️ Period: ${this.escapeHtml(data.periodLabel)}</span>` : ''}
+    </div>
+  `;
+
+  // ─── TICKET SUMMARY ───
+  if (data.totalTickets !== undefined) {
+    html += this.buildSummaryTable(data);
+  }
+
+  // ─── PRIORITY DISTRIBUTION ───
+  if (data.priorityData?.length) {
+    html += this.buildPriorityTable(data.priorityData);
+  }
+
+  // ─── DEPARTMENT PERFORMANCE ───
+  if (data.departmentData?.length) {
+    html += this.buildDepartmentTable(data.departmentData);
+  }
+
+  // ─── RECENT TICKETS ───
+  if (data.recentTickets?.length) {
+    html += this.buildRecentTicketsTable(data.recentTickets);
+  }
+
+  // ─── REQUISITIONS ───
+  if (data.requisitionsData) {
+    html += this.buildRequisitionsSection(data.requisitionsData);
+  }
+
+  // ─── JOB ORDERS ───
+  if (data.jobOrdersData) {
+    html += this.buildJobOrdersSection(data.jobOrdersData);
+  }
+
+  // ─── FOOTER ───
+  html += `
+    <div class="report-footer">
+      📊 END OF REPORT
+      <br>
+      Generated: ${now.toLocaleString()}
+    </div>
+  `;
+
+  html += `</body></html>`;
+  return html;
+}
+
+// ---------- SECTION BUILDERS ----------
+
+private buildSummaryTable(data: any): string {
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="6">📋 TICKET SUMMARY</td>
+      </tr>
+      <tr>
+        <td class="main-header">Total</td>
+        <td class="main-header">Open</td>
+        <td class="main-header">Resolved</td>
+        <td class="main-header">Critical</td>
+        <td class="main-header">Avg Resolution</td>
+        <td class="main-header">SLA %</td>
+      </tr>
+      <tr>
+        <td class="stat-value">${data.totalTickets ?? 0}</td>
+        <td class="stat-value">${data.openTickets ?? 0}</td>
+        <td class="stat-value">${data.resolvedTickets ?? 0}</td>
+        <td class="stat-value">${data.criticalTickets ?? 0}</td>
+        <td class="stat-value">${this.escapeHtml(data.avgResolutionTime || '—')}</td>
+        <td class="stat-value">${data.slaCompliance ?? 0}%</td>
+      </tr>
+      <tr><td class="separator-row" colspan="6"></td></tr>
+    </table>
+  `;
+}
+
+private buildPriorityTable(priorityData: any[]): string {
+  let rows = '';
+  priorityData.forEach((p, i) => {
+    const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+    rows += `
+      <tr class="${rowClass}">
+        <td class="data-cell"><strong>${this.escapeHtml(p.label)}</strong></td>
+        <td class="data-cell data-cell-center">${p.count ?? 0}</td>
+        <td class="data-cell data-cell-center">${p.percentage ?? 0}%</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="3">📊 PRIORITY DISTRIBUTION</td>
+      </tr>
+      <tr>
+        <td class="main-header">Priority</td>
+        <td class="main-header">Count</td>
+        <td class="main-header">Percentage</td>
+      </tr>
+      ${rows}
+      <tr><td class="separator-row" colspan="3"></td></tr>
+    </table>
+  `;
+}
+
+private buildDepartmentTable(departmentData: any[]): string {
+  let rows = '';
+  departmentData.forEach((d, i) => {
+    const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+    rows += `
+      <tr class="${rowClass}">
+        <td class="data-cell">${this.escapeHtml(d.name)}</td>
+        <td class="data-cell data-cell-center">${d.total ?? 0}</td>
+        <td class="data-cell data-cell-center">${d.open ?? 0}</td>
+        <td class="data-cell data-cell-center">${d.resolved ?? 0}</td>
+        <td class="data-cell data-cell-center">${d.sla ?? 0}%</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="5">🏢 DEPARTMENT PERFORMANCE</td>
+      </tr>
+      <tr>
+        <td class="main-header">Department</td>
+        <td class="main-header">Total</td>
+        <td class="main-header">Open</td>
+        <td class="main-header">Resolved</td>
+        <td class="main-header">SLA %</td>
+      </tr>
+      ${rows}
+      <tr><td class="separator-row" colspan="5"></td></tr>
+    </table>
+  `;
+}
+
+private buildRecentTicketsTable(tickets: any[]): string {
+  let rows = '';
+  tickets.slice(0, 20).forEach((t, i) => {
+    const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+    rows += `
+      <tr class="${rowClass}">
+        <td class="data-cell"><code>${this.escapeHtml(t.ticket_number || '')}</code></td>
+        <td class="data-cell">${this.escapeHtml(t.title || '')}</td>
+        <td class="data-cell data-cell-center">${this.escapeHtml(t.priority || '')}</td>
+        <td class="data-cell data-cell-center">${this.escapeHtml(t.status || '')}</td>
+      </tr>
+    `;
+  });
+
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="4">🕐 RECENT TICKETS</td>
+      </tr>
+      <tr>
+        <td class="main-header">Ticket Code</td>
+        <td class="main-header">Title</td>
+        <td class="main-header">Priority</td>
+        <td class="main-header">Status</td>
+      </tr>
+      ${rows}
+      <tr><td class="separator-row" colspan="4"></td></tr>
+    </table>
+  `;
+}
+
+private buildRequisitionsSection(r: any): string {
+  if (!r) return '';        
+  let recentRows = '';
+  if (r.recent?.length) {
+    r.recent.slice(0, 10).forEach((x: any, i: number) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      recentRows += `
+        <tr class="${rowClass}">
+          <td class="data-cell"><code>${this.escapeHtml(x.number || '')}</code></td>
+          <td class="data-cell">${this.escapeHtml(x.requestFrom || '')}</td>
+          <td class="data-cell data-cell-center">${this.escapeHtml(x.status || '')}</td>
+          <td class="data-cell data-cell-center">${x.date ? new Date(x.date).toLocaleDateString() : ''}</td>
+        </tr>
+      `;
+    });
+  }
+
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="5">📩 REQUISITIONS OVERVIEW</td>
+      </tr>
+      <tr>
+        <td class="main-header">Total</td>
+        <td class="main-header">Pending</td>
+        <td class="main-header">Approved</td>
+        <td class="main-header">Released</td>
+        <td class="main-header">Forwarded</td>
+      </tr>
+      <tr>
+        <td class="stat-value">${r.total ?? 0}</td>
+        <td class="stat-value">${r.pending ?? 0}</td>
+        <td class="stat-value">${r.approved ?? 0}</td>
+        <td class="stat-value">${r.released ?? 0}</td>
+        <td class="stat-value">${r.forwarded ?? 0}</td>
+      </tr>
+      <tr><td class="separator-row" colspan="5"></td></tr>
+      ${recentRows ? `
+        <tr>
+          <td class="main-header">Req #</td>
+          <td class="main-header">Request From</td>
+          <td class="main-header">Status</td>
+          <td class="main-header">Date</td>
+          <td class="main-header">—</td>
+        </tr>
+        ${recentRows}
+      ` : ''}
+      <tr><td class="separator-row" colspan="5"></td></tr>
+    </table>
+  `;
+}
+
+private buildJobOrdersSection(j: any): string {
+   if (!j) return ''; 
+  let recentRows = '';
+  if (j.recent?.length) {
+    j.recent.slice(0, 10).forEach((x: any, i: number) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      recentRows += `
+        <tr class="${rowClass}">
+          <td class="data-cell"><code>${this.escapeHtml(x.number || '')}</code></td>
+          <td class="data-cell">${this.escapeHtml(x.department || '')}</td>
+          <td class="data-cell data-cell-center">${this.escapeHtml(x.status || '')}</td>
+          <td class="data-cell">${this.escapeHtml(x.assignedNames || '—')}</td>
+        </tr>
+      `;
+    });
+  }
+
+  return `
+    <table>
+      <tr>
+        <td class="section-header" colspan="5">📋 JOB ORDERS OVERVIEW</td>
+      </tr>
+      <tr>
+        <td class="main-header">Total</td>
+        <td class="main-header">Pending</td>
+        <td class="main-header">Assigned</td>
+        <td class="main-header">Done</td>
+        <td class="main-header">Forwarded</td>
+      </tr>
+      <tr>
+        <td class="stat-value">${j.total ?? 0}</td>
+        <td class="stat-value">${j.pending ?? 0}</td>
+        <td class="stat-value">${j.assigned ?? 0}</td>
+        <td class="stat-value">${j.done ?? 0}</td>
+        <td class="stat-value">${j.forwarded ?? 0}</td>
+      </tr>
+      <tr><td class="separator-row" colspan="5"></td></tr>
+      ${recentRows ? `
+        <tr>
+          <td class="main-header">JO #</td>
+          <td class="main-header">Department</td>
+          <td class="main-header">Status</td>
+          <td class="main-header">Assigned To</td>
+          <td class="main-header">—</td>
+        </tr>
+        ${recentRows}
+      ` : ''}
+      <tr><td class="separator-row" colspan="5"></td></tr>
+    </table>
+  `;
+}
+
+// ---------- HELPERS (same as computer-monitoring) ----------
+
+private downloadHtml(html: string, filename: string): void {
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+private escapeHtml(value: any): string {
+  if (value === null || value === undefined || value === '') return '';
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(value).replace(/[&<>"']/g, m => map[m]);
+}
   startDrag(event: MouseEvent): void {
     const modal = document.getElementById('reportModal');
     if (!modal) return;

@@ -287,7 +287,7 @@ import * as XLSX from 'xlsx';
         <th>Office Activation</th>
         <th>Office Expiry</th>
         <th>AV Status</th>
-        <!-- ✅ Show Cleaning Date column when in cleaning mode -->
+        <!--  Show Cleaning Date column when in cleaning mode -->
         <th *ngIf="showCleanedOnly">Cleaning Date</th>
         <th>Status</th>
         <th>Actions</th>
@@ -301,7 +301,7 @@ import * as XLSX from 'xlsx';
   
   <td>
     <strong>{{ pc.computer_name }}</strong>
-    <!-- ✅ Show notification badge if this PC has active notifications -->
+    <!--  Show notification badge if this PC has active notifications -->
     <span *ngIf="pc.hasWarning" class="row-notif-badge" [title]="pc.activeNotifications[0]?.message">
       {{ pc.notificationCount > 1 ? '🔔×' + pc.notificationCount : '🔔' }}
     </span>
@@ -615,7 +615,7 @@ import * as XLSX from 'xlsx';
             </div>
             <div class="form-group half"></div>
           </div>
-          <!-- ✅ ADD THESE OFFICE FIELDS TO THE ADD/EDIT MODAL -->
+          <!--  ADD THESE OFFICE FIELDS TO THE ADD/EDIT MODAL -->
 <div class="form-row">
   <div class="form-group half">
     <label>Office Activation Date:</label>
@@ -862,7 +862,7 @@ import * as XLSX from 'xlsx';
   </div>
   <small class="hint-text" *ngIf="selectedCleaningStorages.length === 0">Add one or more storage devices</small>
 </div>
-            <!-- ✅ ADD PROCESSOR FIELD -->
+            <!--  ADD PROCESSOR FIELD -->
 <div class="form-group">
   <label>Processor:</label>
   <input type="text" [(ngModel)]="cleaningForm.processor" class="form-input" placeholder="e.g., Intel Core i5-12400, AMD Ryzen 5">
@@ -965,7 +965,7 @@ import * as XLSX from 'xlsx';
             </select>
           </div>
           
-          <!-- ✅ ADD SORTING CONTROLS -->
+          <!--  ADD SORTING CONTROLS -->
           <div class="filter-group">
             <label>Sort By:</label>
             <select [(ngModel)]="cleaningSortField" (change)="applyCleaningFilters()" class="form-input">
@@ -1096,7 +1096,7 @@ import * as XLSX from 'xlsx';
         </div>
         <div class="modal-body" *ngIf="selectedPC">
           <div class="license-status-card">
-            <div class="license-icon">{{ isExpired(selectedPC) ? '❌' : isExpiring(selectedPC) ? '⚠️' : '✅' }}</div>
+            <div class="license-icon">{{ isExpired(selectedPC) ? '❌' : isExpiring(selectedPC) ? '⚠️' : '' }}</div>
             <h4>{{ isExpired(selectedPC) ? 'License Expired' : isExpiring(selectedPC) ? 'License Expiring Soon' : 'License Active' }}</h4>
             <div class="license-details">
               <div class="license-row"><span>Type:</span><strong>{{ selectedPC.ms_license_type || '—' }}</strong></div>
@@ -1323,9 +1323,9 @@ import * as XLSX from 'xlsx';
     .action-btn.clean:hover{background:#e8ffe8;border-color:#008800}
     .empty-row{text-align:center;padding:24px;color:#888}
     .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000}
-    /* ✅ SINGLE modal-content rule with centering */
+    /*  SINGLE modal-content rule with centering */
     .modal-content{background:#fff;width:90%;max-width:650px;max-height:85vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)}
-    /* ✅ When dragged (has inline left style), remove the transform centering */
+    /*  When dragged (has inline left style), remove the transform centering */
     .modal-content[style*="left:"]{transform:none}
     .detail-modal{max-width:700px}
     .confirm-modal{max-width:380px}
@@ -2195,9 +2195,9 @@ export class ComputerMonitoringComponent implements OnInit, OnDestroy {
     historySortField: string = 'cleaning_date';
   historySortDirection: 'asc' | 'desc' = 'desc';
 cleaningSortDirection: 'newest' | 'oldest' | 'asc' | 'desc' = 'newest';
-   showCleanedOnly = false;  // ✅ NEW
-  cleanedPCsCount = 0;      // ✅ NEW
-  private allCleanedPCIds: Set<number> = new Set();  // ✅ NEW
+   showCleanedOnly = false;  //  NEW
+  cleanedPCsCount = 0;      //  NEW
+  private allCleanedPCIds: Set<number> = new Set();  //  NEW
   private apiUrl = environment.apiUrl;
   private cacheKey = 'computer_monitoring_cache_v3';
   private cacheExpiryKey = 'computer_monitoring_cache_expiry_v3';
@@ -2364,7 +2364,7 @@ removeStorage(index: number) {
   this.formData.storage = this.selectedStorages.join(', ');
 }
 
-// ✅ ADD STORAGE - Cleaning form
+// ADD STORAGE - Cleaning form
 addCleaningStorage() {
   if (this.selectedCleaningStorageToAdd && this.selectedCleaningStorageToAdd.trim()) {
     this.selectedCleaningStorages.push(this.selectedCleaningStorageToAdd.trim());
@@ -2676,7 +2676,7 @@ private generateEnhancedCleaningExcel(records: any[]) {
     const isExpiring = officeStatus !== 'Expired' && r.office_expiry && new Date(r.office_expiry).getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000;
     
     let statusClass = 'status-active';
-    let statusText = '✅ Active';
+    let statusText = ' Active';
     if (isExpired) {
       statusClass = 'status-expired';
       statusText = '❌ EXPIRED';
@@ -2732,7 +2732,7 @@ private generateEnhancedCleaningExcel(records: any[]) {
   
   const filename = `Cleaning_Records_Report_${new Date().toISOString().split('T')[0]}.xls`;
   this.downloadHtml(html, filename);
-  this.showToastMsg(`✅ ${sortedRecords.length} cleaning records exported!`, 'success');
+  this.showToastMsg(` ${sortedRecords.length} cleaning records exported!`, 'success');
 }
 private generateEnhancedComputersExcel(computers: any[], title: string) {
   // Sort by location then department then computer name
@@ -2986,7 +2986,7 @@ private generateEnhancedComputersExcel(computers: any[], title: string) {
     const rowClass = rowIndex % 2 === 0 ? 'row-even' : 'row-odd';
     
     // Determine license status
-    let licenseStatus = '✅ Active';
+    let licenseStatus = ' Active';
     let statusClass = 'status-active';
     if (this.isExpired(pc)) {
       licenseStatus = '❌ EXPIRED';
@@ -3003,7 +3003,7 @@ private generateEnhancedComputersExcel(computers: any[], title: string) {
       const isExpiring = this.isOfficeExpiring(pc);
       if (isExpired) officeStatus = '❌ Expired';
       else if (isExpiring) officeStatus = '⚠️ Expiring';
-      else officeStatus = '✅ Activated';
+      else officeStatus = ' Activated';
     }
     
     // PC status
@@ -3065,7 +3065,7 @@ private generateEnhancedComputersExcel(computers: any[], title: string) {
   const safeTitle = title.replace(/[^a-zA-Z0-9]/g, '_');
   const filename = `${safeTitle}_Report_${new Date().toISOString().split('T')[0]}.xls`;
   this.downloadHtml(html, filename);
-  this.showToastMsg(`✅ ${sortedComputers.length} computer records exported!`, 'success');
+  this.showToastMsg(` ${sortedComputers.length} computer records exported!`, 'success');
 }
 
 // Helper method for HTML download
@@ -3151,7 +3151,7 @@ onEscapeKey(event: KeyboardEvent) {
   if (this.showCleaningModal) this.closeCleaningModal();
   if (this.showCleaningHistory) this.closeCleaningHistory();
   if (this.showDeleteModal) this.cancelDelete();
-  if (this.showExportModal) this.closeExportModal(); // ✅ Add this
+  if (this.showExportModal) this.closeExportModal(); // 
 }
 removeCleaningStorage(index: number) {
   this.selectedCleaningStorages.splice(index, 1);
@@ -3384,7 +3384,7 @@ openCleaningModal(pc?: any) {
   this.cleaningTarget = pc || null;
   this.cleaningForm = this.getEmptyCleaningForm();
   
-  // ✅ Reset cleaning storages when no PC selected
+  //  Reset cleaning storages when no PC selected
   if (!pc) {
     this.selectedCleaningStorages = [];
   }
@@ -3397,7 +3397,7 @@ openCleaningModal(pc?: any) {
       this.osList.push(osValue);
     }
     
-    // ✅ Populate cleaning storages
+    //  Populate cleaning storages
     if (latestPC.storage) {
       this.selectedCleaningStorages = latestPC.storage.split(',').map((s: string) => s.trim());
       this.cleaningForm.storage = latestPC.storage;
@@ -3429,7 +3429,7 @@ openCleaningModal(pc?: any) {
   this.showCleaningModal = true;
   this.showCleaningHistory = false;
 }
-// ✅ Helper to format dates properly
+//  Helper to format dates properly
 private formatDate(dateStr: any): string {
   if (!dateStr || dateStr === '0000-00-00' || dateStr === '0000-00-00 00:00:00' || dateStr === 'null' || dateStr === 'undefined') return '';
   // If it's a Date object, convert to string
@@ -3465,7 +3465,7 @@ private formatDate(dateStr: any): string {
     if (!isNaN(months)) {
       activationDate.setMonth(activationDate.getMonth() + months);
       this.cleaningForm.office_expiry = activationDate.toISOString().split('T')[0];
-      // ✅ Auto-set office_activation status for cleaning form too
+      //  Auto-set office_activation status for cleaning form too
       const now = new Date();
       this.cleaningForm.office_activation = activationDate < now ? 'Expired' : 'Activated';
     }
@@ -3576,7 +3576,7 @@ viewCleaningHistory(pc: any) {
   this.cleaningHistoryTarget = pc;
   this.cleaningFilterMonth = ''; 
   this.cleaningFilterYear = '';
-  // ✅ Reset history sorting (not cleaning sort)
+  //  Reset history sorting (not cleaning sort)
   this.historySortField = 'cleaning_date';
   this.historySortDirection = 'desc';
   this.filteredCleaningRecords = []; 
@@ -3613,12 +3613,12 @@ viewCleaningHistory(pc: any) {
   this.http.get<any[]>(url, {headers}).subscribe({
     next: (data) => {
       this.cleaningRecords = Array.isArray(data) ? data : [];
-      // ✅ Merge with localStorage records for this computer
+      //  Merge with localStorage records for this computer
       this.mergeLocalCleaningRecords(pc);
       setTimeout(() => this.applyCleaningFilters(), 50);
     },
     error: () => {
-      // ✅ Load from localStorage
+      //  Load from localStorage
       const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
       this.cleaningRecords = records.filter((r: any) => 
         r.computer_name === pc.computer_name || r.computer_id === pc.id
@@ -3636,12 +3636,12 @@ loadAllCleaningRecordsForFilter() {
   const hasFilter = this.cleaningListFilterMonth || this.cleaningListFilterYear;
   
   if (!hasFilter) {
-    // ✅ No filters selected - show ALL cleaned PCs
+    //  No filters selected - show ALL cleaned PCs
     this.loadCleanedPCIds();
     return;
   }
   
-  // ✅ First try from localStorage (fast, always works)
+  //  First try from localStorage (fast, always works)
   const localRecords = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
   
   let filteredIds: Set<number> = new Set();
@@ -3661,7 +3661,7 @@ loadAllCleaningRecordsForFilter() {
     }
   });
   
-  // ✅ Also try backend with month/year filter
+  //  Also try backend with month/year filter
   const headers = this.getHeaders();
   let url = `${this.apiUrl}/api/computers/cleaning/all-dates`;
   const params: string[] = [];
@@ -3700,7 +3700,7 @@ clearCleaningListFilters() {
   // Reload all cleaned PC IDs
   this.loadCleanedPCIds();
 }
-// ✅ New helper method
+//  New helper method
 private mergeLocalCleaningRecords(pc: any) {
   const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
   const localRecords = records.filter((r: any) => 
@@ -3734,7 +3734,7 @@ private mergeLocalCleaningRecords(pc: any) {
     });
   }
   
-  // ✅ Apply sorting
+  //  Apply sorting
   records = this.sortRecords(records);
   
   this.filteredCleaningRecords = records;
@@ -3765,7 +3765,7 @@ sortRecords(records: any[]): any[] {
         valueA = (a.antivirus || '').toLowerCase();
         valueB = (b.antivirus || '').toLowerCase();
         break;
-        case 'gpu':  // ✅ ADD THIS
+        case 'gpu':  //  ADD THIS
         valueA = (a.gpu || '').toLowerCase();
         valueB = (b.gpu || '').toLowerCase();
         break;
@@ -3862,7 +3862,7 @@ isLatestCleaningRecord(record: any): boolean {
   clearCleaningFilters() {
   this.cleaningFilterMonth = '';
   this.cleaningFilterYear = '';
-  // ✅ Reset sorting to default
+  //  Reset sorting to default
   this.cleaningSortField = 'cleaning_date';
   this.cleaningSortDirection = 'desc';
   this.applyCleaningFilters();
@@ -3900,7 +3900,7 @@ confirmDeleteCleaning() {
       
       this.showDeleteCleaningModal = false;
       this.deleteCleaningTarget = null;
-      this.showToastMsg('✅ Record deleted', 'success');
+      this.showToastMsg(' Record deleted', 'success');
     },
     error: () => {
       const records = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
@@ -3916,7 +3916,7 @@ confirmDeleteCleaning() {
       
       this.showDeleteCleaningModal = false;
       this.deleteCleaningTarget = null;
-      this.showToastMsg('✅ Record deleted', 'success');
+      this.showToastMsg(' Record deleted', 'success');
     }
   });
 }
@@ -3962,7 +3962,7 @@ private getEmptyCleaningForm() {
   }
 
   private loadFromCacheOrServer() {
-  // ✅ Load cache instantly first
+  //  Load cache instantly first
   const cachedData = this.getFromCache();
   if (cachedData && cachedData.length > 0) {
     this.pcs = cachedData;
@@ -3973,7 +3973,7 @@ private getEmptyCleaningForm() {
     console.log('📦 Loaded from cache:', cachedData.length, 'computers');
   }
   
-  // ✅ Then fetch fresh data from server (without clearing cache first)
+  //  Then fetch fresh data from server (without clearing cache first)
   this.loadPCsFromServer(true);
 }
 
@@ -4027,7 +4027,7 @@ filterCleanedPCs() {
   if (this.showCleanedOnly) {
     this.cleaningListFilterMonth = '';
     this.cleaningListFilterYear = '';
-    // ✅ Reset sorting to newest first when entering cleaning mode
+    //  Reset sorting to newest first when entering cleaning mode
     this.cleaningSortDirection = 'newest';
     this.loadAllCleaningData();
   } else {
@@ -4043,8 +4043,8 @@ loadAllCleaningData() {
   
   this.http.get<any[]>(url, { headers }).subscribe({
     next: (data) => {
-      console.log('✅ Raw API response:', data);
-      console.log('✅ Response type:', typeof data, 'Is array:', Array.isArray(data));
+      console.log(' Raw API response:', data);
+      console.log(' Response type:', typeof data, 'Is array:', Array.isArray(data));
       
       if (Array.isArray(data) && data.length > 0) {
         this.allCleaningRecordsForFilter = data;
@@ -4083,7 +4083,7 @@ loadAllCleaningData() {
         });
         
         this.cleanedPCsCount = this.allCleanedPCIds.size;
-        console.log('✅ Final count:', this.cleanedPCsCount);
+        console.log(' Final count:', this.cleanedPCsCount);
       } else {
         console.warn('⚠️ No data returned, falling back');
         this.loadFromLocalStorage();
@@ -4099,12 +4099,12 @@ loadAllCleaningData() {
     }
   });
 }
-// ✅ Add this helper method
+//  Add this helper method
 private mergeLocalCleaningRecordsForAll() {
   // This is now handled inline in loadAllCleaningData
 }
 
-// ✅ New method: Load both PC IDs and dates, then apply filters
+//  New method: Load both PC IDs and dates, then apply filters
 loadCleanedPCIdsAndDates() {
   const headers = this.getHeaders();
   
@@ -4117,12 +4117,12 @@ loadCleanedPCIdsAndDates() {
       this.mergeLocalCleaningIds();
       this.cleanedPCsCount = this.allCleanedPCIds.size;
       
-      // ✅ Now load the dates
+      //  Now load the dates
       this.loadAllCleaningRecordsForDates();
     },
     error: () => {
       this.loadFromLocalStorage();
-      // ✅ Still load dates even if IDs fail
+      //  Still load dates even if IDs fail
       this.loadAllCleaningRecordsForDates();
     }
   });
@@ -4139,7 +4139,7 @@ getLastCleaningDate(computerId: number): string | null {
   // Check all records from the API (these have id, computer_id, cleaning_date)
   if (this.allCleaningRecordsForFilter && this.allCleaningRecordsForFilter.length > 0) {
     for (const record of this.allCleaningRecordsForFilter) {
-      // ✅ Convert both to numbers for comparison
+      //  Convert both to numbers for comparison
       const recordCompId = Number(record.computer_id);
       if (recordCompId === numId && record.cleaning_date) {
         const dateObj = new Date(record.cleaning_date);
@@ -4185,7 +4185,7 @@ loadAllCleaningRecords() {
     }
   });
 }
-// ✅ New method specifically for loading dates when entering cleaning mode
+//  New method specifically for loading dates when entering cleaning mode
 loadAllCleaningRecordsForDates() {
   const headers = this.getHeaders();
   const url = `${this.apiUrl}/api/computers/cleaning/all-records`;
@@ -4234,7 +4234,7 @@ getDaysUntilDate(dateStr: string): number {
   today.setHours(0, 0, 0, 0);
   return Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
-// ✅ New method to handle opening history from detail modal
+//  New method to handle opening history from detail modal
 openHistoryFromDetail(pc: any) {
   // Save the PC reference first
   const pcToView = pc;
@@ -4243,11 +4243,11 @@ openHistoryFromDetail(pc: any) {
   // Open history with the saved reference
   this.viewCleaningHistory(pcToView);
 }
-// ✅ Simple one-click antivirus update
+//  Simple one-click antivirus update
 updateAntivirus(pc: any) {
   const today = new Date();
   const nextUpdate = new Date();
-  nextUpdate.setDate(today.getDate() + 90); // ✅ Changed from 14 to 90 days
+  nextUpdate.setDate(today.getDate() + 90); //  Changed from 14 to 90 days
   
   const updateData = {
     av_last_update: today.toISOString().split('T')[0],
@@ -4516,7 +4516,7 @@ savePC() {
     ? `${this.apiUrl}/api/computers/${this.editingPC.id}` 
     : `${this.apiUrl}/api/computers`;
   
-  // ✅ Calculate office activation status before saving
+  //  Calculate office activation status before saving
   if (this.formData.office_activation_date && this.formData.office_expiry) {
     const now = new Date();
     const expiry = new Date(this.formData.office_expiry);
@@ -4533,7 +4533,7 @@ savePC() {
     next: (response: any) => {
       this.showModal = false;
       
-      // ✅ Update local pcs array immediately
+      //  Update local pcs array immediately
       if (this.editingPC) {
         // Editing existing PC
         const idx = this.pcs.findIndex(p => p.id === this.editingPC!.id);

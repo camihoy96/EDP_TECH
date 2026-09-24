@@ -479,6 +479,18 @@ interface JobOrderItem {
     <div class="dropdown-item" (click)="printReport('jobOrders'); showPrintDropdown = false">📋 Job Orders Only</div>
   </div>
 </div>
+ <!-- Excel export dropdown -->
+  <div class="print-dropdown">
+    <button class="btn-export-dropdown" (click)="toggleExportDropdown($event)">
+      📊 Export Excel <span class="dropdown-arrow">▼</span>
+    </button>
+    <div class="print-dropdown-menu" *ngIf="showExportDropdown" (click)="$event.stopPropagation()">
+      <div class="dropdown-item" (click)="exportReport('all'); showExportDropdown = false">📄 All Documents</div>
+      <div class="dropdown-item" (click)="exportReport('tickets'); showExportDropdown = false">🎫 Tickets Only</div>
+      <div class="dropdown-item" (click)="exportReport('requisitions'); showExportDropdown = false">📩 Requisitions Only</div>
+      <div class="dropdown-item" (click)="exportReport('jobOrders'); showExportDropdown = false">📋 Job Orders Only</div>
+    </div>
+  </div>
             <button class="btn-close-bottom" (click)="close()">Close</button>
           </div>
         </div>
@@ -706,7 +718,14 @@ interface JobOrderItem {
       padding: 2px 6px; border-radius: 3px; font-size: 9px; font-weight: 600;
       background: #f0e8ff; color: #8b5cf6;
     }
-
+.btn-export-dropdown {
+  padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 11px;
+  border: 1px solid #166534; background: #166534; color: white;
+  font-family: 'Segoe UI', sans-serif;
+  display: flex; align-items: center; gap: 6px;
+}
+.btn-export-dropdown:hover { background: #15803d; }
+.btn-export-dropdown .dropdown-arrow { font-size: 8px; }
     /* Generated Info */
     .generated-info {
       display: flex; gap: 16px; font-size: 10px; color: #aaa;
@@ -775,7 +794,7 @@ interface JobOrderItem {
 export class ClientReportsModalComponent implements OnInit {
   @Input() reportType: 'daily' | 'weekly' | 'monthly' | 'yearly' = 'daily';
   @Output() closeModal = new EventEmitter<void>();
-
+  showExportDropdown = false;
   reportData: ReportData | null = null;
   isLoading = false;
   error: string | null = null;
@@ -834,14 +853,421 @@ export class ClientReportsModalComponent implements OnInit {
     this.loadReport();
   }
 @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent) {
-    const target = event.target as HTMLElement;
-    // Only close if clicking outside the print dropdown
-    if (!target.closest('.print-dropdown')) {
-      this.showPrintDropdown = false;
+onDocumentClick(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (!target.closest('.print-dropdown')) {
+    this.showPrintDropdown = false;
+    this.showExportDropdown = false;
+  }
+}
+toggleExportDropdown(event?: MouseEvent) {
+  if (event) event.stopPropagation();
+  this.showExportDropdown = !this.showExportDropdown;
+  this.showPrintDropdown = false;   // close the other one
+}
+// ============ EXCEL EXPORT FUNCTION ============
+exportReport(section: 'all' | 'tickets' | 'requisitions' | 'jobOrders') {
+  if (!this.reportData) return;
+
+  const html = this.buildExcelHtml(section);
+  const sectionLabel = section === 'all' ? 'Complete_Report'
+                     : section === 'tickets' ? 'Tickets_Report'
+                     : section === 'requisitions' ? 'Requisitions_Report'
+                     : 'JobOrders_Report';
+  const periodLabel = this.getPeriodLabel().replace(/\s+/g, '_');
+  const filename = `${sectionLabel}_${periodLabel}_${new Date().toISOString().split('T')[0]}.xls`;
+  this.downloadHtml(html, filename);
+}
+
+private buildExcelHtml(section: 'all' | 'tickets' | 'requisitions' | 'jobOrders'): string {
+  const data = this.reportData!;
+  const now = new Date();
+  const sectionTitle = section === 'all' ? 'Complete Report'
+                     : section === 'tickets' ? 'Tickets Report'
+                     : section === 'requisitions' ? 'Requisitions Report'
+                     : 'Job Orders Report';
+
+  const includeSummary     = section === 'all';
+  const includeTickets     = section === 'all' || section === 'tickets';
+  const includeReqs        = section === 'all' || section === 'requisitions';
+  const includeJOs         = section === 'all' || section === 'jobOrders';
+
+  let html = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:x="urn:schemas-microsoft-com:office:excel"
+          xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>${this.escapeHtml(sectionTitle)}</x:Name>
+              <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        .report-title { font-size: 20pt; font-weight: bold; color: #0a246a; text-align: center; font-family: Arial, sans-serif; padding: 10px 0; }
+        .report-subtitle { font-size: 14pt; font-weight: bold; color: #333; text-align: center; font-family: Arial, sans-serif; }
+        .report-meta { font-size: 10pt; color: #555; text-align: center; font-family: Arial, sans-serif; padding: 5px 0 15px 0; border-bottom: 2px solid #0a246a; margin-bottom: 15px; }
+        .report-meta span { margin: 0 15px; }
+        .section-header { font-size: 14pt; font-weight: bold; color: #fff; background-color: #0a246a; text-align: center; padding: 8px 10px; font-family: Arial, sans-serif; }
+        .main-header { font-size: 10pt; font-weight: bold; color: #fff; background-color: #1a3a8a; text-align: center; padding: 6px 8px; font-family: Arial, sans-serif; border: 1px solid #0a246a; }
+        .data-cell { font-size: 9pt; color: #333; padding: 4px 6px; font-family: Arial, sans-serif; border: 1px solid #cccccc; text-align: left; vertical-align: middle; }
+        .data-cell-center { text-align: center; }
+        .stat-value { font-size: 12pt; color: #0a246a; font-weight: bold; text-align: center; padding: 6px 10px; border: 1px solid #cccccc; background-color: #fff; font-family: Arial, sans-serif; }
+        .row-even { background-color: #f8f9fa; }
+        .row-odd  { background-color: #fff; }
+        .badge-critical { color: #cc0000; font-weight: bold; }
+        .badge-high     { color: #cc5500; font-weight: bold; }
+        .badge-medium   { color: #886600; font-weight: bold; }
+        .badge-low      { color: #006600; font-weight: bold; }
+        .report-footer { font-size: 10pt; font-weight: bold; color: #0a246a; text-align: center; padding: 10px 0; border-top: 2px solid #0a246a; margin-top: 15px; font-family: Arial, sans-serif; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+        .separator-row td { border: none; padding: 5px 0; }
+      </style>
+    </head>
+    <body>
+  `;
+
+  // ─── TITLE BLOCK ───
+  html += `
+    <div class="report-title">${this.escapeHtml(this.getReportTitle())} - ${this.escapeHtml(sectionTitle).toUpperCase()}</div>
+    <div class="report-subtitle">EDPTech Helpdesk System</div>
+    <div class="report-meta">
+      <span>🏢 ${this.escapeHtml(this.userBranch || 'N/A')}</span>
+      <span>${this.isBranchManager ? '📂 Entire Branch' : '📂 ' + this.escapeHtml(this.userDepartment || 'N/A')}</span>
+      <span>📅 Period: ${this.escapeHtml(this.getPeriodLabel())}</span>
+      <span>🕐 Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}</span>
+    </div>
+  `;
+
+  // ─── SUMMARY ───
+  if (includeSummary) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="4">📊 OVERALL SUMMARY</td></tr>
+        <tr>
+          <td class="main-header">Total Requests</td>
+          <td class="main-header">Completed</td>
+          <td class="main-header">Completion Rate</td>
+          <td class="main-header">${this.isBranchManager ? 'Departments' : 'Categories'}</td>
+        </tr>
+        <tr>
+          <td class="stat-value">${data.summary.totalRequests}</td>
+          <td class="stat-value">${data.summary.completedRequests}</td>
+          <td class="stat-value">${data.summary.completionRate}%</td>
+          <td class="stat-value">${data.summary.departments}</td>
+        </tr>
+        <tr><td class="separator-row" colspan="4"></td></tr>
+      </table>
+    `;
+  }
+
+  // ─── TICKETS ───
+  if (includeTickets) {
+    html += this.buildTicketsExcelSection(data, section === 'all');
+  }
+
+  // ─── REQUISITIONS ───
+  if (includeReqs) {
+    html += this.buildRequisitionsExcelSection(data, section === 'all');
+  }
+
+  // ─── JOB ORDERS ───
+  if (includeJOs) {
+    html += this.buildJobOrdersExcelSection(data, section === 'all');
+  }
+
+  // ─── FOOTER ───
+  html += `
+    <div class="report-footer">
+      📊 END OF REPORT · EDPtech Helpdesk · Confidential
+      <br>
+      Generated: ${now.toLocaleString()}
+    </div>
+  `;
+
+  html += `</body></html>`;
+  return html;
+}
+
+// ---------- TICKETS ----------
+private buildTicketsExcelSection(data: ReportData, includeBreakdowns: boolean): string {
+  let html = `
+    <table>
+      <tr><td class="section-header" colspan="6">🎫 TICKETS SUMMARY</td></tr>
+      <tr>
+        <td class="main-header">Total</td>
+        <td class="main-header">Open</td>
+        <td class="main-header">Resolved</td>
+        <td class="main-header">Closed</td>
+        <td class="main-header">Avg Resolution</td>
+        <td class="main-header">SLA %</td>
+      </tr>
+      <tr>
+        <td class="stat-value">${data.tickets.total}</td>
+        <td class="stat-value">${data.tickets.open}</td>
+        <td class="stat-value">${data.tickets.resolved}</td>
+        <td class="stat-value">${data.tickets.closed}</td>
+        <td class="stat-value">${this.escapeHtml(data.tickets.avgResolutionTime)}</td>
+        <td class="stat-value">${data.tickets.slaCompliance}%</td>
+      </tr>
+      <tr><td class="separator-row" colspan="6"></td></tr>
+    </table>
+  `;
+
+  if (includeBreakdowns) {
+    // Priority breakdown
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="3">📊 BY PRIORITY</td></tr>
+        <tr>
+          <td class="main-header">Priority</td>
+          <td class="main-header">Count</td>
+          <td class="main-header">Percentage</td>
+        </tr>
+    `;
+    const total = data.tickets.total || 1;
+    const priorities: [string, number, string][] = [
+      ['Critical', data.tickets.byPriority.critical, 'badge-critical'],
+      ['High',     data.tickets.byPriority.high,     'badge-high'],
+      ['Medium',   data.tickets.byPriority.medium,   'badge-medium'],
+      ['Low',      data.tickets.byPriority.low,      'badge-low'],
+    ];
+    priorities.forEach(([label, count, cls], i) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      const pct = Math.round((count / total) * 100);
+      html += `
+        <tr class="${rowClass}">
+          <td class="data-cell ${cls}"><strong>${label}</strong></td>
+          <td class="data-cell data-cell-center">${count}</td>
+          <td class="data-cell data-cell-center">${pct}%</td>
+        </tr>
+      `;
+    });
+    html += `<tr><td class="separator-row" colspan="3"></td></tr></table>`;
+
+    // Department breakdown (branch managers only)
+    if (this.isBranchManager && data.tickets.byDepartment?.length) {
+      html += `
+        <table>
+          <tr><td class="section-header" colspan="3">🏢 BY DEPARTMENT</td></tr>
+          <tr>
+            <td class="main-header">Department</td>
+            <td class="main-header">Count</td>
+            <td class="main-header">Percentage</td>
+          </tr>
+      `;
+      data.tickets.byDepartment.forEach((d, i) => {
+        const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+        const pct = Math.round((d.count / total) * 100);
+        html += `
+          <tr class="${rowClass}">
+            <td class="data-cell">${this.escapeHtml(d.name)}</td>
+            <td class="data-cell data-cell-center">${d.count}</td>
+            <td class="data-cell data-cell-center">${pct}%</td>
+          </tr>
+        `;
+      });
+      html += `<tr><td class="separator-row" colspan="3"></td></tr></table>`;
     }
   }
 
+  // Ticket list
+  const list = data.tickets.list || [];
+  if (list.length) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="${this.isBranchManager ? 8 : 7}">🎫 TICKET LIST (${list.length} records)</td></tr>
+        <tr>
+          <td class="main-header">Ticket #</td>
+          <td class="main-header">Title</td>
+          <td class="main-header">Priority</td>
+          <td class="main-header">Status</td>
+          ${this.isBranchManager ? '<td class="main-header">Department</td>' : ''}
+          <td class="main-header">Created By</td>
+          <td class="main-header">Created</td>
+          <td class="main-header">Resolved</td>
+        </tr>
+    `;
+    list.forEach((t, i) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      html += `
+        <tr class="${rowClass}">
+          <td class="data-cell"><code>${this.escapeHtml(t.ticket_number)}</code></td>
+          <td class="data-cell">${this.escapeHtml(t.title)}</td>
+          <td class="data-cell data-cell-center">${this.escapeHtml(t.priority)}</td>
+          <td class="data-cell data-cell-center">${this.escapeHtml(this.formatStatus(t.status))}</td>
+          ${this.isBranchManager ? `<td class="data-cell">${this.escapeHtml(t.department_name)}</td>` : ''}
+          <td class="data-cell">${this.escapeHtml(t.created_by_name)}</td>
+          <td class="data-cell data-cell-center">${t.created_at ? new Date(t.created_at).toLocaleString() : ''}</td>
+          <td class="data-cell data-cell-center">${t.resolved_at ? new Date(t.resolved_at).toLocaleString() : '-'}</td>
+        </tr>
+      `;
+    });
+    html += `<tr><td class="separator-row" colspan="${this.isBranchManager ? 8 : 7}"></td></tr></table>`;
+  }
+
+  return html;
+}
+
+// ---------- REQUISITIONS ----------
+private buildRequisitionsExcelSection(data: ReportData, includeStats: boolean): string {
+  let html = '';
+
+  if (includeStats) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="6">📩 REQUISITIONS SUMMARY</td></tr>
+        <tr>
+          <td class="main-header">Total</td>
+          <td class="main-header">Pending</td>
+          <td class="main-header">Approved</td>
+          <td class="main-header">Processing</td>
+          <td class="main-header">Released</td>
+          <td class="main-header">Forwarded</td>
+        </tr>
+        <tr>
+          <td class="stat-value">${data.requisitions.total}</td>
+          <td class="stat-value">${data.requisitions.pending}</td>
+          <td class="stat-value">${data.requisitions.approved}</td>
+          <td class="stat-value">${data.requisitions.processing}</td>
+          <td class="stat-value">${data.requisitions.released}</td>
+          <td class="stat-value">${data.requisitions.forwarded}</td>
+        </tr>
+        <tr><td class="separator-row" colspan="6"></td></tr>
+      </table>
+    `;
+  }
+
+  const list = data.requisitions.list || [];
+  if (list.length) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="${this.isBranchManager ? 7 : 6}">📩 REQUISITION LIST (${list.length} records)</td></tr>
+        <tr>
+          <td class="main-header">Req #</td>
+          <td class="main-header">Request From</td>
+          ${this.isBranchManager ? '<td class="main-header">Department</td>' : ''}
+          <td class="main-header">Status</td>
+          <td class="main-header">Date</td>
+          <td class="main-header">Prepared By</td>
+          <td class="main-header">Forwarded</td>
+        </tr>
+    `;
+    list.forEach((r, i) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      html += `
+        <tr class="${rowClass}">
+          <td class="data-cell"><code>${this.escapeHtml(r.requisition_number)}</code></td>
+          <td class="data-cell">${this.escapeHtml(r.request_from)}</td>
+          ${this.isBranchManager ? `<td class="data-cell">${this.escapeHtml(r.department_name)}</td>` : ''}
+          <td class="data-cell data-cell-center">${this.escapeHtml(this.formatStatus(r.status))}</td>
+          <td class="data-cell data-cell-center">${r.date ? new Date(r.date).toLocaleDateString() : ''}</td>
+          <td class="data-cell">${this.escapeHtml(r.prepared_name)}</td>
+          <td class="data-cell data-cell-center">${r.is_forwarded ? 'Yes' : 'No'}</td>
+        </tr>
+      `;
+    });
+    html += `<tr><td class="separator-row" colspan="${this.isBranchManager ? 7 : 6}"></td></tr></table>`;
+  }
+
+  return html;
+}
+
+// ---------- JOB ORDERS ----------
+private buildJobOrdersExcelSection(data: ReportData, includeStats: boolean): string {
+  let html = '';
+
+  if (includeStats) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="6">📋 JOB ORDERS SUMMARY</td></tr>
+        <tr>
+          <td class="main-header">Total</td>
+          <td class="main-header">Pending</td>
+          <td class="main-header">Received</td>
+          <td class="main-header">Assigned</td>
+          <td class="main-header">Forwarded</td>
+          <td class="main-header">Done</td>
+        </tr>
+        <tr>
+          <td class="stat-value">${data.jobOrders.total}</td>
+          <td class="stat-value">${data.jobOrders.pending}</td>
+          <td class="stat-value">${data.jobOrders.approved}</td>
+          <td class="stat-value">${data.jobOrders.assigned}</td>
+          <td class="stat-value">${data.jobOrders.forwarded}</td>
+          <td class="stat-value">${data.jobOrders.done}</td>
+        </tr>
+        <tr><td class="separator-row" colspan="6"></td></tr>
+      </table>
+    `;
+  }
+
+  const list = data.jobOrders.list || [];
+  if (list.length) {
+    html += `
+      <table>
+        <tr><td class="section-header" colspan="${this.isBranchManager ? 7 : 6}">📋 JOB ORDER LIST (${list.length} records)</td></tr>
+        <tr>
+          <td class="main-header">JO #</td>
+          <td class="main-header">Job For</td>
+          ${this.isBranchManager ? '<td class="main-header">Department</td>' : ''}
+          <td class="main-header">Status</td>
+          <td class="main-header">Date</td>
+          <td class="main-header">Requested By</td>
+          <td class="main-header">Forwarded</td>
+        </tr>
+    `;
+    list.forEach((j, i) => {
+      const rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+      html += `
+        <tr class="${rowClass}">
+          <td class="data-cell"><code>${this.escapeHtml(j.job_order_number)}</code></td>
+          <td class="data-cell">${this.escapeHtml(j.job_order_for)}</td>
+          ${this.isBranchManager ? `<td class="data-cell">${this.escapeHtml(j.department_name)}</td>` : ''}
+          <td class="data-cell data-cell-center">${this.escapeHtml(this.formatStatus(j.status))}</td>
+          <td class="data-cell data-cell-center">${j.date ? new Date(j.date).toLocaleDateString() : ''}</td>
+          <td class="data-cell">${this.escapeHtml(j.requested_name)}</td>
+          <td class="data-cell data-cell-center">${j.is_forwarded ? 'Yes' : 'No'}</td>
+        </tr>
+      `;
+    });
+    html += `<tr><td class="separator-row" colspan="${this.isBranchManager ? 7 : 6}"></td></tr></table>`;
+  }
+
+  return html;
+}
+
+// ---------- HELPERS ----------
+private downloadHtml(html: string, filename: string): void {
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+private escapeHtml(value: any): string {
+  if (value === null || value === undefined || value === '') return '';
+  const map: { [key: string]: string } = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return String(value).replace(/[&<>"']/g, m => map[m]);
+}
   get filteredTickets(): TicketItem[] {
     if (!this.reportData?.tickets.list) return [];
     if (this.ticketFilter === 'all') return this.reportData.tickets.list;
