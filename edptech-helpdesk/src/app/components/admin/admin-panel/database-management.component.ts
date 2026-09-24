@@ -2,9 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
-import { Router } from '@angular/router';
-import { environment } from '../../../../environments/environment'; // ✅ ADD THIS IMPORT
-
+import { environment } from '../../../../environments/environment'; 
 @Component({
   selector: 'app-database-management',
   standalone: true,
@@ -90,7 +88,7 @@ import { environment } from '../../../../environments/environment'; // ✅ ADD T
         <h3>📊 Database Tables</h3>
         <div class="table-links">
           <a *ngFor="let table of phpMyAdminTables" 
-             [href]="'http://localhost:8080/phpmyadmin/index.php?route=/table/sql&db=edptech_helpdesk&table=' + table.name" 
+             [href]="phpMyAdminBase + '/index.php?route=/table/sql&db=edptech_helpdesk&table=' + table.name"
              target="_blank" 
              class="table-link-item">
             <span class="table-icon">📋</span>
@@ -344,7 +342,7 @@ export class DatabaseManagementComponent implements OnInit {
   confirmAction: (() => void) | null = null;
   isProcessing = false;
 
-  constructor(private http: HttpClient, private router: Router) {}
+  constructor(private http: HttpClient) {}
 
   ngOnInit() { 
     this.loadCurrentUser();
@@ -362,10 +360,15 @@ export class DatabaseManagementComponent implements OnInit {
       this.loadTablesForLinks();
     }
   }
-
-  openPhpMyAdmin(page: string) {
-    this.router.navigate(['/admin/phpmyadmin'], { queryParams: { page } });
-  }
+openPhpMyAdmin(page: string) {
+  const base = this.phpMyAdminBase;
+  const map: Record<string, string> = {
+    structure: `${base}/index.php?route=/database/structure&db=edptech_helpdesk`,
+    sql:       `${base}/index.php?route=/database/sql&db=edptech_helpdesk`,
+    import:    `${base}/index.php?route=/database/import&db=edptech_helpdesk`,
+  };
+  window.open(map[page] || base, '_blank');
+}
 
   verifyAccess() {
     if (!this.authPassword) {
@@ -379,7 +382,7 @@ export class DatabaseManagementComponent implements OnInit {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     const headers = { 'Authorization': `Bearer ${token}` };
 
-    // ✅ FIXED: Use apiUrl instead of hardcoded localhost
+    //  FIXED: Use apiUrl instead of hardcoded localhost
     this.http.post(`${this.apiUrl}/api/auth/verify-password`, 
       { password: this.authPassword },
       { headers }
@@ -435,7 +438,9 @@ export class DatabaseManagementComponent implements OnInit {
       }
     });
   }
-
+get phpMyAdminBase(): string {
+  return environment.phpMyAdminUrl;  
+}
   exportDatabase() {
     this.showConfirm(
       '💾 Export Database', 
@@ -449,7 +454,7 @@ export class DatabaseManagementComponent implements OnInit {
 
         this.showToastMsg('⏳ Preparing database export...', 'success');
 
-        // ✅ FIXED: Use apiUrl instead of hardcoded localhost
+        // FIXED: Use apiUrl instead of hardcoded localhost
         this.http.get(`${this.apiUrl}/api/admin/database/export`, { 
           headers,
           responseType: 'blob',
@@ -476,7 +481,7 @@ export class DatabaseManagementComponent implements OnInit {
             document.body.removeChild(link);
             window.URL.revokeObjectURL(url);
             
-            this.showToastMsg('✅ Database exported successfully!', 'success');
+            this.showToastMsg(' Database exported successfully!', 'success');
             this.isProcessing = false;
           },
           error: (err) => {

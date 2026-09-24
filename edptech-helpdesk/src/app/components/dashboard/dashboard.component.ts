@@ -1995,7 +1995,7 @@ loadNotificationCount() {
   this.computerMonitoringNotifCount = this.getActiveNotificationCount(dismissedSet);
 }
 
-// ✅ Load cleaning records once so the badge respects Rule 1
+//  Load cleaning records once so the badge respects Rule 1
 private loadCleaningRecordsForBadge(): Promise<any[]> {
   return new Promise((resolve) => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token');
@@ -2311,7 +2311,7 @@ if (currentUser.user_table !== 'users') {
       const headers = { 'Authorization': `Bearer ${token}` };
       this.http.get<{valid: boolean; user?: any}>(`${this.apiUrl}/api/auth/verify-admin`, { headers }).subscribe({
   next: (response: any) => {
-    // ✅ Check if user is from 'users' table instead of specific roles
+    //  Check if user is from 'users' table instead of specific roles
     if (response && response.valid && response.user && response.user.user_table === 'users') {
       this.isAuthenticated = true;
       this.isTokenValid = true;
@@ -2358,7 +2358,7 @@ if (currentUser.user_table !== 'users') {
     if (currentUser?.locked_until && new Date(currentUser.locked_until).getTime() > Date.now()) {
       this.handleUnauthorized('Account is temporarily locked'); return;
     }
-    // ✅ Check if user is from 'users' table instead of specific roles
+    //  Check if user is from 'users' table instead of specific roles
     if (currentUser?.user_table !== 'users') {
       this.handleUnauthorized('Access denied. EDP/IT staff only.');
       return;
@@ -2717,7 +2717,7 @@ onUserActivity() {
       }
     }
   }
-  // ✅ Load read orders from localStorage
+  //  Load read orders from localStorage
   loadReadOrdersFromStorage() {
     const stored = localStorage.getItem('readJobOrders');
     if (stored) {
@@ -2733,7 +2733,7 @@ saveNotificationMapToStorage() {
   localStorage.setItem('jobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
 
-  // ✅ Update notification counts
+  //  Update notification counts
  updateNotificationCounts() {
   // Count unread orders for "Our Job Orders" (status updates)
   this.ourOrdersUnreadCount = this.allOrders.filter(o => {
@@ -2747,10 +2747,10 @@ saveNotificationMapToStorage() {
            this.notificationMap.get(o.id)?.type === 'incoming';
   }).length;
   
-  // ✅ Total unread count for the sidebar badge (combine both types)
+  //  Total unread count for the sidebar badge (combine both types)
   this.totalUnreadCount = this.ourOrdersUnreadCount + this.incomingOrdersUnreadCount;
   
-  // ✅ Update pending count with the total unread count
+  //  Update pending count with the total unread count
   // This will show the badge on the sidebar link
   this.pendingJobOrdersCount = this.totalUnreadCount;
 }
@@ -2764,15 +2764,15 @@ saveNotificationMapToStorage() {
       this.allOrders = Array.isArray(data) ? data : [];
       this.allJOsTotal = this.allOrders.length;
       
-      // ✅ Traditional counts (for reference only - not used for badge)
+      //  Traditional counts (for reference only - not used for badge)
       // Don't overwrite pendingJobOrdersCount here
       this.receivedJOsCount = this.allOrders.filter(o => o.status === 'approved').length;
       this.rejectedJOsCount = this.allOrders.filter(o => o.status === 'rejected').length;
       
-      // ✅ Check for new notifications
+      //  Check for new notifications
       this.checkForNewNotifications();
       
-      // ✅ Update notification counts (this will set pendingJobOrdersCount)
+      //  Update notification counts (this will set pendingJobOrdersCount)
       this.updateNotificationCounts();
     },
     error: () => {
@@ -2803,14 +2803,14 @@ checkForNewNotifications() {
                            (forwardedToBranchId === currentUserBranchId && forwardedToDeptId === currentUserDeptId);
     const isFromOthers = !(submitterBranchId === currentUserBranchId && submitterDeptId === currentUserDeptId) && submittedById !== currentUserId;
     
-    // ✅ Check for incoming notifications (new or forwarded orders)
+    //  Check for incoming notifications (new or forwarded orders)
     if ((isForUs || isForwardedToUs) && isFromOthers) {
       this.notificationMap.set(o.id, { type: 'incoming', status: '' });
       this.saveNotificationMapToStorage();
       return; // Skip status update check if already marked as incoming
     }
     
-    // ✅ Check for status updates (for Our Job Orders)
+    //  Check for status updates (for Our Job Orders)
     const isStatusUpdate = o.status && ['approved', 'assigned', 'forwarded', 'done'].includes(o.status);
     if (isStatusUpdate && (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname)) {
       if (!this.notificationMap.has(o.id)) {
@@ -2845,7 +2845,7 @@ loadRequisitionsCount() {
       this.receivedRequisitionsCount = reqs.filter(r => r.status === 'approved').length;
       this.rejectedRequisitionsCount = reqs.filter(r => r.status === 'rejected').length;
       
-      // ✅ Use the getter which reads from localStorage
+      //  Use the getter which reads from localStorage
       const seenIds = this.seenReqNotificationIds;
       
       this._requisitionsNotificationCount = reqs.filter(r => {
@@ -2902,7 +2902,7 @@ markRequisitionNotificationsAsRead(): void {
         }
       });
       
-      // ✅ Add all current incoming IDs to the seen set (persisted to localStorage)
+      //  Add all current incoming IDs to the seen set (persisted to localStorage)
       this.addSeenReqIds(idsToMark);
       
       // Reset the count after marking as read
@@ -2932,10 +2932,10 @@ loadStats() {
     this.totalTickets = tickets.length;
     this.openTickets = tickets.filter(t => !['resolved', 'closed'].includes(t.status)).length;
     
-    // ✅ Only count NEW unassigned tickets for the badge
+    //  Only count NEW unassigned tickets for the badge
     const newUnassigned = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
     
-    // ✅ Separately count tickets assigned to current user
+    //  Separately count tickets assigned to current user
     const assignedToMe = tickets.filter(t => 
       t.assigned_to === this.currentUser?.id && 
       ['assigned', 'in_progress', 'pending'].includes(t.status)
@@ -2960,7 +2960,7 @@ loadStats() {
     this.totalTickets = tickets.length;
     this.openTickets = tickets.filter(t => !['resolved', 'closed'].includes(t.status)).length;
     
-    // ✅ Only count NEW unassigned tickets for the badge
+    //  Only count NEW unassigned tickets for the badge
     const newUnassigned = tickets.filter(t => t.status === 'new' && !t.assigned_to).length;
     this.newTicketsCount = newUnassigned;
     
@@ -2998,7 +2998,7 @@ loadStats() {
   getStatusIcon(status: string): string {
     const icons: Record<string, string> = {
       new: '🆕', assigned: '📌', in_progress: '⚙️',
-      pending: '⏳', resolved: '✅', closed: '🔒'
+      pending: '⏳', resolved: '', closed: '🔒'
     };
     return icons[status] || '📋';
   }
@@ -3401,7 +3401,7 @@ generateReport(type: string): void {
   
   url += `&branch_id=${branchId}&department_id=${departmentId}`;
 
-  // ✅ Load all data in parallel
+  //  Load all data in parallel
   Promise.all([
     this.http.get<any>(url, { headers }).toPromise(),
     this.http.get<any[]>(`${environment.apiUrl}/api/admin/requisitions`, { headers }).toPromise(),
@@ -3409,13 +3409,13 @@ generateReport(type: string): void {
   ]).then(([reportData, requisitions, jobOrders]) => {
     this.reportModalData = {
       ...reportData,
-      // ✅ Add requisitions data filtered by branch/department
+      //  Add requisitions data filtered by branch/department
       requisitionsData: this.processRequisitionsForReport(
         (Array.isArray(requisitions) ? requisitions : []).filter(r => 
           Number(r.branch_id) === branchId && Number(r.department_id) === departmentId
         )
       ),
-      // ✅ Add job orders data filtered by branch/department
+      //  Add job orders data filtered by branch/department
       jobOrdersData: this.processJobOrdersForReport(
         (Array.isArray(jobOrders) ? jobOrders : []).filter(jo => 
           Number(jo.branch_id) === branchId && Number(jo.department_id) === departmentId
@@ -3431,7 +3431,7 @@ generateReport(type: string): void {
   });
 }
 
-// ✅ Process requisitions for report display
+//  Process requisitions for report display
 private processRequisitionsForReport(requisitions: any[]): any {
   const now = new Date();
   const filterDate = this.getFilterDate(this.lastReportType);
@@ -3455,7 +3455,7 @@ private processRequisitionsForReport(requisitions: any[]): any {
   };
 }
 
-// ✅ Process job orders for report display
+//  Process job orders for report display
 private processJobOrdersForReport(jobOrders: any[]): any {
   const now = new Date();
   const filterDate = this.getFilterDate(this.lastReportType);
@@ -3480,7 +3480,7 @@ private processJobOrdersForReport(jobOrders: any[]): any {
   };
 }
 
-// ✅ Helper to get filter date based on report type
+//  Helper to get filter date based on report type
 private getFilterDate(type: string): Date | null {
   const now = new Date();
   switch(type) {
@@ -3491,7 +3491,7 @@ private getFilterDate(type: string): Date | null {
   }
 }
 
-// ✅ Add fallback method for local report generation
+//  Add fallback method for local report generation
 private generateLocalReport(type: string, branchId: number, departmentId: number): void {
   let tickets: Ticket[] = [];
   
@@ -3499,7 +3499,7 @@ private generateLocalReport(type: string, branchId: number, departmentId: number
     tickets = t;
   }).unsubscribe();
 
-  // ✅ Filter by branch and department
+  //  Filter by branch and department
   tickets = tickets.filter(t => 
     Number(t.branch_id) === branchId && 
     Number(t.department_id) === departmentId
@@ -3565,7 +3565,7 @@ private getLocalDepartmentData(tickets: Ticket[]): any[] {
   
   tickets.forEach(t => {
     const deptId = t.department_id || 0;
-    // ✅ Use the loaded department names from API
+    //  Use the loaded department names from API
     const dept = this.departmentMap.get(Number(deptId)) || t.location || `Dept #${deptId}`;
     
     if (!deptMap.has(dept)) {
@@ -3681,9 +3681,9 @@ startDatabaseBackup() {
       const fileSizeMB = (blob.size / (1024 * 1024)).toFixed(2);
       const sizeDisplay = blob.size > 1048576 ? `${fileSizeMB} MB` : `${fileSizeKB} KB`;
       
-      this.showStatusPopup(`✅ Database backup completed!\n📁 ${filename}\n📦 Size: ${sizeDisplay}`);
+      this.showStatusPopup(` Database backup completed!\n📁 ${filename}\n📦 Size: ${sizeDisplay}`);
       
-      console.log('✅ Database backup downloaded:', filename);
+      console.log(' Database backup downloaded:', filename);
     },
     error: (err) => {
       console.error('❌ Backup failed:', err);
@@ -3716,27 +3716,81 @@ startDatabaseBackup() {
 getSidebarDropdownCount(): number {
   return this.pendingJobOrdersCount + this.requisitionsNotificationCount;
 }
-  restoreData() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'application/json';
-    input.onchange = (event: any) => {
-      const file = event.target.files[0];
-      const reader = new FileReader();
-      reader.onload = (e: any) => {
-        try {
-          JSON.parse(e.target.result);
-          alert('Restore completed! Please refresh the page.');
-        } catch {
-          alert('Invalid backup file!');
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-    this.activeMenu = null;
-  }
+restoreData() {
+  this.activeMenu = null;
 
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.sql,application/sql,text/plain';   //  SQL, not JSON
+
+  input.onchange = (event: any) => {
+    const file: File = event.target.files?.[0];
+    if (!file) return;
+
+    // Guard: size sanity check (e.g. 100MB max)
+    if (file.size > 100 * 1024 * 1024) {
+      alert('File too large. Maximum allowed is 100 MB.');
+      return;
+    }
+
+    // Guard: extension check
+    if (!file.name.toLowerCase().endsWith('.sql')) {
+      alert('Please select a .sql backup file.');
+      return;
+    }
+
+    // ⚠️ Destructive — confirm first
+    const confirmMsg =
+      `⚠️ RESTORE DATABASE ⚠️\n\n` +
+      `File: ${file.name}\n` +
+      `Size: ${(file.size / 1024).toFixed(1)} KB\n\n` +
+      `This will OVERWRITE your current database with the contents of this backup.\n\n` +
+      `All current data will be lost unless you back it up first.\n\n` +
+      `Are you sure you want to continue?`;
+
+    if (!confirm(confirmMsg)) return;
+
+    const reader = new FileReader();
+    reader.onload = (e: any) => {
+      const sql: string = e.target.result;
+      const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Visual feedback
+      this.cacheStatus = 'Restoring...';
+
+      this.http.post<any>(
+        `${environment.apiUrl}/api/admin/database/import`,
+        { sql, filename: file.name },
+        { headers }
+      ).subscribe({
+        next: (res) => {
+          this.cacheStatus = 'Active';
+          this.showStatusPopup(
+            ` Database restored!\n` +
+            `Executed: ${res.executed} statements\n` +
+            `Errors: ${res.errors}\n` +
+            `File: ${res.filename}`
+          );
+          // Optional: force reload so the app re-fetches fresh data
+          setTimeout(() => window.location.reload(), 2000);
+        },
+        error: (err) => {
+          this.cacheStatus = 'Active';
+          const msg = err.error?.error || err.message || 'Restore failed';
+          alert('❌ Restore failed:\n' + msg);
+        }
+      });
+    };
+    reader.onerror = () => alert('❌ Failed to read the file.');
+    reader.readAsText(file);
+  };
+
+  input.click();
+}
  systemHealth() {
     this.router.navigate(['/admin/system-health']);
     this.activeMenu = null;
@@ -3804,7 +3858,7 @@ hasSystemAccess(): boolean {
          role === 'branch manager';
 }
 /**
- * ✅ Check if current user is an Admin (for restricted features)
+ *  Check if current user is an Admin (for restricted features)
  * Only Admin users can see Database and System Health
  */
 isAdminUser(): boolean {
@@ -3945,12 +3999,12 @@ goToSupport() {
   this.activeMenu = null;
 }
 
-// ✅ Cancel logout confirmation
+//  Cancel logout confirmation
 cancelLogoutConfirm() {
   this.showLogoutConfirmModal = false;
 }
 
-// ✅ Confirm and proceed with logout
+//  Confirm and proceed with logout
 confirmLogout() {
   this.showLogoutConfirmModal = false;
   this.clearLogoutTimers();

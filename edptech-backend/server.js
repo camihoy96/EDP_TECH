@@ -6,14 +6,16 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const passport = require('passport');
 const multer = require('multer');
+const { exec } = require('child_process');
 const path = require('path');
+const os = require('os')
 const fs = require('fs');
 const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const PORT = process.env.PORT || 6001;
 const { createProxyMiddleware } = require('http-proxy-middleware');
-// These MUST be before your routes
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(passport.initialize());
@@ -23,28 +25,28 @@ const OFFLINE_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 // Middleware
 app.use(cors({
     origin: [
-        // ✅ Network 1 - IIS
+        //  Network 1 - IIS
         'http://localhost:8082',
         'http://192.168.0.10:8082',
         'http://127.0.0.1:8082',
         
-        // ✅ Network 2 - IIS
+        //  Network 2 - IIS
         'http://192.168.5.108:8082',
         
-        // ✅ Network 1 - Dev server
+        //  Network 1 - Dev server
         'http://localhost:4000',
         'http://192.168.0.10:4000',
         'http://127.0.0.1:4000',
         
-        // ✅ Network 2 - Dev server
+        //  Network 2 - Dev server
         'http://192.168.5.108:4000',
         
-        // ✅ Network 1 - Angular dev server
+        //  Network 1 - Angular dev server
         'http://localhost:4200',
         'http://192.168.0.10:4200',
         'http://127.0.0.1:4200',
         
-        // ✅ Network 2 - Angular dev server
+        //  Network 2 - Angular dev server
         'http://192.168.5.108:4200'
     ],
     credentials: true,
@@ -58,7 +60,7 @@ const pool = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-     dateStrings: true,    // ✅ CRITICAL: Return dates as strings
+     dateStrings: true,    // CRITICAL: Return dates as strings
     timezone: '+08:00', 
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
@@ -111,7 +113,7 @@ const upload = multer({
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-// ✅ Token authentication middleware
+//  Token authentication middleware
 function authenticateToken(req, res, next) {
     // First check if the main middleware already decoded the token
     if (req.decodedUser) {
@@ -140,7 +142,7 @@ function authenticateToken(req, res, next) {
         return res.status(403).json({ error: 'Invalid or expired token.' });
     }
 }
-// ✅ Optional: Role-based middleware
+//  Optional: Role-based middleware
 function requireRole(...roles) {
     return (req, res, next) => {
         if (!req.user) {
@@ -169,7 +171,7 @@ async function createAttachmentsTable() {
                 FOREIGN KEY (ticket_id) REFERENCES tickets(id) ON DELETE CASCADE
             )
         `);
-        console.log('✅ ticket_attachments table ready');
+        console.log(' ticket_attachments table ready');
     } catch (error) {
         console.error('Error creating attachments table:', error);
     }
@@ -178,7 +180,7 @@ async function createAttachmentsTable() {
 async function testConnection() {
     try {
         const connection = await pool.getConnection();
-        console.log('✅ Database connected successfully');
+        console.log(' Database connected successfully');
         connection.release();
     } catch (error) {
         console.error('❌ Database connection error:', error.message);
@@ -218,14 +220,14 @@ app.post('/api/auth/register', async (req, res) => {
             console.log('❌ Invalid registration key for branch:', registrationKey);
             return res.status(403).json({ message: 'Invalid registration key for this branch' });
         }
-        console.log('✅ Valid registration key for branch:', keyResults[0].name);
+        console.log(' Valid registration key for branch:', keyResults[0].name);
         
-        // ✅ Determine which table to use:
+        //  Determine which table to use:
         // Main branch (1 or 5) + EDP/IT department → users table
         // All others → new_user table
         const isMainBranch = (branch_id == 1 || branch_id == 5);
         const deptName = (department || '').toLowerCase();
-        // ✅ BEST OPTION: Use exact matches only
+        //  BEST OPTION: Use exact matches only
         const isEDPIT = deptName === 'edp' || 
                 deptName === 'it' || 
                 deptName === 'edp/it' || 
@@ -253,7 +255,7 @@ app.post('/api/auth/register', async (req, res) => {
         
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        console.log('✅ Password hashed successfully');
+        console.log(' Password hashed successfully');
         
         const insertQuery = `INSERT INTO ${tableName} (
             username, password, fullname, role, department, 
@@ -269,7 +271,7 @@ app.post('/api/auth/register', async (req, res) => {
         
         const [result] = await pool.query(insertQuery, insertValues);
         
-        console.log('✅ User registered successfully!');
+        console.log(' User registered successfully!');
         console.log('   ID:', result.insertId);
         console.log('   Table:', tableName);
         console.log('   Username:', username);
@@ -305,7 +307,7 @@ app.use('/api', (req, res, next) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (token) {
         try {
-            // ✅ Try new secret first, fallback to old
+            //  Try new secret first, fallback to old
             let decoded;
             try {
                 decoded = jwt.verify(token, JWT_SECRET);
@@ -316,7 +318,7 @@ app.use('/api', (req, res, next) => {
             const username = decoded.username || decoded.id;
             userActivity.set(username, Date.now());
             
-            // ✅ Attach decoded user to request for all routes to use
+            //  Attach decoded user to request for all routes to use
             req.decodedUser = decoded;
         } catch (e) {
             // Token completely invalid - ignore
@@ -354,7 +356,7 @@ app.post('/api/auth/login', async (req, res) => {
         if (usersResult.length > 0) {
             user = usersResult[0];
             userTable = 'users';
-            console.log('✅ User found in users table:', user.username);
+            console.log(' User found in users table:', user.username);
         } else {
             // Check new_user table with JOIN
             const [newUserResult] = await pool.query(
@@ -374,13 +376,13 @@ app.post('/api/auth/login', async (req, res) => {
             if (newUserResult.length > 0) {
                 user = newUserResult[0];
                 userTable = 'new_user';
-                console.log('✅ User found in new_user table:', user.username);
+                console.log(' User found in new_user table:', user.username);
             }
         }
         
         if (!user) {
             console.log('❌ User not found in either table');
-            // ✅ LOG: Failed login - user not found
+            //  LOG: Failed login - user not found
             await logSystemEvent('WARNING', 'auth', null, username, null, 
                 `Failed login attempt - user not found: ${username}`, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid username or password' });
@@ -391,7 +393,7 @@ app.post('/api/auth/login', async (req, res) => {
             const lockTime = new Date(user.locked_until);
             const minutesLeft = Math.ceil((lockTime.getTime() - Date.now()) / 60000);
             console.log('🔒 Account locked until:', user.locked_until);
-            // ✅ LOG: Account locked
+            //  LOG: Account locked
             await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
                 `Login attempt on locked account - locked for ${minutesLeft} more minutes`, req.ip);
             return res.status(423).json({ 
@@ -403,13 +405,13 @@ app.post('/api/auth/login', async (req, res) => {
         // Compare password
         console.log('🔐 Comparing password for user:', user.username);
         const isValid = await bcrypt.compare(password, user.password);
-        console.log('✅ Password match:', isValid);
+        console.log(' Password match:', isValid);
         
         if (!isValid) {
             console.log('❌ Password does not match for user:', user.username);
             const newFailedAttempts = (user.failed_attempts || 0) + 1;
             
-            // ✅ LOG: Failed password
+            //  LOG: Failed password
             await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
                 `Failed login - incorrect password (attempt ${newFailedAttempts}/10)`, req.ip);
             
@@ -420,7 +422,7 @@ app.post('/api/auth/login', async (req, res) => {
                     [newFailedAttempts, lockUntil, user.id]
                 );
                 console.log('🔒 Account locked for user:', user.username);
-                // ✅ LOG: Account locked after max attempts
+                //  LOG: Account locked after max attempts
                 await logSystemEvent('ERROR', 'auth', user.id, user.username, userTable, 
                     'Account locked after 10 failed login attempts', req.ip);
                 return res.status(423).json({ 
@@ -444,16 +446,16 @@ app.post('/api/auth/login', async (req, res) => {
                 `UPDATE ${userTable} SET failed_attempts = 0, locked_until = NULL WHERE id = ?`,
                 [user.id]
             );
-            console.log('✅ Reset failed attempts for user:', user.username);
+            console.log(' Reset failed attempts for user:', user.username);
         }
         
-        console.log('✅ Login successful for user:', user.username);
+        console.log(' Login successful for user:', user.username);
         
-        // ✅ LOG: Successful login
+        //  LOG: Successful login
         await logSystemEvent('INFO', 'auth', user.id, user.username, userTable, 
             'User logged in successfully', req.ip);
        userActivity.set(user.username, Date.now());
-        console.log('✅ User activity tracked:', user.username);
+        console.log(' User activity tracked:', user.username);
         // Generate token
         const token = jwt.sign(
     { id: user.id, username: user.username, role: user.role, userTable: userTable, branch_id: user.branch_id, department_id: user.department_id, },
@@ -494,7 +496,7 @@ app.post('/api/auth/login', async (req, res) => {
         
     } catch (error) {
         console.error('❌ Login error:', error);
-        // ✅ LOG: Login error
+        //  LOG: Login error
         await logSystemEvent('ERROR', 'auth', null, null, null, 
             `Login system error: ${error.message}`, req.ip);
         res.status(500).json({ success: false, error: error.message });
@@ -514,11 +516,11 @@ app.post('/api/auth/logout', (req, res) => {
             }
             const username = decoded.username || decoded.id;
             
-            // ✅ Remove user from activity tracking
+            //  Remove user from activity tracking
             userActivity.delete(username);
-            console.log('✅ User activity cleared for:', username);
+            console.log(' User activity cleared for:', username);
             
-            // ✅ Also log the logout event
+            //  Also log the logout event
             logSystemEvent('INFO', 'auth', decoded.id, decoded.username, decoded.userTable || 'users', 
                 'User logged out', req.ip);
         } catch (e) {
@@ -530,7 +532,7 @@ app.post('/api/auth/logout', (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
 });
 
-// ✅ NEW: Endpoint to get online users
+//  NEW: Endpoint to get online users
 app.get('/api/users/online-status', (req, res) => {
     const now = Date.now();
     const OFFLINE_THRESHOLD = 5 * 60 * 1000;
@@ -634,8 +636,8 @@ app.get('/api/auth/verify-admin', async (req, res) => {
         }
         
         user = rows[0];
-        console.log('✅ User found in', userTable, 'table:', user.username);
-        console.log('✅ User role:', user.role);
+        console.log(' User found in', userTable, 'table:', user.username);
+        console.log(' User role:', user.role);
         
         // Check if user is verified
         if (!user.is_verified) {
@@ -654,18 +656,18 @@ app.get('/api/auth/verify-admin', async (req, res) => {
             });
         }
         
-        // ✅ FIX: Allow ANY user from the 'users' table (not just admin/Technician)
+        //  FIX: Allow ANY user from the 'users' table (not just admin/Technician)
         let isAuthorized = false;
         
         if (userTable === 'users') {
-            // ✅ ALL users from 'users' table are allowed
+            //  ALL users from 'users' table are allowed
             isAuthorized = true;
-            console.log('✅ User from users table - access granted');
+            console.log(' User from users table - access granted');
         } else if (userTable === 'new_user') {
             // ❌ Users from 'new_user' table - only allow if they have admin role
             if (user.role === 'admin') {
                 isAuthorized = true;
-                console.log('✅ Admin user from new_user table - access granted');
+                console.log(' Admin user from new_user table - access granted');
             } else {
                 console.log('❌ Non-admin user from new_user table - denied');
             }
@@ -692,7 +694,7 @@ app.get('/api/auth/verify-admin', async (req, res) => {
                 branch_id: user.branch_id,
                 avatar_color: user.avatar_color || '#4f6ef7',
                 photo_url: user.photo_url || '',
-                user_table: userTable,  // ✅ CRITICAL: Include this!
+                user_table: userTable,  //  CRITICAL: Include this!
                 registration_key: user.registration_key || '',
                 is_verified: user.is_verified,
                 created_at: user.created_at
@@ -752,18 +754,18 @@ app.get('/api/auth/validate-admin-token', async (req, res) => {
             return res.status(403).json({ valid: false, error: 'Account locked' });
         }
         
-        // ✅ FIX: Allow ALL users from 'users' table
+        //  FIX: Allow ALL users from 'users' table
         let isAuthorized = false;
         
         if (userTable === 'users') {
-            // ✅ ALL users from 'users' table are authorized
+            //  ALL users from 'users' table are authorized
             isAuthorized = true;
-            console.log('✅ User from users table - validated');
+            console.log(' User from users table - validated');
         } else if (userTable === 'new_user') {
             // ❌ Users from 'new_user' table - only allow if they have admin role
             if (user.role === 'admin') {
                 isAuthorized = true;
-                console.log('✅ Admin user from new_user table - validated');
+                console.log(' Admin user from new_user table - validated');
             } else {
                 console.log('❌ Non-admin user from new_user table - denied');
             }
@@ -837,7 +839,7 @@ app.post('/api/auth/validate-key', async (req, res) => {
         );
         
         if (keyResults.length > 0) {
-            console.log('✅ Valid branch key found:', key_code);
+            console.log(' Valid branch key found:', key_code);
             res.json({ 
                 valid: true, 
                 branch_id: keyResults[0].id,
@@ -1075,7 +1077,7 @@ app.post('/api/profile/:table/:id/change-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(newPassword, 10);
         await pool.query(`UPDATE ${table} SET password = ? WHERE id = ?`, [hashedPassword, id]);
         
-        console.log('✅ Password changed successfully');
+        console.log(' Password changed successfully');
         res.json({ success: true, message: 'Password changed successfully' });
         
     } catch (error) {
@@ -1083,7 +1085,7 @@ app.post('/api/profile/:table/:id/change-password', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
-// ✅ Helper function to check if a department is EDP/IT - STRICT MATCH
+//  Helper function to check if a department is EDP/IT - STRICT MATCH
 function isEDPITDepartmentStrict(departmentName, departmentId) {
     // First check by ID (most reliable)
     if (departmentId) {
@@ -1200,7 +1202,7 @@ app.get('/api/tickets/my', async (req, res) => {
         if (userTable === 'users') {
             console.log('📌 EDP/IT STAFF - tickets sent to EDP/IT departments');
             
-            // ✅ Get the user's department to check if they are EDP/IT
+            //  Get the user's department to check if they are EDP/IT
             let userDeptId = userDepartmentId;
             let isEDPIT = false;
             
@@ -1210,7 +1212,7 @@ app.get('/api/tickets/my', async (req, res) => {
                     [userDeptId]
                 );
                 if (deptCheck.length > 0) {
-                    // ✅ Use strict EDP/IT check
+                    //  Use strict EDP/IT check
                     isEDPIT = isEDPITDepartmentStrict(deptCheck[0].name, deptCheck[0].id);
                 }
             }
@@ -1290,7 +1292,7 @@ app.get('/api/tickets/my', async (req, res) => {
             };
         });
         
-        console.log(`✅ Found ${parsedTickets.length} tickets`);
+        console.log(` Found ${parsedTickets.length} tickets`);
         res.json(parsedTickets);
         
     } catch (error) {
@@ -1300,7 +1302,7 @@ app.get('/api/tickets/my', async (req, res) => {
 });
 // ============ CLIENT TICKET ROUTES ============
 app.get('/api/client/test', (req, res) => {
-    console.log('✅ Test endpoint reached!');
+    console.log(' Test endpoint reached!');
     res.json({ message: 'Backend is working!', query: req.query });
 });
 // ============ CLIENT TICKET ROUTES ============
@@ -1358,7 +1360,7 @@ app.get('/api/client/tickets', async (req, res) => {
             department: user.department
         });
         
-        // ✅ Check if user is EDP/IT - using STRICT matching
+        //  Check if user is EDP/IT - using STRICT matching
         if (userDeptId) {
             const [deptCheck] = await pool.query(
                 'SELECT id, name, branch_id FROM departments WHERE id = ?',
@@ -1402,7 +1404,7 @@ app.get('/api/client/tickets', async (req, res) => {
                 values.push(userDeptId);
                 console.log('📌 Main branch EDP/IT - showing tickets for department:', userDeptId);
             } else {
-                // ✅ User is in OTHER branch EDP/IT
+                //  User is in OTHER branch EDP/IT
                 // Show: 1. Tickets sent to their EDP/IT department, OR 2. Tickets THEY created
                 // This includes tickets created by the EDP user AND tickets from other departments sent to EDP/IT
                 query += ' AND (t.department_id = ? OR t.created_by = ?)';
@@ -1507,7 +1509,7 @@ app.get('/api/client/tickets/:id', async (req, res) => {
             return res.status(404).json({ error: 'Ticket not found' });
         }
         
-        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
+        //  FIXED: Parse assigned_users - handle double-stringified JSON
         let assignedUsers = [];
         if (tickets[0].assigned_users) {
             try {
@@ -1791,13 +1793,13 @@ app.post('/api/tickets', async (req, res) => {
         console.log('🎫 Generated ticket number:', ticket_number);
         console.log('🏢 Branch ID:', branchId);
         
-        // ✅ FIX: Don't set id manually - let MySQL auto-increment handle it
+        //  FIX: Don't set id manually - let MySQL auto-increment handle it
         const [result] = await pool.query(`
             INSERT INTO tickets (ticket_number, title, description, priority, location, department_id, branch_id, created_by, created_by_name, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
         `, [ticket_number, title, description, priority || 'medium', location, department_id || 1, branchId, created_by || null, created_by_name || 'Unknown']);
         
-        console.log('✅ Ticket created:', { id: result.insertId, ticket_number, branch_id: branchId });
+        console.log(' Ticket created:', { id: result.insertId, ticket_number, branch_id: branchId });
         
         const [newTicket] = await pool.query(`
             SELECT t.*, 
@@ -1868,7 +1870,7 @@ app.put('/api/tickets/:id', async (req, res) => {
         
         await pool.query(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`, values);
         
-        // ✅ FIXED: Return updated ticket with BOTH users AND new_user joins for agent_name
+        //  FIXED: Return updated ticket with BOTH users AND new_user joins for agent_name
         const [updatedTicket] = await pool.query(`
             SELECT t.*, 
                    COALESCE(u.fullname, nu.fullname) as creator_name,
@@ -1891,7 +1893,7 @@ app.put('/api/tickets/:id', async (req, res) => {
             return res.status(404).json({ error: 'Ticket not found' });
         }
         
-        // ✅ FIXED: Parse assigned_users - handle double-stringified JSON
+        //  FIXED: Parse assigned_users - handle double-stringified JSON
         let assignedUsers = [];
         if (updatedTicket[0].assigned_users) {
             try {
@@ -1971,7 +1973,7 @@ app.put('/api/client/tickets/:id', async (req, res) => {
             updates.push('assigned_to = ?');
             values.push(assigned_to);
         }
-        // ✅ FIXED: Don't double-stringify assigned_users
+        //  FIXED: Don't double-stringify assigned_users
         if (assigned_users !== undefined) {
             updates.push('assigned_users = ?');
             if (typeof assigned_users === 'string') {
@@ -1994,11 +1996,11 @@ app.put('/api/client/tickets/:id', async (req, res) => {
         
         await pool.query(`UPDATE tickets SET ${updates.join(', ')} WHERE id = ?`, values);
         
-        // ✅ DEBUG: Check what was actually saved in the database
+        //  DEBUG: Check what was actually saved in the database
         const [checkSaved] = await pool.query('SELECT assigned_users FROM tickets WHERE id = ?', [req.params.id]);
         console.log('📝 [CLIENT] Saved assigned_users in DB:', JSON.stringify(checkSaved[0]?.assigned_users).substring(0, 300));
         
-        // ✅ CLIENT-SPECIFIC: Return updated ticket with BOTH users AND new_user joins for agent_name
+        //  CLIENT-SPECIFIC: Return updated ticket with BOTH users AND new_user joins for agent_name
         const [updatedTicket] = await pool.query(`
             SELECT t.*, 
                    COALESCE(u.fullname, nu.fullname) as creator_name,
@@ -2021,7 +2023,7 @@ app.put('/api/client/tickets/:id', async (req, res) => {
             return res.status(404).json({ error: 'Ticket not found' });
         }
         
-        // ✅ FIXED: Parse assigned_users JSON - handle double-stringified JSON
+        //  FIXED: Parse assigned_users JSON - handle double-stringified JSON
         let assignedUsers = [];
         if (updatedTicket[0].assigned_users) {
             try {
@@ -2071,7 +2073,7 @@ app.put('/api/client/tickets/:id', async (req, res) => {
             assigned_users: assignedUsers
         };
         
-        console.log('✅ [CLIENT] Ticket updated, final assigned_users:', JSON.stringify(assignedUsers));
+        console.log(' [CLIENT] Ticket updated, final assigned_users:', JSON.stringify(assignedUsers));
         res.json(ticket);
         
     } catch (error) {
@@ -2100,15 +2102,15 @@ app.delete('/api/tickets/:id', async (req, res) => {
         // Now delete the ticket
         const [result] = await pool.query('DELETE FROM tickets WHERE id = ?', [req.params.id]);
         
-        console.log('✅ Delete result:', result);
-        console.log('✅ Affected rows:', result.affectedRows);
+        console.log(' Delete result:', result);
+        console.log(' Affected rows:', result.affectedRows);
         
         if (result.affectedRows === 0) {
             console.log('⚠️ No rows were deleted for ticket:', req.params.id);
             return res.status(500).json({ error: 'Failed to delete ticket - no rows affected' });
         }
         
-        console.log('✅ Ticket deleted successfully:', req.params.id);
+        console.log(' Ticket deleted successfully:', req.params.id);
         res.json({ success: true, deletedId: req.params.id });
     } catch (error) {
         console.error('❌ Error deleting ticket:', error);
@@ -2329,8 +2331,8 @@ app.delete('/api/client/tickets/:id', async (req, res) => {
         const isCreator = ticket[0].created_by === decoded.id;
         const isAdmin = decoded.user_table === 'users';
         
-        console.log('✅ Is creator?', isCreator);
-        console.log('✅ Is admin?', isAdmin);
+        console.log(' Is creator?', isCreator);
+        console.log(' Is admin?', isAdmin);
         
         if (!isCreator && !isAdmin) {
             console.log('❌ Not authorized');
@@ -2344,7 +2346,7 @@ app.delete('/api/client/tickets/:id', async (req, res) => {
         // Delete the ticket
         const [result] = await pool.query('DELETE FROM tickets WHERE id = ?', [id]);
         
-        console.log('✅ Delete result:', result.affectedRows, 'rows affected');
+        console.log(' Delete result:', result.affectedRows, 'rows affected');
         
         res.json({ success: true, message: 'Ticket deleted', deletedId: parseInt(id) });
     } catch (error) {
@@ -2414,7 +2416,7 @@ app.get('/api/users', async (req, res) => {
 const decoded = req.decodedUser;
         console.log('🔍 Decoded user ID:', decoded.id);
 
-        // ✅ Get current user from new_user table (client users)
+        //  Get current user from new_user table (client users)
         let currentUser = null;
         let userBranchId = null;
         let userDepartmentId = null;
@@ -2478,7 +2480,7 @@ const decoded = req.decodedUser;
 
         console.log(`📍 Branch: ${userBranchId}, Main: ${isMainBranch}`);
 
-        // ✅ 1. Get IT staff from users table (admin/IT staff)
+        //  1. Get IT staff from users table (admin/IT staff)
         const [adminUsers] = await pool.query(`
             SELECT 
                 u.id,
@@ -2513,7 +2515,7 @@ const decoded = req.decodedUser;
 
         console.log(`📋 Found ${adminUsers.length} admin IT staff`);
 
-        // ✅ 2. Get client users from new_user table who are in EDP/IT department
+        //  2. Get client users from new_user table who are in EDP/IT department
         const [clientEDPUsers] = await pool.query(`
             SELECT 
                 u.id,
@@ -2548,7 +2550,7 @@ const decoded = req.decodedUser;
 
         console.log(`📋 Found ${clientEDPUsers.length} client EDP/IT users`);
 
-        // ✅ 3. Also get client users with IT-related roles
+        //  3. Also get client users with IT-related roles
         const [clientITRoleUsers] = await pool.query(`
             SELECT 
                 u.id,
@@ -2586,15 +2588,15 @@ const decoded = req.decodedUser;
         let filteredUsers = [];
 
         if (isMainBranch) {
-            // ✅ MAIN BRANCH: ONLY show admin IT staff from users table
+            //  MAIN BRANCH: ONLY show admin IT staff from users table
             filteredUsers = adminUsers.filter(u => 
                 u.role === 'Technician' || 
                 u.role === 'Head/Manager' || 
                 u.role === 'Supervisor'
             );
-            console.log(`✅ Main branch: Showing ${filteredUsers.length} admin IT staff only (excluding client users)`);
+            console.log(` Main branch: Showing ${filteredUsers.length} admin IT staff only (excluding client users)`);
         } else {
-            // ✅ OTHER BRANCH: Show branch EDP/IT users + Main branch Head/Manager & Supervisor
+            //  OTHER BRANCH: Show branch EDP/IT users + Main branch Head/Manager & Supervisor
             
             // Combine all client IT users
             const allClientITUsers = [...clientEDPUsers, ...clientITRoleUsers];
@@ -2639,7 +2641,7 @@ const decoded = req.decodedUser;
                 return true;
             });
             
-            console.log(`✅ Other branch: ${branchAllUsers.length} branch users + ${mainBranchStaff.length} main staff = ${filteredUsers.length} users total`);
+            console.log(` Other branch: ${branchAllUsers.length} branch users + ${mainBranchStaff.length} main staff = ${filteredUsers.length} users total`);
         }
 
         // Format response
@@ -2657,7 +2659,7 @@ const formattedUsers = filteredUsers.map(user => ({
     company_name: user.company_name || '',
     avatar_color: user.avatar_color || '#0a3a8c',
     photo_url: user.photo_url,
-    // ✅ Keep original values, don't set defaults
+    //  Keep original values, don't set defaults
     workDays: user.workDays,      // Keep as null if null
     dayOff: user.dayOff,          // Keep as null if null
     workStart: user.workStart,    // Keep as null if null
@@ -2766,7 +2768,7 @@ app.use(async (req, res, next) => {
     }
     
     try {
-        // ✅ Support both old and new tokens
+        //  Support both old and new tokens
         let decoded;
         try {
             decoded = jwt.verify(token, JWT_SECRET);
@@ -2774,7 +2776,7 @@ app.use(async (req, res, next) => {
             decoded = jwt.verify(token, 'secret_key');
         }
         
-        // ✅ Set all the properties that endpoints expect
+        //  Set all the properties that endpoints expect
         req.user = decoded;
         req.decodedUser = decoded;
         req.userId = decoded.id;
@@ -2785,7 +2787,7 @@ app.use(async (req, res, next) => {
             role: decoded.role
         };
         
-        console.log('✅ Auth success for:', req.path, 'User:', decoded.id);
+        console.log(' Auth success for:', req.path, 'User:', decoded.id);
     } catch (error) {
         // Silent fail - don't block the request
     }
@@ -2868,7 +2870,7 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
             filteredUsers = [...branchEdpUsers, ...mainBranchStaff];
         }
 
-        // ✅ Format response - KEEP ORIGINAL VALUES, DO NOT SET DEFAULTS
+        //  Format response - KEEP ORIGINAL VALUES, DO NOT SET DEFAULTS
         const formattedUsers = filteredUsers.map(user => ({
             id: user.id,
             username: user.username,
@@ -2882,7 +2884,7 @@ app.get('/api/users/branch/:branchId', async (req, res) => {
             company_name: user.company_name || '',
             avatar_color: user.avatar_color || '#0a3a8c',
             photo_url: user.photo_url,
-            // ✅ Keep original values - no defaults!
+            //  Keep original values - no defaults!
             workDays: user.workDays,
             dayOff: user.dayOff,
             workStart: user.workStart,
@@ -2955,7 +2957,7 @@ app.get('/api/users/main-branch', async (req, res) => {
             company_name: user.company_name || '',
             avatar_color: user.avatar_color || '#0a3a8c',
             photo_url: user.photo_url,
-            // ✅ Keep original values - no defaults!
+            //  Keep original values - no defaults!
             workDays: user.workDays,
             dayOff: user.dayOff,
             workStart: user.workStart,
@@ -3109,7 +3111,7 @@ async function canModifyUser(permission, targetTable, targetId) {
     return { allowed: true, target };
 }
 
-// ✅ GET - Fetch all users from users table (Team) - Admin
+//  GET - Fetch all users from users table (Team) - Admin
 app.get('/api/admin/users', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -3123,7 +3125,7 @@ const decoded = req.decodedUser;
                      FROM users`;
         const params = [];
         
-        // ✅ Admin, Head/Manager, Supervisor can see ALL branches
+        //  Admin, Head/Manager, Supervisor can see ALL branches
         const canSeeAllBranches = permission.isAdmin || 
                                    permission.isHeadManager || 
                                    permission.isSupervisor;
@@ -3136,7 +3138,7 @@ const decoded = req.decodedUser;
         query += ' ORDER BY fullname ASC';
         
         const [teamUsers] = await pool.query(query, params);
-        console.log('✅ Team users found:', teamUsers.length);
+        console.log(' Team users found:', teamUsers.length);
         res.json(teamUsers);
         
     } catch (error) {
@@ -3144,7 +3146,7 @@ const decoded = req.decodedUser;
         res.status(500).json({ error: error.message });
     }
 });
-// ✅ GET - Fetch all users from new_user table (Clients) - Admin
+//  GET - Fetch all users from new_user table (Clients) - Admin
 app.get('/api/admin/new-users', async (req, res) => {
     try {
        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -3161,7 +3163,7 @@ const decoded = req.decodedUser;
         const conditions = [];
         const params = [];
         
-        // ✅ Admin, Head/Manager, Supervisor can see ALL branches
+        //  Admin, Head/Manager, Supervisor can see ALL branches
         // Only Technician and Branch Manager are restricted to their branch
         const canSeeAllBranches = permission.isAdmin || 
                                    permission.isHeadManager || 
@@ -3191,7 +3193,7 @@ const decoded = req.decodedUser;
         query += ' ORDER BY branch_id ASC, department ASC, fullname ASC';
         
         const [clientUsers] = await pool.query(query, params);
-        console.log('✅ Client users found:', clientUsers.length);
+        console.log(' Client users found:', clientUsers.length);
         res.json(clientUsers);
         
     } catch (error) {
@@ -3200,7 +3202,7 @@ const decoded = req.decodedUser;
     }
 });
 
-// ✅ POST - Lock user - Admin
+//  POST - Lock user - Admin
 app.post('/api/admin/users/:table/:id/lock', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -3231,7 +3233,7 @@ const decoded = req.decodedUser;
     }
 });
 
-// ✅ POST - Unlock user - Admin
+//  POST - Unlock user - Admin
 app.post('/api/admin/users/:table/:id/unlock', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -3261,7 +3263,7 @@ const decoded = req.decodedUser;
     }
 });
 
-// ✅ DELETE - Delete user - Admin
+//  DELETE - Delete user - Admin
 app.delete('/api/admin/users/:table/:id', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -3334,7 +3336,7 @@ const decoded = req.decodedUser;
             return res.status(404).json({ message: 'User not found' });
         }
         
-        console.log('✅ Admin password reset successful for user ID:', userId);
+        console.log(' Admin password reset successful for user ID:', userId);
         res.json({ success: true, message: 'Password reset by admin' });
         
     } catch (error) {
@@ -3669,7 +3671,7 @@ app.get('/api/public/departments/:departmentId/roles', async (req, res) => {
             ]);
         }
         
-        console.log(`✅ Roles loaded: ${rows.length}`);
+        console.log(` Roles loaded: ${rows.length}`);
         res.json(rows);
     } catch (error) {
         console.error('❌ Error fetching public department roles:', error);
@@ -3781,7 +3783,7 @@ app.get('/api/reports', async (req, res) => {
 
         const statusIcons = {
             new: '🆕', assigned: '📌', in_progress: '⚙️',
-            pending: '⏳', resolved: '✅', closed: '🔒'
+            pending: '⏳', resolved: '', closed: '🔒'
         };
         const statusLabels = {
             new: 'New', assigned: 'Assigned', in_progress: 'In Progress',
@@ -3984,12 +3986,12 @@ app.get('/api/job-orders/my', async (req, res) => {
             fullname: userFullname 
         });
         
-        // ✅ FIXED: Include creator info via JOIN with users/new_user tables
+        //  FIXED: Include creator info via JOIN with users/new_user tables
         // Added DISTINCT to prevent duplicates
         const [allOrders] = await pool.query(
             `SELECT DISTINCT
                 jo.*,
-                -- ✅ Creator info (IMPORTANT for frontend filtering)
+                --  Creator info (IMPORTANT for frontend filtering)
                 COALESCE(u.branch_id, nu.branch_id) as creator_branch_id,
                 COALESCE(u.department_id, nu.department_id) as creator_dept_id,
                 COALESCE(u.fullname, nu.fullname) as submitted_by_name,
@@ -4075,7 +4077,7 @@ app.post('/api/job-orders', async (req, res) => {
             job_order_number, submitted_by,
             requested_signature, approved_signature, received_signature,
             branch_id, department_id,
-            // ✅ Also accept these field names from frontend
+            //  Also accept these field names from frontend
             remarks, attn, request_from, prepared_name, prepared_date
         } = req.body;
         console.log('📋 Client creating job order:', { 
@@ -4084,7 +4086,7 @@ app.post('/api/job-orders', async (req, res) => {
             request_dept: request_dept || request_from
         });
         const userId = submitted_by || decoded.id;
-        // ✅ Insert with temporary number first
+        //  Insert with temporary number first
         const tempJONumber = 'TEMP-JO-' + Date.now();
         const [result] = await pool.query(`
             INSERT INTO job_orders (
@@ -4122,13 +4124,13 @@ app.post('/api/job-orders', async (req, res) => {
             received_signature || null,
             userId
         ]);
-        // ✅ Generate unique JO number using the auto-increment ID
+        //  Generate unique JO number using the auto-increment ID
         const now = new Date();
         const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
         const paddedId = String(result.insertId).padStart(3, '0');
         const joNumber = `JO-${paddedId}-${datePart}`;
         const ctrlNumber = joNumber; 
-        // ✅ Update with the generated numbers
+        //  Update with the generated numbers
         await pool.query(
     'UPDATE job_orders SET job_order_number = ?, ctrl_no = ? WHERE id = ?', 
     [joNumber, ctrlNumber, result.insertId]
@@ -4192,7 +4194,7 @@ app.put('/api/job-orders/:id', async (req, res) => {
             orderId
         ]);
         
-        console.log('✅ Client job order updated:', orderId);
+        console.log(' Client job order updated:', orderId);
         res.json({ success: true, message: 'Job order updated successfully' });
         
     } catch (error) {
@@ -4250,7 +4252,7 @@ app.put('/api/job-orders/:id/receive', async (req, res) => {
             WHERE id = ?
         `, [received_name || null, received_date || null, received_signature || null, req.params.id]);
         
-        console.log('✅ Client job order received:', req.params.id);
+        console.log(' Client job order received:', req.params.id);
         res.json({ success: true, message: 'Job order received' });
     } catch (error) {
         console.error('❌ Error receiving job order:', error);
@@ -4293,7 +4295,7 @@ app.delete('/api/job-orders/:id', async (req, res) => {
 // GET - Get all job orders (Admin)
 app.get('/api/admin/job-orders', async (req, res) => {
     try {
-        // ✅ USE req.user from middleware instead of verifying token again
+        //  USE req.user from middleware instead of verifying token again
         const userId = req.user?.id;
         const userRole = req.user?.role || '';
         
@@ -4303,7 +4305,7 @@ app.get('/api/admin/job-orders', async (req, res) => {
         
         console.log('📋 Admin GET all orders - user:', userId, 'role:', userRole);
         
-        // ✅ More flexible role check
+        //  More flexible role check
         const roleLower = (userRole || '').toLowerCase();
         const allowedRoles = ['admin', 'technician', 'head/manager', 'supervisor', 'branch manager', 'staff'];
         
@@ -4352,7 +4354,7 @@ app.get('/api/admin/job-orders', async (req, res) => {
 // GET - Get single job order by ID (Admin)
 app.get('/api/admin/job-orders/:id', async (req, res) => {
     try {
-        // ✅ USE req.user from middleware
+        //  USE req.user from middleware
         const userId = req.user?.id;
         
         if (!userId) {
@@ -4418,7 +4420,7 @@ app.post('/api/admin/job-orders', async (req, res) => {
             has_received_signature: !!received_signature
         });
         const userId = submitted_by || decoded.id;
-        // ✅ Insert with temporary number first
+        //  Insert with temporary number first
         const tempJONumber = 'TEMP-JO-' + Date.now();
         const [result] = await pool.query(`
             INSERT INTO job_orders (
@@ -4457,18 +4459,18 @@ app.post('/api/admin/job-orders', async (req, res) => {
             userId,
             status || 'pending'
         ]);
-        // ✅ Generate unique JO number using the auto-increment ID
+        //  Generate unique JO number using the auto-increment ID
         const now = new Date();
         const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
         const paddedId = String(result.insertId).padStart(3, '0');
         const joNumber = `JO-${paddedId}-${datePart}`;
         const ctrlNumber = joNumber;
-        // ✅ Update with the generated numbers
+        //  Update with the generated numbers
         await pool.query(
        'UPDATE job_orders SET job_order_number = ?, ctrl_no = ? WHERE id = ?', 
        [joNumber, ctrlNumber, result.insertId]
             );
-        console.log('✅ Admin job order created:', result.insertId, 'Number:', joNumber);
+        console.log(' Admin job order created:', result.insertId, 'Number:', joNumber);
         res.json({ 
             success: true, 
             id: result.insertId, 
@@ -4526,7 +4528,7 @@ app.put('/api/admin/job-orders/:id', async (req, res) => {
             return res.status(404).json({ error: 'Job order not found' });
         }
         
-        console.log('✅ Admin job order updated:', id);
+        console.log(' Admin job order updated:', id);
         res.json({ success: true, message: 'Job order updated successfully' });
         
     } catch (error) {
@@ -4566,7 +4568,7 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
             return res.status(400).json({ error: 'Invalid status' });
         }
         
-        // ✅ DEDUP CHECK: Use database transaction with SELECT FOR UPDATE
+        //  DEDUP CHECK: Use database transaction with SELECT FOR UPDATE
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
@@ -4584,7 +4586,7 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
             
             const jo = orders[0];
             
-            // ✅ Check if status is already the same (prevent redundant updates)
+            //  Check if status is already the same (prevent redundant updates)
             if (jo.is_forwarded) {
                 if (status === 'assigned' && jo.forwarded_status === 'assigned') {
                     await connection.rollback();
@@ -4657,7 +4659,7 @@ app.put('/api/admin/job-orders/:id/status', async (req, res) => {
             await connection.commit();
             connection.release();
             
-            console.log('✅ Admin job order status updated:', { id, status });
+            console.log(' Admin job order status updated:', { id, status });
             res.json({ success: true, message: `Job order ${status}` });
             
         } catch (txError) {
@@ -4705,7 +4707,7 @@ app.put('/api/admin/job-orders/:id/receive', async (req, res) => {
             return res.status(404).json({ error: 'Job order not found' });
         }
         
-        console.log('✅ Admin job order received:', id);
+        console.log(' Admin job order received:', id);
         res.json({ success: true, message: 'Job order received successfully' });
         
     } catch (error) {
@@ -4734,7 +4736,7 @@ app.put('/api/admin/job-orders/:id/forward', async (req, res) => {
             WHERE id = ?
         `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, req.params.id]);
         
-        console.log('✅ Job order forwarded:', req.params.id);
+        console.log(' Job order forwarded:', req.params.id);
         res.json({ success: true, message: 'Job order forwarded' });
     } catch (error) {
         console.error('Forward error:', error);
@@ -4802,7 +4804,7 @@ app.put('/api/admin/job-orders/:id/approve', async (req, res) => {
             await pool.query(`UPDATE job_orders SET ${updates.join(', ')} WHERE id = ?`, values);
         }
         
-        console.log('✅ Admin job order approved/received:', req.params.id);
+        console.log(' Admin job order approved/received:', req.params.id);
         res.json({ success: true, message: 'Job order updated' });
     } catch (error) {
         console.error('❌ Error approving job order:', error);
@@ -4824,7 +4826,7 @@ app.delete('/api/admin/job-orders/:id', async (req, res) => {
             return res.status(404).json({ error: 'Job order not found' });
         }
         
-        console.log('✅ Job order deleted:', id);
+        console.log(' Job order deleted:', id);
         res.json({ success: true, message: 'Job order deleted successfully' });
         
     } catch (error) {
@@ -4866,7 +4868,7 @@ app.get('/api/requisitions/my', async (req, res) => {
         
         console.log('📋 User branch:', userBranchId, 'dept:', userDeptId);
         
-        // ✅ FIXED: Get requisitions with creator info
+        //  FIXED: Get requisitions with creator info
         // This returns:
         // 1. Requisitions I created (submitted_by = me)
         // 2. Requisitions created by colleagues in my branch+department (for "Our Requests")
@@ -5009,7 +5011,7 @@ app.post('/api/admin/requisitions', async (req, res) => {
         console.log('📝 POST /api/admin/requisitions - Admin Creating');
         console.log('   department_id:', department_id, 'branch_id:', branch_id);
         
-        // ✅ Insert with a temporary requisition number first
+        //  Insert with a temporary requisition number first
         const tempReqNumber = 'TEMP-' + Date.now();
         
         const [result] = await pool.query(`
@@ -5029,13 +5031,13 @@ app.post('/api/admin/requisitions', async (req, res) => {
              userId, 'pending']
         );
         
-        // ✅ Generate unique requisition number using the auto-increment ID
+        //  Generate unique requisition number using the auto-increment ID
         const now = new Date();
         const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
         const paddedId = String(result.insertId).padStart(3, '0');
         const requisitionNumber = `REQ-${paddedId}-${datePart}`;
         
-        // ✅ Update the requisition with the generated number
+        //  Update the requisition with the generated number
         await pool.query('UPDATE requisitions SET requisition_number = ? WHERE id = ?', 
             [requisitionNumber, result.insertId]);
         
@@ -5046,7 +5048,7 @@ app.post('/api/admin/requisitions', async (req, res) => {
             }
         }
         
-        console.log('✅ Admin Requisition created:', result.insertId, 'Number:', requisitionNumber);
+        console.log(' Admin Requisition created:', result.insertId, 'Number:', requisitionNumber);
         res.json({ success: true, id: result.insertId, requisition_number: requisitionNumber });
     } catch (error) { 
         console.error('POST /api/admin/requisitions error:', error);
@@ -5097,7 +5099,7 @@ app.put('/api/admin/requisitions/:id', async (req, res) => {
             }
         }
         
-        console.log('✅ Admin Requisition updated:', id);
+        console.log(' Admin Requisition updated:', id);
         res.json({ success: true, id });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id error:', error);
@@ -5124,7 +5126,7 @@ app.post('/api/requisitions', async (req, res) => {
         console.log('📝 POST /api/requisitions - Creating');
         console.log('   department_id:', department_id, 'branch_id:', branch_id);
         
-        // ✅ Insert with a temporary requisition number first
+        //  Insert with a temporary requisition number first
         const tempReqNumber = 'TEMP-' + Date.now();
         
         const [result] = await pool.query(`
@@ -5144,13 +5146,13 @@ app.post('/api/requisitions', async (req, res) => {
              userId, 'pending']
         );
         
-        // ✅ Generate unique requisition number using the auto-increment ID
+        //  Generate unique requisition number using the auto-increment ID
         const now = new Date();
         const datePart = now.toISOString().split('T')[0].replace(/-/g, '');
         const paddedId = String(result.insertId).padStart(3, '0');
         const requisitionNumber = `REQ-${paddedId}-${datePart}`;
         
-        // ✅ Update the requisition with the generated number
+        //  Update the requisition with the generated number
         await pool.query('UPDATE requisitions SET requisition_number = ? WHERE id = ?', 
             [requisitionNumber, result.insertId]);
         
@@ -5161,7 +5163,7 @@ app.post('/api/requisitions', async (req, res) => {
             }
         }
         
-        console.log('✅ Requisition created:', result.insertId, 'Number:', requisitionNumber);
+        console.log(' Requisition created:', result.insertId, 'Number:', requisitionNumber);
         res.json({ success: true, id: result.insertId, requisition_number: requisitionNumber });
     } catch (error) { 
         console.error('POST /api/requisitions error:', error);
@@ -5195,7 +5197,7 @@ app.put('/api/admin/requisitions/:id/forward', async (req, res) => {
             WHERE id = ?
         `, [forwarded_to_branch_id, forwarded_to_department_id, forwarded_by_name, id]);
         
-        console.log('✅ Requisition forwarded:', id);
+        console.log(' Requisition forwarded:', id);
         res.json({ success: true, message: 'Requisition forwarded successfully' });
     } catch (error) {
         console.error('PUT /api/admin/requisitions/:id/forward error:', error);
@@ -5226,7 +5228,7 @@ app.get('/api/requisitions/:id', async (req, res) => {
         const [items] = await pool.query('SELECT * FROM requisition_items WHERE requisition_id = ?', [requisition.id]);
         requisition.items = items;
         
-        // ✅ Get user's branch, department, AND ROLE
+        //  Get user's branch, department, AND ROLE
         let userBranchId = null;
         let userDeptId = null;
         let userRole = '';
@@ -5249,12 +5251,12 @@ app.get('/api/requisitions/:id', async (req, res) => {
             }
         }
         
-        // ✅ Check if user is the recipient (same branch + department)
+        //  Check if user is the recipient (same branch + department)
         const isRecipient = userBranchId && userDeptId && 
                            requisition.branch_id == userBranchId && 
                            requisition.department_id == userDeptId;
         
-        // ✅ Check if user is Head/Manager or Supervisor from same department
+        //  Check if user is Head/Manager or Supervisor from same department
         const isHeadOrSupervisor = userRole === 'head/manager' || userRole === 'supervisor' || userRole === 'branch manager';
         const isSameDept = userBranchId && userDeptId && 
                           requisition.branch_id == userBranchId && 
@@ -5322,7 +5324,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
         
         const { id } = req.params;
         
-        // ✅ Use transaction with row locking for deduplication
+        //  Use transaction with row locking for deduplication
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
@@ -5360,7 +5362,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
                 released_name, released_date
             } = req.body;
             
-            // ✅ Check for duplicate status update
+            //  Check for duplicate status update
             if (reqData.is_forwarded) {
                 if (status === 'processing' && reqData.forwarded_status === 'processing') {
                     await connection.rollback();
@@ -5432,7 +5434,7 @@ app.put('/api/admin/requisitions/:id/status', async (req, res) => {
             await connection.commit();
             connection.release();
             
-            console.log('✅ Status update:', id, '→', status);
+            console.log(' Status update:', id, '→', status);
             res.json({ success: true });
             
         } catch (txError) {
@@ -5453,7 +5455,7 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
         
-        // ✅ Get user info for recipient check
+        //  Get user info for recipient check
         let userBranchId = null;
         let userDeptId = null;
         
@@ -5475,7 +5477,7 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
             }
         }
         
-        // ✅ Check if user is the recipient of this requisition
+        //  Check if user is the recipient of this requisition
         const [requisition] = await pool.query(
             'SELECT branch_id, department_id FROM requisitions WHERE id = ?', [req.params.id]
         );
@@ -5520,7 +5522,7 @@ app.put('/api/admin/requisitions/:id/approve', async (req, res) => {
             }
         }
         
-        console.log('✅ Approve:', req.params.id);
+        console.log(' Approve:', req.params.id);
         res.json({ success: true });
     } catch (error) { 
         console.error('PUT /api/admin/requisitions/:id/approve error:', error);
@@ -5542,7 +5544,7 @@ app.delete('/api/admin/requisitions/:id', async (req, res) => {
         // Delete the requisition
         await pool.query('DELETE FROM requisitions WHERE id = ?', [id]);
         
-        console.log('✅ Requisition deleted:', id);
+        console.log(' Requisition deleted:', id);
         res.json({ success: true, id });
     } catch (error) { 
         console.error('DELETE /api/admin/requisitions/:id error:', error);
@@ -5569,7 +5571,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
         
         const reqRecord = existing[0];
         
-        // ✅ Get user role and department info for access check
+        //  Get user role and department info for access check
         let userBranchId = null;
         let userDeptId = null;
         let userRole = '';
@@ -5595,20 +5597,20 @@ app.put('/api/requisitions/:id', async (req, res) => {
             }
         }
         
-        // ✅ Normalize role to lowercase for comparison
+        //  Normalize role to lowercase for comparison
         const normalizedRole = (userRole || '').toLowerCase();
         
-        // ✅ Check access with expanded permissions
+        //  Check access with expanded permissions
         const isCreator = reqRecord.submitted_by == userId;
         const isAdmin = decoded.role === 'admin' || normalizedRole === 'admin' || normalizedRole === 'technician';
         
-        // ✅ Head/Manager, Supervisor, Branch Manager can edit if same BRANCH
+        //  Head/Manager, Supervisor, Branch Manager can edit if same BRANCH
         const isHeadOrSupervisor = normalizedRole === 'head/manager' || 
                                    normalizedRole === 'supervisor' || 
                                    normalizedRole === 'branch manager';
         const isSameBranch = reqRecord.branch_id == userBranchId;
         
-        // ✅ Also allow if user is in the same department (regardless of role)
+        //  Also allow if user is in the same department (regardless of role)
         const isSameDept = reqRecord.branch_id == userBranchId && reqRecord.department_id == userDeptId;
         
         console.log('🔑 ACCESS CHECK:');
@@ -5621,7 +5623,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
         console.log('   userBranchId:', userBranchId, 'reqBranchId:', reqRecord.branch_id);
         console.log('   userDeptId:', userDeptId, 'reqDeptId:', reqRecord.department_id);
         
-        // ✅ UPDATED ACCESS LOGIC:
+        //  UPDATED ACCESS LOGIC:
         // Allow if: Creator OR Admin OR (Head/Supervisor in same branch) OR Same department
         const hasAccess = isCreator || 
                          isAdmin || 
@@ -5648,7 +5650,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
             });
         }
         
-        console.log('✅ ACCESS GRANTED');
+        console.log(' ACCESS GRANTED');
         
         const { request_from, attn, date, time, remarks, items,
                 prepared_name, prepared_signature, prepared_date,
@@ -5690,7 +5692,7 @@ app.put('/api/requisitions/:id', async (req, res) => {
             }
         }
         
-        console.log('✅ Requisition updated successfully:', reqRecord.id);
+        console.log(' Requisition updated successfully:', reqRecord.id);
         res.json({ success: true, id: reqRecord.id });
     } catch (error) {
         console.error('PUT /api/requisitions/:id error:', error);
@@ -5700,20 +5702,20 @@ app.put('/api/requisitions/:id', async (req, res) => {
 // GET - Specific Users basing on the specific department of specific branch
 app.get('/api/admin/users', async (req, res) => {
     try {
-        // ✅ Use pre-decoded user from middleware
+        //  Use pre-decoded user from middleware
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         
-        // ✅ Add department_id
+        //  Add department_id
         const [users] = await pool.query(
             "SELECT id, fullname, username, role, branch_id, department_id FROM users ORDER BY fullname"
         );
         
-        // ✅ Also check new_user table with department_id
+        //  Also check new_user table with department_id
         const [newUsers] = await pool.query(
             "SELECT id, fullname, username, role, branch_id, department_id FROM new_user ORDER BY fullname"
         );
         
-        // ✅ Combine both tables
+        //  Combine both tables
         const allUsers = [...users, ...newUsers];
         
         console.log(`📋 /api/admin/users - Returning ${allUsers.length} users`);
@@ -5731,7 +5733,7 @@ app.get('/api/client/users/by-dept/:departmentId', async (req, res) => {
         
         const { departmentId } = req.params;
         
-        // ✅ Get users from BOTH tables
+        //  Get users from BOTH tables
         const [users] = await pool.query(
             `SELECT id, fullname, username, role, branch_id, department_id, 'users' as user_table
              FROM users 
@@ -5795,7 +5797,7 @@ app.delete('/api/requisitions/:id', async (req, res) => {
         if (existing.length > 0) {
             await pool.query('DELETE FROM requisition_items WHERE requisition_id = ?', [existing[0].id]);
             await pool.query('DELETE FROM requisitions WHERE id = ?', [existing[0].id]);
-            console.log('✅ Requisition deleted:', existing[0].id);
+            console.log(' Requisition deleted:', existing[0].id);
             res.json({ success: true });
         } else { 
             res.status(404).json({ error: 'Not found' }); 
@@ -5881,7 +5883,7 @@ app.get('/api/admin/health', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
         
-        // ✅ Allow Admin, Head/Manager, Supervisor, Branch Manager
+        //  Allow Admin, Head/Manager, Supervisor, Branch Manager
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         const userRole = (decoded.role || '').toLowerCase().trim();
         
@@ -6115,7 +6117,7 @@ async function logSystemEvent(level, type, userId, userName, userTable, action, 
 // ============================================
 // COMPUTER MONITORING - Optimized
 // ============================================
-// ✅ NEW: GET - Distinct Locations (fast, direct from DB)
+//  NEW: GET - Distinct Locations (fast, direct from DB)
 app.get('/api/computers/locations', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -6146,7 +6148,7 @@ app.get('/api/computers', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
 
-        // ✅ Check if Python is available with a quick health check
+        //  Check if Python is available with a quick health check
         let pythonAvailable = false;
         try {
             const healthCheck = await fetch('http://localhost:5002/api/health', {
@@ -6167,7 +6169,7 @@ app.get('/api/computers', async (req, res) => {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('✅ Data from Python API');
+                    console.log(' Data from Python API');
                     return res.json(data);
                 }
             } catch (pythonError) {
@@ -6177,7 +6179,7 @@ app.get('/api/computers', async (req, res) => {
             console.log('ℹ️ Python API not available, using local database directly');
         }
         
-        // ✅ Direct from MySQL (fast - no timeout delay)
+        //  Direct from MySQL (fast - no timeout delay)
       const [computers] = await pool.query(
             `SELECT 
                 id, computer_name, user_name, location, department, ip_address, mac_address,
@@ -6193,7 +6195,7 @@ app.get('/api/computers', async (req, res) => {
                 DATE_FORMAT(av_next_update, '%Y-%m-%d') as av_next_update,
                 status, last_checked, created_at
             FROM computer_monitoring 
-            WHERE id > 0  -- ✅ Exclude invalid records
+            WHERE id > 0  --  Exclude invalid records
             ORDER BY INET_ATON(SUBSTRING_INDEX(ip_address, '/', 1))`
         );
         
@@ -6230,7 +6232,7 @@ app.get('/api/computers/:id', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
 
-        // ✅ Quick health check instead of waiting for timeout
+        //  Quick health check instead of waiting for timeout
         let pythonAvailable = false;
         try {
             const healthCheck = await fetch('http://localhost:5002/api/health', {
@@ -6327,7 +6329,7 @@ app.get('/api/computers/expiring', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
 
-        // ✅ Direct from MySQL (fast - no Python dependency needed for this)
+        //  Direct from MySQL (fast - no Python dependency needed for this)
         const [expiring] = await pool.query(
             `SELECT 
                 id, computer_name, user_name, location, department, ip_address, 
@@ -6379,14 +6381,14 @@ app.post('/api/computers', async (req, res) => {
             av_last_update, av_next_update
         } = req.body;
         
-        // ✅ Validate required fields
+        //  Validate required fields
         if (!computer_name || !ip_address) {
             return res.status(400).json({ 
                 error: 'Computer Name and IP Address are required' 
             });
         }
         
-        // ✅ Check if IP already exists
+        //  Check if IP already exists
         const [existing] = await pool.query(
             'SELECT id FROM computer_monitoring WHERE ip_address = ?',
             [ip_address]
@@ -6435,7 +6437,7 @@ app.post('/api/computers', async (req, res) => {
             ]
         );
         
-        console.log('✅ Computer added successfully. ID:', result.insertId);
+        console.log(' Computer added successfully. ID:', result.insertId);
         
         res.json({ 
             success: true, 
@@ -6464,7 +6466,7 @@ app.put('/api/computers/:id', async (req, res) => {
         ms_license_type, license_activation, license_duration, license_expiry,
         office_activation, office_activation_date, office_duration, office_expiry,
         av_last_update, av_next_update 
-    } = req.body; // ✅ NEW
+    } = req.body; //  NEW
     
      await pool.query(`UPDATE computer_monitoring SET
         computer_name=?, user_name=?, location=?, department=?, ip_address=?,
@@ -6477,8 +6479,8 @@ app.put('/api/computers/:id', async (req, res) => {
         [computer_name, user_name, location, department, ip_address, mac_address,
          os, bit, ram, storage, processor,  gpu, antivirus,
          ms_license_type, license_activation, license_duration, license_expiry,
-         office_activation, office_activation_date, office_duration, office_expiry,  // ✅ NEW
-         av_last_update, av_next_update, req.params.id]  // ✅ NEW
+         office_activation, office_activation_date, office_duration, office_expiry,  //  NEW
+         av_last_update, av_next_update, req.params.id]  //  NEW
     );
     
     res.json({ success: true, message: 'Computer updated' });
@@ -6506,7 +6508,7 @@ app.get('/api/computers/dashboard/stats', async (req, res) => {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
 
-        // ✅ Direct from MySQL - statistics don't need Python
+        //  Direct from MySQL - statistics don't need Python
         const [stats] = await pool.query(`
             SELECT 
                 COUNT(*) as total_computers,
@@ -6601,7 +6603,7 @@ app.post('/api/computers/cleaning', async (req, res) => {
     }
 });
 
-// ✅ NAMED ROUTES FIRST - before any /:parameter routes
+//  NAMED ROUTES FIRST - before any /:parameter routes
 
 // GET - Get cleaning records filtered by month/year
 app.get('/api/computers/cleaning/all-dates', async (req, res) => {
@@ -6675,7 +6677,7 @@ app.get('/api/computers/cleaning/all-ids', async (req, res) => {
     }
 });
 
-// ✅ PARAMETERIZED ROUTES LAST
+//  PARAMETERIZED ROUTES LAST
 
 // GET - Get Cleaning Records for a Specific Computer
 app.get('/api/computers/cleaning/:computerId', async (req, res) => {
@@ -6953,7 +6955,7 @@ app.get('/api/admin/settings', async (req, res) => {
         }
     });
     
-    // ✅ Ensure ai exists
+    //  Ensure ai exists
     if (!settings.ai) {
         settings.ai = {
             name: 'St4Nger AI',
@@ -6962,7 +6964,7 @@ app.get('/api/admin/settings', async (req, res) => {
         };
     }
     
-    // ✅ Merge ai_avatar into ai.avatar
+    //  Merge ai_avatar into ai.avatar
     if (settings.ai_avatar) {
         settings.ai.avatar = settings.ai_avatar;
     }
@@ -7012,7 +7014,7 @@ app.post('/api/admin/settings', async (req, res) => {
             );
         }
         
-        // ✅ Save AI avatar separately ONLY if it's not already in ai object
+        //  Save AI avatar separately ONLY if it's not already in ai object
         // This ensures both keys are in sync
         if (settings.ai && settings.ai.avatar) {
             await pool.query(
@@ -7023,7 +7025,7 @@ app.post('/api/admin/settings', async (req, res) => {
             );
         }
         
-        console.log('✅ Settings saved by user:', userId);
+        console.log(' Settings saved by user:', userId);
         res.json({ success: true, message: 'Settings saved' });
     } catch (error) {
         console.error('POST /api/admin/settings error:', error);
@@ -7053,7 +7055,7 @@ app.post('/api/admin/upload-logo', uploadLogo.single('logo'), async (req, res) =
             [logoUrl, decoded.id]
         );
         
-        console.log('✅ Logo uploaded by user:', decoded.id, 'File:', req.file.filename);
+        console.log(' Logo uploaded by user:', decoded.id, 'File:', req.file.filename);
         res.json({ success: true, logoUrl: logoUrl, message: 'Logo uploaded successfully' });
     } catch (error) {
         console.error('POST /api/admin/upload-logo error:', error);
@@ -7081,7 +7083,7 @@ app.delete('/api/admin/remove-logo', async (req, res) => {
             const filepath = path.join(__dirname, rows[0].settings_value);
             if (fs.existsSync(filepath)) {
                 fs.unlinkSync(filepath);
-                console.log('✅ Logo file deleted:', filepath);
+                console.log(' Logo file deleted:', filepath);
             }
         }
         
@@ -7090,7 +7092,7 @@ app.delete('/api/admin/remove-logo', async (req, res) => {
             [decoded.id]
         );
         
-        console.log('✅ Logo removed by user:', decoded.id);
+        console.log(' Logo removed by user:', decoded.id);
         res.json({ success: true, message: 'Logo removed successfully' });
     } catch (error) {
         console.error('DELETE /api/admin/remove-logo error:', error);
@@ -7118,7 +7120,7 @@ app.get('/api/public/settings', async (req, res) => {
             }
         });
         
-        // ✅ Merge ai_avatar into ai object
+        //  Merge ai_avatar into ai object
         if (settings.ai && settings.ai_avatar && !settings.ai.avatar) {
             settings.ai.avatar = settings.ai_avatar;
         }
@@ -7213,7 +7215,7 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             [result.insertId]
         );
         
-        console.log(`✅ Branch created: ${name} by user ${decoded.id}`);
+        console.log(` Branch created: ${name} by user ${decoded.id}`);
         res.status(201).json(newBranch[0]);
     } catch (error) {
         console.error('POST /api/admin/branches error:', error);
@@ -7268,7 +7270,7 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             [branchId]
         );
         
-        console.log(`✅ Branch updated: ${name} by user ${decoded.id}`);
+        console.log(` Branch updated: ${name} by user ${decoded.id}`);
         res.json(updatedBranch[0]);
     } catch (error) {
         console.error('PUT /api/admin/branches/:id error:', error);
@@ -7327,7 +7329,7 @@ if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             [branchId]
         );
         
-        console.log(`✅ Branch deleted: ${existing[0].name} by user ${decoded.id}`);
+        console.log(` Branch deleted: ${existing[0].name} by user ${decoded.id}`);
         res.json({ success: true, message: 'Branch deleted successfully' });
     } catch (error) {
         console.error('DELETE /api/admin/branches/:id error:', error);
@@ -7414,7 +7416,7 @@ app.get('/api/public/departments/:departmentId/roles', async (req, res) => {
             [req.params.departmentId]
         );
         
-        console.log(`✅ Roles loaded for department ${req.params.departmentId}:`, rows.length);
+        console.log(` Roles loaded for department ${req.params.departmentId}:`, rows.length);
         res.json(rows);
     } catch (error) {
         console.error('GET /api/public/departments/:departmentId/roles error:', error);
@@ -8030,7 +8032,7 @@ app.put('/api/notifications/:id/read', async (req, res) => {
             [id, req.decodedUser.username]
         );
 
-        console.log(`✅ Updated ${result.affectedRows} row(s)`);
+        console.log(` Updated ${result.affectedRows} row(s)`);
 
         if (result.affectedRows === 0) {
             return res.status(404).json({ error: 'Notification not found' });
@@ -8165,7 +8167,7 @@ app.delete('/api/notifications/:id', async (req, res) => {
             [id, req.decodedUser.username]
         );
 
-        console.log(`✅ Deleted ${result.affectedRows} row(s)`);
+        console.log(` Deleted ${result.affectedRows} row(s)`);
         res.json({ success: true, affectedRows: result.affectedRows });
     } catch (error) {
         console.error('❌ Error deleting notification:', error);
@@ -8186,7 +8188,7 @@ app.put('/api/notifications/mark-all-read', async (req, res) => {
             [req.decodedUser.username]
         );
 
-        console.log(`✅ Marked ${result.affectedRows} row(s) as read`);
+        console.log(` Marked ${result.affectedRows} row(s) as read`);
         res.json({ success: true, affectedRows: result.affectedRows });
     } catch (error) {
         console.error('❌ Error marking all as read:', error);
@@ -8206,7 +8208,7 @@ app.put('/api/notifications/clear-all', async (req, res) => {
             [req.decodedUser.username]
         );
 
-        console.log(`✅ Cleared ${result.affectedRows} row(s)`);
+        console.log(` Cleared ${result.affectedRows} row(s)`);
         res.json({ success: true, affectedRows: result.affectedRows });
     } catch (error) {
         console.error('❌ Error clearing notifications:', error);
@@ -8381,7 +8383,7 @@ app.post('/api/client-notifications/branch', async (req, res) => {
     try {
         const { branch_id, type, title, message, ticket_id, ticket_number, exclude_user_id } = req.body;
         
-        // ✅ Get EDP/IT users ONLY in this specific branch
+        //  Get EDP/IT users ONLY in this specific branch
         const [edpUsers] = await pool.query(`
             SELECT id FROM users 
             WHERE branch_id = ? 
@@ -8396,12 +8398,12 @@ app.post('/api/client-notifications/branch', async (req, res) => {
         
         let allEdpIds = [...edpUsers.map(u => u.id), ...edpNewUsers.map(u => u.id)];
         
-        // ✅ Exclude the ticket creator
+        //  Exclude the ticket creator
         if (exclude_user_id) {
             allEdpIds = allEdpIds.filter(id => id !== exclude_user_id);
         }
         
-        // ✅ Also filter: only users whose branch_id matches (already done by SQL)
+        //  Also filter: only users whose branch_id matches (already done by SQL)
         console.log(`📢 Branch notification: branch ${branch_id}, notifying ${allEdpIds.length} EDP/IT users`);
         
         // Insert notification for each EDP/IT user
@@ -8439,7 +8441,7 @@ app.put('/api/client-notifications/mark-all-read/:userId', async (req, res) => {
 // GET - New users endpoint (for client users) - SINGLE VERSION
 app.get('/api/new-users', async (req, res) => {
     try {
-        // ✅ Use pre-decoded user from middleware
+        //  Use pre-decoded user from middleware
         if (!req.decodedUser) {
             return res.status(401).json({ error: 'Invalid token' });
         }
@@ -8455,7 +8457,7 @@ app.get('/api/new-users', async (req, res) => {
              ORDER BY fullname ASC`
         );
         
-        console.log('✅ Client users found:', users.length);
+        console.log(' Client users found:', users.length);
         res.json(users);
     } catch (error) {
         console.error('Error loading new users:', error.message);
@@ -8594,7 +8596,7 @@ app.use('/api', (req, res, next) => {
         return next();
     }
     
-    // ✅ Use req.decodedUser if available (set by the middleware above)
+    //  Use req.decodedUser if available (set by the middleware above)
     if (req.decodedUser) {
         const username = req.decodedUser.username || req.decodedUser.id;
         userActivity.set(username, Date.now());
@@ -8995,7 +8997,7 @@ const userId = req.decodedUser.id;
             ...joStats
         };
         
-        console.log('✅ Department stats response ready');
+        console.log(' Department stats response ready');
         res.json(response);
         
     } catch (error) {
@@ -9139,7 +9141,7 @@ app.post('/api/feedback', async (req, res) => {
             ]
         );
         
-        console.log(`✅ Feedback submitted by user ${userId}, ID: ${result.insertId}`);
+        console.log(` Feedback submitted by user ${userId}, ID: ${result.insertId}`);
         
         res.json({ 
             success: true, 
@@ -9619,134 +9621,82 @@ app.get('/api/admin/database/export', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-        
-        console.log('💾 Starting database export...');
-        
-        // Get all tables ONLY (skip views)
-        const [tables] = await pool.query(
-            `SELECT TABLE_NAME 
-             FROM information_schema.TABLES 
-             WHERE TABLE_SCHEMA = 'edptech_helpdesk' 
-             AND TABLE_TYPE = 'BASE TABLE'
-             ORDER BY TABLE_NAME`
-        );
-        
-        console.log(`   Found ${tables.length} tables (views excluded)`);
-        
-        let sql = '-- ============================================\n';
-        sql += '-- EDPTech Helpdesk Database Export\n';
-        sql += `-- Generated: ${new Date().toISOString()}\n`;
-        sql += `-- Database: edptech_helpdesk\n`;
-        sql += `-- Tables: ${tables.length}\n`;
-        sql += '-- ============================================\n\n';
-        sql += 'SET FOREIGN_KEY_CHECKS = 0;\n';
-        sql += 'SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";\n';
-        sql += 'START TRANSACTION;\n\n';
-        
-        let totalRows = 0;
-        let successTables = 0;
-        let skippedTables = 0;
-        
-        for (const tableObj of tables) {
-            const tableName = tableObj.TABLE_NAME;
-            
-            try {
-                console.log(`  📋 Exporting table: ${tableName}`);
-                
-                // Get CREATE TABLE statement
-                const [createResult] = await pool.query(`SHOW CREATE TABLE \`${tableName}\``);
-                const createStatement = createResult[0]['Create Table'];
-                
-                sql += `-- --------------------------------------------------------\n`;
-                sql += `-- Table: \`${tableName}\`\n`;
-                sql += `-- --------------------------------------------------------\n\n`;
-                sql += `DROP TABLE IF EXISTS \`${tableName}\`;\n`;
-                sql += `${createStatement};\n\n`;
-                
-                // Get table data
-                const [rows] = await pool.query(`SELECT * FROM \`${tableName}\``);
-                
-                if (rows.length > 0) {
-                    sql += `-- Data for table \`${tableName}\` (${rows.length} rows)\n`;
-                    
-                    // Get column names
-                    const columns = Object.keys(rows[0]);
-                    const columnList = columns.map(col => `\`${col}\``).join(', ');
-                    
-                    // Build INSERT statements in batches of 50 rows
-                    const batchSize = 50;
-                    for (let i = 0; i < rows.length; i += batchSize) {
-                        const batch = rows.slice(i, i + batchSize);
-                        const values = batch.map(row => {
-                            const rowValues = columns.map(col => {
-                                const value = row[col];
-                                if (value === null) return 'NULL';
-                                if (value instanceof Date) {
-                                    return `'${value.toISOString().slice(0, 19).replace('T', ' ')}'`;
-                                }
-                                if (typeof value === 'number') return value;
-                                if (typeof value === 'boolean') return value ? 1 : 0;
-                                // String or Buffer - escape special characters
-                                if (Buffer.isBuffer(value)) {
-                                    return `0x${value.toString('hex')}`;
-                                }
-                                return `'${String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r')}'`;
-                            });
-                            return `(${rowValues.join(', ')})`;
-                        });
-                        
-                        sql += `INSERT INTO \`${tableName}\` (${columnList}) VALUES\n${values.join(',\n')};\n\n`;
-                    }
-                    
-                    totalRows += rows.length;
-                } else {
-                    sql += `-- Table \`${tableName}\` is empty\n\n`;
-                }
-                
-                successTables++;
-                
-            } catch (tableError) {
-                console.warn(`  ⚠️ Skipping table ${tableName}: ${tableError.message}`);
-                sql += `-- ⚠️ Table \`${tableName}\` skipped due to error: ${tableError.message}\n\n`;
-                skippedTables++;
-            }
-        }
-        
-        sql += 'SET FOREIGN_KEY_CHECKS = 1;\n';
-        sql += 'COMMIT;\n';
-        sql += '\n-- ============================================\n';
-        sql += `-- Export completed: ${successTables} tables, ${totalRows} rows`;
-        if (skippedTables > 0) sql += `, ${skippedTables} skipped`;
-        sql += '\n-- ============================================\n';
-        
-        // Generate filename
+
+        console.log('💾 Starting full database export (mysqldump)...');
+
+        const MYSQLDUMP = process.env.MYSQLDUMP_PATH || 'C:\\xampp\\mysql\\bin\\mysqldump.exe';
+        const DB_HOST   = process.env.DB_HOST || 'localhost';
+        const DB_USER   = process.env.DB_USER || 'root';
+        const DB_PASS   = process.env.DB_PASS || '';
+        const DB_NAME   = process.env.DB_NAME || 'edptech_helpdesk';
+
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-        const filename = `edptech_helpdesk_backup_${timestamp}.sql`;
-        
-        console.log(`✅ Database export complete: ${filename}`);
-        console.log(`   Tables: ${successTables} (${skippedTables} skipped)`);
-        console.log(`   Total rows: ${totalRows}`);
-        console.log(`   Size: ${(sql.length / 1024).toFixed(1)} KB`);
-        
-        // Log the export event
-        try {
-            await logSystemEvent('info', 'database_export', decoded.id, decoded.username, 
-                decoded.userTable || 'users', `Database exported: ${successTables} tables`, req.ip);
-        } catch (logError) {
-            console.warn('⚠️ Could not log export event:', logError.message);
-        }
-        
-        // Send as downloadable file
-        res.setHeader('Content-Type', 'application/sql; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Length', Buffer.byteLength(sql, 'utf8'));
-        res.send(sql);
-        
+        const filename  = `edptech_helpdesk_backup_${timestamp}.sql`;
+        const tmpPath   = path.join(os.tmpdir(), filename);
+
+        // Build mysqldump args
+        const args = [
+            `--host=${DB_HOST}`,
+            `--user=${DB_USER}`,
+            DB_PASS ? `--password=${DB_PASS}` : '',
+            '--routines',
+            '--events',
+            '--triggers',
+            '--single-transaction',
+            '--quick',
+            '--lock-tables=false',
+            '--default-character-set=utf8mb4',
+            '--add-drop-database',
+            '--add-drop-table',
+            '--create-options',
+            '--disable-keys',
+            '--extended-insert',
+            '--comments',
+            '--complete-insert',
+            '--set-charset',
+            '--databases', DB_NAME
+        ].filter(Boolean).join(' ');
+
+        const cmd = `"${MYSQLDUMP}" ${args} > "${tmpPath}"`;
+        console.log('   Running:', cmd.replace(/--password=\S+/, '--password=***'));
+
+        exec(cmd, { maxBuffer: 1024 * 1024 * 500 }, async (err, _stdout, stderr) => {
+            if (err) {
+                console.error('❌ mysqldump failed:', err.message);
+                console.error('   stderr:', stderr);
+                return res.status(500).json({
+                    success: false,
+                    error: 'Export failed: ' + (stderr || err.message)
+                });
+            }
+
+            try {
+                await logSystemEvent(
+                    'info', 'database_export', decoded.id, decoded.username,
+                    decoded.userTable || 'users',
+                    `Database exported (full schema): ${filename}`, req.ip
+                );
+            } catch (logError) {
+                console.warn('⚠️ Could not log export event:', logError.message);
+            }
+
+            res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+            const stream = fs.createReadStream(tmpPath);
+            stream.pipe(res);
+            stream.on('end', () => fs.unlink(tmpPath, () => {}));
+            stream.on('error', (streamErr) => {
+                console.error('❌ Stream error:', streamErr);
+                if (!res.headersSent) res.status(500).json({ error: 'Stream failed' });
+            });
+        });
+
     } catch (error) {
         console.error('❌ Database export error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to export database: ' + error.message 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to export database: ' + error.message
         });
     }
 });
@@ -9808,60 +9758,158 @@ app.post('/api/admin/database/import', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
         const decoded = req.decodedUser;
-        
-        // Only admin can restore
+
         const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
         if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
             return res.status(403).json({ error: 'Access denied. Insufficient permissions.' });
         }
-        
+
         const { sql, filename } = req.body;
-        
         if (!sql) {
             return res.status(400).json({ error: 'No SQL content provided' });
         }
-        
+
         console.log(`🔄 Starting database restore from: ${filename || 'unknown file'}`);
         console.log(`   SQL size: ${(sql.length / 1024).toFixed(1)} KB`);
-        
-        // Split SQL into individual statements
-        const statements = sql
-            .split(';')
-            .map(s => s.trim())
-            .filter(s => s.length > 0 && !s.startsWith('--') && !s.startsWith('SET '));
-        
+
+        // ---- Smart tokenizer: handles DELIMITER, strings, comments ----
+        function splitSqlStatements(input) {
+            const statements = [];
+            let current = '';
+            let inString = false;
+            let stringChar = '';
+            let delimiter = ';';
+
+            for (let i = 0; i < input.length; i++) {
+                const ch = input[i];
+                const next = input[i + 1];
+
+                // Detect DELIMITER command (only at line start-ish)
+                if (!inString && /^DELIMITER\s/i.test(input.substr(i, 10))) {
+                    const eol = input.indexOf('\n', i);
+                    if (eol === -1) break;
+                    delimiter = input.substring(i + 9, eol).trim() || ';';
+                    i = eol;
+                    continue;
+                }
+
+                // Skip -- comments (but only when not in string)
+                if (!inString && ch === '-' && next === '-') {
+                    const eol = input.indexOf('\n', i);
+                    i = eol === -1 ? input.length : eol;
+                    continue;
+                }
+
+                // Skip /* ... */ comments (except MySQL conditional /*! ... */)
+                if (!inString && ch === '/' && next === '*') {
+                    // Check if it's /*! ... */ — we must KEEP the inner SQL
+                    if (input[i + 2] === '!') {
+                        // Find end */, keep inner content
+                        const end = input.indexOf('*/', i + 3);
+                        if (end === -1) break;
+                        // Extract the executable part and append to current
+                        current += input.substring(i, end + 2);
+                        i = end + 1;
+                        continue;
+                    }
+                    // Normal comment → skip
+                    const end = input.indexOf('*/', i + 2);
+                    if (end === -1) break;
+                    i = end + 1;
+                    continue;
+                }
+
+                // Track string literals
+                if (!inString && (ch === "'" || ch === '"' || ch === '`')) {
+                    inString = true;
+                    stringChar = ch;
+                } else if (inString && ch === stringChar && input[i - 1] !== '\\') {
+                    inString = false;
+                    stringChar = '';
+                }
+
+                // Delimiter match
+                if (!inString && input.substr(i, delimiter.length) === delimiter) {
+                    const trimmed = current.trim();
+                    if (trimmed) statements.push(trimmed);
+                    current = '';
+                    i += delimiter.length - 1;
+                    continue;
+                }
+
+                current += ch;
+            }
+
+            const tail = current.trim();
+            if (tail) statements.push(tail);
+            return statements;
+        }
+
+        // Split using smart tokenizer
+        let statements = splitSqlStatements(sql);
+        console.log(`   Parsed ${statements.length} statements`);
+
+        // Filter out empty and DELIMITER leftovers (client-only commands)
+        statements = statements.filter(s => {
+            const t = s.trim().toUpperCase();
+            if (!t) return false;
+            if (t === 'DELIMITER ;') return false;
+            return true;
+        });
+
         let executed = 0;
         let errors = 0;
-        
-        for (const statement of statements) {
-            try {
-                await pool.query(statement);
-                executed++;
-            } catch (stmtError) {
-                console.warn(`⚠️ Skipping statement: ${stmtError.message}`);
-                errors++;
+
+        // Disable FK checks for the whole import (in case file didn't include them)
+        const conn = await pool.getConnection();
+        try {
+            await conn.query('SET FOREIGN_KEY_CHECKS = 0');
+            await conn.query('SET UNIQUE_CHECKS = 0');
+            await conn.query('SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO"');
+            await conn.query('SET NAMES utf8mb4');
+
+            for (const statement of statements) {
+                try {
+                    await conn.query(statement);
+                    executed++;
+                } catch (stmtError) {
+                    console.warn(`⚠️ Skipped: ${stmtError.message.slice(0, 120)}`);
+                    errors++;
+                }
             }
+
+            await conn.query('SET FOREIGN_KEY_CHECKS = 1');
+            await conn.query('SET UNIQUE_CHECKS = 1');
+        } finally {
+            conn.release();
         }
-        
-        console.log(`✅ Database restore complete: ${executed} statements executed, ${errors} skipped`);
-        
-        // Log the restore event
-        await logSystemEvent('warning', 'database_restore', decoded.id, decoded.username, 
-            decoded.userTable || 'users', `Database restored from: ${filename || 'upload'}`, req.ip);
-        
-        res.json({ 
-            success: true, 
-            message: `Database restored successfully!`,
+
+        console.log(`✅ Restore complete: ${executed} executed, ${errors} skipped`);
+
+        try {
+            await logSystemEvent(
+                'warning', 'database_restore', decoded.id, decoded.username,
+                decoded.userTable || 'users',
+                `Database restored from: ${filename || 'upload'} (${executed} stmts, ${errors} errors)`,
+                req.ip
+            );
+        } catch (logError) {
+            console.warn('⚠️ Could not log restore event:', logError.message);
+        }
+
+        res.json({
+            success: true,
+            message: `Database restored. ${executed} statements executed, ${errors} skipped.`,
             executed,
             errors,
             filename: filename || 'uploaded file'
         });
-        
+
     } catch (error) {
         console.error('❌ Database import error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to restore database: ' + error.message 
+        res.status(500).json({
+            success: false,
+            error: 'Failed to restore database: ' + error.message
         });
     }
 });
@@ -9990,7 +10038,7 @@ app.put('/api/ticket-notifications/mark-all-read', async (req, res) => {
             [currentUserTable, currentUserId, currentUserTable]
         );
 
-        console.log(`✅ Marked ${updateResult.affectedRows} ticket-notification row(s) read`);
+        console.log(` Marked ${updateResult.affectedRows} ticket-notification row(s) read`);
 
         res.json({
             success: true,
@@ -10045,14 +10093,14 @@ app.put('/api/ticket-notifications/clear-all', async (req, res) => {
             [currentUserId, currentUserTable, currentUserId, currentUserTable, currentUserTable, currentUserId, currentUserTable]
         );
 
-        console.log(`✅ Updated ${updateResult.affectedRows}, inserted ${insertResult.affectedRows}`);
+        console.log(` Updated ${updateResult.affectedRows}, inserted ${insertResult.affectedRows}`);
         res.json({ success: true, updated: updateResult.affectedRows, inserted: insertResult.affectedRows });
     } catch (error) {
         console.error('Clear all error:', error);
         res.status(500).json({ error: error.message });
     }
 });
-// ✅ KEEP THIS ONE - The proper GET with cleared notification filtering
+//  KEEP THIS ONE - The proper GET with cleared notification filtering
 app.get('/api/ticket-notifications', async (req, res) => {
     try {
         if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
@@ -10116,7 +10164,7 @@ app.post('/api/announcements', async (req, res) => {
             [title, message, priority || 'normal', expires_at || null, created_by, created_by_name]
         );
         
-        console.log('✅ Announcement created:', result.insertId);
+        console.log(' Announcement created:', result.insertId);
         res.status(201).json({ id: result.insertId, success: true });
     } catch (error) {
         console.error('POST /api/announcements error:', error);
@@ -10183,7 +10231,7 @@ app.post('/api/client-notifications/announcement', async (req, res) => {
             );
         }
         
-        console.log('✅ Announcement notifications sent to', clientUsers.length, 'client users');
+        console.log(' Announcement notifications sent to', clientUsers.length, 'client users');
         res.json({ success: true, notified: clientUsers.length });
     } catch (error) {
         console.error('Error saving announcement notification:', error);
@@ -10242,7 +10290,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
 });
 app.listen(PORT, () => {
-    console.log(`✅ Server is ready on port ${PORT}!`);
+    console.log(` Server is ready on port ${PORT}!`);
 });
 
 // PUT - Update New User Profile
@@ -10277,7 +10325,7 @@ app.put('/api/admin/profile/new_user/:id', async (req, res) => {
             values
         );
         
-        console.log('✅ New user profile updated:', id);
+        console.log(' New user profile updated:', id);
         res.json({ success: true, message: 'Profile updated successfully' });
         
     } catch (error) {
@@ -10343,7 +10391,7 @@ const decoded = req.decodedUser;
             values
         );
         
-        console.log('✅ Users profile updated:', id);
+        console.log(' Users profile updated:', id);
         res.json({ success: true, message: 'Profile updated successfully' });
         
     } catch (error) {
@@ -10465,7 +10513,7 @@ app.post('/api/admin/upload-ai-avatar', async (req, res) => {
             );
         }
         
-        console.log('✅ AI Avatar saved:', avatar.substring(0, 50) + '...');
+        console.log(' AI Avatar saved:', avatar.substring(0, 50) + '...');
         res.json({ success: true, avatarUrl: avatar, message: 'AI Avatar saved' });
     } catch (error) {
         console.error('POST /api/admin/upload-ai-avatar error:', error);
@@ -10506,7 +10554,7 @@ app.delete('/api/admin/remove-ai-avatar', async (req, res) => {
             }
         }
         
-        console.log('✅ AI Avatar removed');
+        console.log(' AI Avatar removed');
         res.json({ success: true, message: 'AI Avatar removed' });
     } catch (error) {
         console.error('DELETE /api/admin/remove-ai-avatar error:', error);
@@ -10813,7 +10861,7 @@ function getBranchId(req) {
 }
 
 // ─────────────────────────────────────────
-// ✅ SPECIFIC ROUTES FIRST (before /:id)
+//  SPECIFIC ROUTES FIRST (before /:id)
 // ─────────────────────────────────────────
 
 // GET - List computers scoped to user's branch
@@ -11246,7 +11294,7 @@ async function startServer() {
         console.log(`   GET    /api/users`);
         console.log(`   GET    /api/ai/knowledge-base`);
         console.log(`   POST   /api/ai/knowledge-base`);
-        console.log(`\n✅ Server is ready!\n`);
+        console.log(`\n Server is ready!\n`);
     });
 }
 
