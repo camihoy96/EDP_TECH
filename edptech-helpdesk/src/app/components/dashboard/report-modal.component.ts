@@ -543,6 +543,9 @@ constructor(private http: HttpClient) {}
   close(): void {
     this.closed.emit();
   }
+retry(): void {                   
+  this.retryRequest.emit();
+}
 
   print(): void {
   const printWindow = window.open('', '_blank', 'width=900,height=700');
