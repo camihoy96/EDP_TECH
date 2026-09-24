@@ -167,19 +167,19 @@ import { NotificationService } from '../../../services/notification.service';
                 <div class="field-error" *ngIf="locationTouched && !ticket.location">Location is required.</div>
               </div>
 
-              <div class="form-field">
-                <label for="department">Department <span class="req">*</span></label>
-                <select id="department" [(ngModel)]="ticket.department_id" name="department_id" class="classic-select">
-                  <option value="1">IT Department</option>
-                  <option value="2">Human Resources</option>
-                  <option value="3">Finance</option>
-                  <option value="4">Sales</option>
-                  <option value="5">Operations</option>
-                  <option value="6">Marketing</option>
-                  <option value="7">Administration</option>
-                </select>
-              </div>
-            </div>
+             <div class="form-field">
+  <label for="department">Department <span class="req">*</span></label>
+  <select id="department" [(ngModel)]="ticket.department_id" name="department_id" class="classic-select">
+    <option [ngValue]="null" disabled>Select Department</option>
+    <option *ngFor="let dept of departments" [ngValue]="dept.id">
+      {{ dept.name }}
+    </option>
+  </select>
+  <div class="field-error" *ngIf="departments.length === 0 && departmentsLoaded">
+    No departments available. Contact your administrator.
+  </div>
+</div>
+</div>
           </fieldset>
 
           <div class="step-actions">
@@ -668,15 +668,19 @@ export class TicketFormComponent implements AfterViewInit, OnInit {
   editMode = false;
   editTicketId: number | null = null;
   ticket = {
-    title:          '',
-    description:    '',
-    priority:       'medium',
-    location:       '',        // Changed from category to location
-    department_id:  1,
-    affected_users: 'just_me',
-    contact_method: 'email',
-  };
-
+  title: '',
+  description: '',
+  priority: 'medium',
+  location: '',
+  department_id: null as number | null,
+  affected_users: 'just_me',
+  contact_method: 'email',
+};
+// ── Departments ──
+departments: any[] = [];
+departmentsLoaded = false;
+private userBranchId: number | null = null;
+private departmentLoadAttempted = false;
   titleTouched = false;
   descTouched  = false;
   locationTouched = false;  // Added for location validation
@@ -708,20 +712,56 @@ export class TicketFormComponent implements AfterViewInit, OnInit {
     private notificationService: NotificationService
   ) {}
 
-  ngOnInit() {
-    // Get current user
-    this.authService.currentUser$.subscribe((user: any) => {
-      this.currentUser = user;
-    });
-this.route.params.subscribe(params => {
-      const id = params['id'];
-      if (id && this.router.url.includes('/edit')) {
-        this.editMode = true;
-        this.editTicketId = Number(id);
-        this.loadTicketForEdit(this.editTicketId);
+ ngOnInit() {
+  // Get current user
+  this.authService.currentUser$.subscribe((user: any) => {
+    this.currentUser = user;
+
+    // Load departments the first time we know the user's branch
+    if (user?.branch_id && !this.departmentLoadAttempted) {
+      this.userBranchId = Number(user.branch_id);
+      this.departmentLoadAttempted = true;
+      this.loadDepartments(this.userBranchId);
+    }
+  });
+
+  this.route.params.subscribe(params => {
+    const id = params['id'];
+    if (id && this.router.url.includes('/edit')) {
+      this.editMode = true;
+      this.editTicketId = Number(id);
+      this.loadTicketForEdit(this.editTicketId);
+    }
+  });
+}
+loadDepartments(branchId: number) {
+  this.departmentsLoaded = false;
+
+  this.ticketService.getDepartmentsByBranch(branchId).subscribe({
+    next: (data) => {
+      this.departments = Array.isArray(data) ? data : [];
+      this.departmentsLoaded = true;
+
+      // If the user's saved department is in this list, use it.
+      // Otherwise, if we're not editing, default to their own department
+      // or the first available one.
+      const hasSaved = this.ticket.department_id &&
+                       this.departments.some(d => d.id === Number(this.ticket.department_id));
+
+      if (!hasSaved && !this.editMode && this.departments.length > 0) {
+        const own = this.departments.find(
+          d => d.id === Number(this.currentUser?.department_id)
+        );
+        this.ticket.department_id = own ? own.id : this.departments[0].id;
       }
-    });
-  }
+    },
+    error: (err) => {
+      console.error('❌ Failed to load departments:', err);
+      this.departments = [];
+      this.departmentsLoaded = true;
+    }
+  });
+}
    saveDescription() {
   if (this.editorRef) {
     const content = this.editorRef.nativeElement.innerHTML;
@@ -923,12 +963,11 @@ compressImage(file: File, callback: (dataUrl: string) => void) {
     return this.priorityOptions.find(p => p.value === val)?.label ?? val;
   }
 
-  getDeptLabel(id: number | string): string {
-    const depts: Record<string, string> = {
-      '1':'IT','2':'Human Resources','3':'Finance','4':'Sales','5':'Operations','6':'Marketing','7':'Administration'
-    };
-    return depts[String(id)] ?? String(id);
-  }
+  getDeptLabel(id: number | string | null): string {
+  if (id === null || id === undefined) return '—';
+  const dept = this.departments.find(d => d.id === Number(id));
+  return dept ? dept.name : `Department #${id}`;
+}
 
   getAffectedLabel(val: string): string {
     const map: Record<string, string> = {
@@ -1045,7 +1084,10 @@ onDrop(event: DragEvent) {
     alert('Please enter your location.');
     return;
   }
-  
+  if (!this.ticket.department_id) {
+  alert('Please select a department.');
+  return;
+}
   this.submitting = true;
   this.updateDescription();  
   

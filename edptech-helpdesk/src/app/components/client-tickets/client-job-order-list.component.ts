@@ -28,7 +28,6 @@ import { NotificationService } from '../../services/notification.service';
 </button>
         </div>
       </div>
-
       <!-- Status Tabs -->
       <div class="status-tabs-bar" *ngIf="allOrders.length > 0">
        <!-- All -->
@@ -39,7 +38,6 @@ import { NotificationService } from '../../services/notification.service';
   </svg>
   All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
 </button>
-
 <!-- Pending -->
 <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -48,7 +46,6 @@ import { NotificationService } from '../../services/notification.service';
   </svg>
   Pending <span class="tab-count pending-count">{{ getFilteredStatusCount('pending') }}</span>
 </button>
-
 <!-- Received -->
 <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -677,16 +674,16 @@ import { NotificationService } from '../../services/notification.service';
     </div>
   `,
   styles: [`
-    .admin-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
+    .admin-container { padding: 3px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; margin: 2px;}
     .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
     .header-actions { display: flex; gap: 6px; align-items: center; }
     .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
     .classic-btn:hover { background: #dde8f0; }
-    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
+    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; margin-right:13px;}
     .classic-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
     .classic-btn.danger { background: #cc0000; color: white; border-color: #cc0000; }
-    .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 6px; flex-wrap: wrap; }
+    .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 1px; flex-wrap: wrap; }
     .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
@@ -698,9 +695,9 @@ import { NotificationService } from '../../services/notification.service';
     .tab-count.forwarded-count { background: #0a3a8c; }
     .tab-count.done-count { background: #0066cc; }
     .tab-count.rejected-count { background: #cc0000; }
-    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 1px; }
     .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 12px; background: white; }
-    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 1px; }
     .status-sep { color: #b0b0b0; }
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
     .classic-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -949,16 +946,39 @@ import { NotificationService } from '../../services/notification.service';
 .assign-user-name { flex: 1; font-size: 12px; font-weight: 500; color: #333; }
 .assign-user-role { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
 .assign-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
-.role-tag-tiny {
-  font-size: 11px;
-  background: #f5f0ff;
-  color: #6600cc;
-  padding: 1px 4px;
-  border-radius: 2px;
-  border: 1px solid #d0c0e8;
-  white-space: nowrap;
-  font-style: italic;
-}
+    .role-tag-tiny {
+      font-size: 11px;
+      background: #f5f0ff;
+      color: #6600cc;
+      padding: 1px 4px;
+      border-radius: 2px;
+      border: 1px solid #d0c0e8;
+      white-space: nowrap;
+      font-style: italic;
+    }
+    .admin-container, .admin-container * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .admin-container button, .admin-container button *, .admin-container select, .admin-container select *, .admin-container .classic-btn, .admin-container .classic-btn *, .admin-container .status-tab, .admin-container .status-tab *, .admin-container .action-btn, .admin-container .action-btn *, .admin-container .modal-close, .admin-container .modal-titlebar, .admin-container .modal-titlebar *, .admin-container .clickable-row, .admin-container .assign-user-item, .admin-container .assign-user-item *, .admin-container .checkbox-label, .admin-container .checkbox-label *, .admin-container .toast-notification, .admin-container .notification-badge, .admin-container .empty-state button { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .admin-container .classic-table td, .admin-container .classic-table th, .admin-container .classic-table td *, .admin-container .classic-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .admin-container .classic-table td:last-child, .admin-container .classic-table td:last-child *, .admin-container .classic-table th:last-child, .admin-container .classic-table th:last-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .admin-container .jo-num, .admin-container .jo-num *, .admin-container .creator-label, .admin-container .date-cell, .admin-container .date-cell *, .admin-container .time-under-date, .admin-container .desc-cell, .admin-container .dept-name-small, .admin-container .branch-tag-tiny, .admin-container .company-tag, .admin-container .forward-label, .admin-container .forward-dept, .admin-container .forward-company, .admin-container .forward-by, .admin-container .forward-by-label, .admin-container .received-by, .admin-container .assigned-under-status, .admin-container .assigned-to-label, .admin-container .status-forwarded-sub, .admin-container .role-tag-tiny, .admin-container .view-field span, .admin-container .view-remarks, .admin-container .view-req-number code, .admin-container .assigned-names, .admin-container .view-sig-name, .admin-container .view-sig-date, .admin-container .warning-message, .admin-container .warning-message *, .admin-container .assign-info, .admin-container .assign-info *, .admin-container .assign-user-name, .admin-container .assign-user-role, .admin-container .empty-state p, .admin-container .empty-state h3 { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .admin-container input, .admin-container textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+        .modal-overlay, .modal-overlay *,
+    .modal-window, .modal-window * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .modal-window button, .modal-window button *, .modal-window select, .modal-window select *,
+    .modal-close, .modal-titlebar, .modal-titlebar *,
+    .assign-user-item, .assign-user-item *, .checkbox-label, .checkbox-label *,
+    .modal-footer button, .modal-footer button * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .modal-titlebar { cursor: grab; }
+    .modal-titlebar:active { cursor: grabbing; }
+    .modal-window .view-field span, .modal-window .view-field span *,
+    .modal-window .view-remarks, .modal-window .view-remarks *,
+    .modal-window .view-req-number code,
+    .modal-window .assigned-names,
+    .modal-window .view-sig-name, .modal-window .view-sig-date,
+    .modal-window .warning-message, .modal-window .warning-message *,
+    .modal-window .assign-info, .modal-window .assign-info *,
+    .modal-window .assign-user-name, .modal-window .assign-user-role,
+    .modal-window .detail-info-item span, .modal-window .detail-info-item label { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
   `]
 })
 export class ClientJobOrderListComponent implements OnInit, OnDestroy {
@@ -1182,41 +1202,51 @@ private clearAllUserData(): void {
         // Ignore storage errors
     }
   }
-  // Add this method to load user roles (call it in ngOnInit after loadFilterBranches)
+  //this method to load user roles (call it in ngOnInit after loadFilterBranches)
 loadUserRoles() {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const headers = { 'Authorization': `Bearer ${token}` };
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const headers = { 'Authorization': `Bearer ${token}` };
+
+  const addUser = (u: any) => {
+    const role = u.role || 'Staff';
+    const fullname = u.fullname || '';
+    const username = u.username || '';
     
-    // Load from users table
-    this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
-        next: (users) => {
-            (users || []).forEach(u => {
-                const name = u.fullname || u.username;
-                if (name) {
-                    this.userRolesMap.set(name, u.role || 'Staff');
-                }
-            });
-            
-            // Also load from new_user table
-            this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
-                next: (newUsers) => {
-                    (newUsers || []).forEach(u => {
-                        const name = u.fullname || u.username;
-                        if (name) {
-                            this.userRolesMap.set(name, u.role || 'Staff');
-                        }
-                    });
-                    console.log('👥 JO - User roles loaded:', this.userRolesMap.size);
-                },
-                error: () => {
-                    console.log('⚠️ Could not load new_user roles');
-                }
-            });
+    // Store multiple key variants
+    if (fullname) {
+      this.userRolesMap.set(fullname, role);
+      this.userRolesMap.set(fullname.toLowerCase().trim(), role);
+    }
+    if (username) {
+      this.userRolesMap.set(username, role);
+      this.userRolesMap.set(username.toLowerCase().trim(), role);
+    }
+    // "First Last" from "Last, First"
+    if (fullname.includes(',')) {
+      const parts = fullname.split(',').map((p: string) => p.trim());
+      if (parts.length === 2) {
+        const flipped = `${parts[1]} ${parts[0]}`;
+        this.userRolesMap.set(flipped, role);
+        this.userRolesMap.set(flipped.toLowerCase(), role);
+      }
+    }
+  };
+
+  this.http.get<any[]>(`${environment.apiUrl}/api/admin/users`, { headers }).subscribe({
+    next: (users) => {
+      (users || []).forEach(addUser);
+      
+      this.http.get<any[]>(`${environment.apiUrl}/api/new-users`, { headers }).subscribe({
+        next: (newUsers) => {
+          (newUsers || []).forEach(addUser);
+          console.log('👥 JO - User roles loaded:', this.userRolesMap.size, 'entries');
+          console.log('🔑 Sample keys:', Array.from(this.userRolesMap.keys()).slice(0, 10));
         },
-        error: (err) => {
-            console.warn('Could not load user roles:', err);
-        }
-    });
+        error: () => console.log('⚠️ Could not load new_user roles')
+      });
+    },
+    error: (err) => console.warn('Could not load user roles:', err)
+  });
 }
 resetFilters() {
   this.searchTerm = '';
@@ -1227,21 +1257,38 @@ resetFilters() {
   };
   this.applyFilters();
 }
-// Add this method to get the role for an ATTN name
+// method to get the role for an ATTN name
 getAttnRole(attnName: string): string {
-    if (!attnName) return '';
-    // Check cache first
-    const cached = this.userRolesMap.get(attnName);
-    if (cached) return cached;
+  if (!attnName) return '';
+  
+  // Normalize: lowercase, trim, collapse multiple spaces, remove dots/commas
+  const normalize = (s: string) => 
+    s.toLowerCase().trim().replace(/[.,]/g, '').replace(/\s+/g, ' ');
+  
+  const target = normalize(attnName);
+  
+  // Pass 1: exact match on normalized keys
+  for (const [name, role] of this.userRolesMap.entries()) {
+    if (normalize(name) === target) return role;
+  }
+  
+  // Pass 2: partial match — split into words, require ALL words to match
+  const targetWords = target.split(' ').filter(w => w.length > 1);
+  for (const [name, role] of this.userRolesMap.entries()) {
+    const nameNorm = normalize(name);
+    const nameWords = nameNorm.split(' ').filter(w => w.length > 1);
     
-    // If not found, try to match by partial name
-    for (const [name, role] of this.userRolesMap.entries()) {
-        if (name.includes(attnName) || attnName.includes(name)) {
-            return role;
-        }
+    // All target words must appear in the name (order-independent)
+    const allMatch = targetWords.every(tw => 
+      nameWords.some(nw => nw === tw || nw.startsWith(tw) || tw.startsWith(nw))
+    );
+    
+    if (allMatch && targetWords.length > 0) {
+      return role;
     }
-    
-    return '';
+  }
+  
+  return '';
 }
    loadReadOrdersFromStorage() {
     const stored = localStorage.getItem('readJobOrders');

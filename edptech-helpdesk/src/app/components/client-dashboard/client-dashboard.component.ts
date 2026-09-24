@@ -4594,9 +4594,12 @@ onLogoutMouseUp() {
   document.removeEventListener('mouseup', this.onLogoutMouseUp.bind(this));
 }
 
-// Add the confirm/cancel methods
 confirmLogout() {
   this.showLogoutConfirm = false;
+  localStorage.removeItem('client_computer_monitoring_cache_v1');
+  localStorage.removeItem('client_computer_monitoring_cache_expiry_v1');
+  localStorage.removeItem('client_computer_monitoring_cache_branch');
+  localStorage.removeItem('client_cleaning_records');
   this.authService.logout();
   this.router.navigate(['/login']);
 }

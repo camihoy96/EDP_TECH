@@ -22,7 +22,6 @@ import * as XLSX from 'xlsx';
 </h2>
         <span class="header-sub">Monitor systems, licenses, and Microsoft product expirations</span>
       </div>
-
       <!-- Stats Bar -->
       <div class="stats-bar">
         <div class="stat-item"><span class="stat-label">Total PCs</span><span class="stat-value">{{ totalComputers }}</span></div>
@@ -32,34 +31,65 @@ import * as XLSX from 'xlsx';
         <div class="stat-item"><span class="stat-label">Office Expiring</span><span class="stat-value office-warn">{{ officeExpiringCount }}</span></div>
         <div class="stat-item"><span class="stat-label">AV Updates</span><span class="stat-value av-warn">{{ avUpdateCount }}</span></div>
       </div>
-
       <!-- Warning Alert -->
       <div class="expiry-alert" *ngIf="expiringCount > 0 || officeExpiringCount > 0 || avUpdateCount > 0">
         <span class="alert-icon">⚠️</span>
         <div class="alert-messages">
           <div *ngIf="expiringCount > 0"><strong>{{ expiringCount }}</strong> computer(s) have Microsoft licenses expiring within 30 days!</div>
           <div *ngIf="officeExpiringCount > 0"><strong>{{ officeExpiringCount }}</strong> computer(s) have Office activation expiring!</div>
-          <div *ngIf="avUpdateCount > 0"><strong>{{ avUpdateCount }}</strong> computer(s) need antivirus update!</div>
+          <div *ngIf="avUpdateCount > 0">
+  <strong>{{ avUpdateCount }}</strong> cleaned computer(s) with Trellix need an antivirus update!
+</div>
         </div>
       </div>
-
       <!-- Notification Bar -->
       <div class="notification-bar" *ngIf="notifications.length > 0">
-        <div class="notification-item" *ngFor="let notif of notifications.slice(0, 3)" [class.critical]="notif.type === 'expired'" [class.warning]="notif.type === 'expiring'">
-          <span class="notif-icon">{{ notif.type === 'expired' ? '🔴' : notif.type === 'expiring' ? '🟡' : '🟢' }}</span>
-          <span class="notif-text">{{ notif.message }}</span>
-          <button class="notif-close" (click)="dismissNotification(notif)">✕</button>
-        </div>
+      <div class="notification-item" *ngFor="let notif of notifications.slice(0, 3)" [class.critical]="notif.type === 'expired'" [class.warning]="notif.type === 'expiring'">
+  <span class="notif-icon" [attr.data-type]="notif.type" aria-hidden="true">
+    <!-- Expired alert icon -->
+    <svg *ngIf="notif.icon === 'alert-circle' || notif.icon === 'shield-alert'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <!-- Expiring clock icon -->
+    <svg *ngIf="notif.icon === 'clock'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    <!-- Shield icon (AV) -->
+    <svg *ngIf="notif.icon === 'shield'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  </span>
+  <span class="notif-text"><strong>{{ notif.title }}:</strong> {{ notif.subtitle }}</span>
+  <button class="notif-close" (click)="dismissNotification(notif)">✕</button>
+</div>
         <button class="notif-toggle" *ngIf="notifications.length > 3" (click)="showAllNotifications = !showAllNotifications">
           {{ showAllNotifications ? '🔼 Show Less' : '🔽 ' + (notifications.length - 3) + ' more' }}
         </button>
-        <div class="notification-item" *ngFor="let notif of notifications.slice(3)" [hidden]="!showAllNotifications" [class.critical]="notif.type === 'expired'" [class.warning]="notif.type === 'expiring'">
-          <span class="notif-icon">{{ notif.type === 'expired' ? '🔴' : notif.type === 'expiring' ? '🟡' : '🟢' }}</span>
-          <span class="notif-text">{{ notif.message }}</span>
-          <button class="notif-close" (click)="dismissNotification(notif)">✕</button>
-        </div>
+       <div class="notification-item" *ngFor="let notif of notifications.slice(3)" [hidden]="!showAllNotifications" [class.critical]="notif.type === 'expired'" [class.warning]="notif.type === 'expiring'">
+  <span class="notif-icon" [attr.data-type]="notif.type" aria-hidden="true">
+    <!-- Expired alert icon -->
+    <svg *ngIf="notif.icon === 'alert-circle' || notif.icon === 'shield-alert'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="12" y1="8" x2="12" y2="12"/>
+      <line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>
+    <!-- Expiring clock icon -->
+    <svg *ngIf="notif.icon === 'clock'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/>
+      <polyline points="12 6 12 12 16 14"/>
+    </svg>
+    <!-- Shield icon (AV) -->
+    <svg *ngIf="notif.icon === 'shield'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  </span>
+  <span class="notif-text"><strong>{{ notif.title }}:</strong> {{ notif.subtitle }}</span>
+  <button class="notif-close" (click)="dismissNotification(notif)">✕</button>
+</div>
       </div>
-
 <!-- Filter Bar -->
 <div class="filter-bar">
   <!-- Search input with SVG icon -->
@@ -307,12 +337,17 @@ import * as XLSX from 'xlsx';
           </div>
         </td>
         <td>
-          <span class="status-badge" [class]="'status-' + getAVStatus(pc)">{{ pc.antivirus || 'N/A' }}</span>
-          <div class="countdown" *ngIf="isValidDate(pc.av_last_update)">
-            <small>Updated: {{ pc.av_last_update | date:'MMM yyyy' }}</small>
-          </div>
-        </td>
-        <!-- ✅ Show last cleaning date for this PC -->
+  <span class="status-badge" [class]="'status-' + getAVStatus(pc)">
+    {{ pc.antivirus && pc.antivirus !== 'None' ? pc.antivirus : '⚠️ NO AV' }}
+  </span>
+  <div class="countdown" *ngIf="isValidDate(pc.av_last_update)">
+    <small>Updated: {{ pc.av_last_update | date:'MMM yyyy' }}</small>
+  </div>
+  <div class="countdown" *ngIf="!isValidDate(pc.av_last_update)">
+    <small class="expired-text">No update on record</small>
+  </div>
+</td>
+        <!-- Show last cleaning date for this PC -->
          <td *ngIf="showCleanedOnly">
   <span class="cleaning-date-badge">{{ getLastCleaningDate(pc.id) | date:'MMM d, yyyy' }}</span>
 </td>
@@ -1207,7 +1242,7 @@ import * as XLSX from 'xlsx';
     </div>
   `,
    styles: [`
-    .monitoring-container{padding:16px;font-family:'Segoe UI',sans-serif;font-size:11px}
+    .monitoring-container{padding:2px;font-family:'Segoe UI',sans-serif;font-size:11px}
     .page-header{margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
     .page-header h2{margin:0 0 2px 0;color:#0a246a;font-size:16px}
     .header-sub{color:#666;font-size:10px}
@@ -1227,15 +1262,34 @@ import * as XLSX from 'xlsx';
     .notification-item{display:flex;align-items:center;gap:6px;padding:6px 10px;border-bottom:1px solid #eee;font-size:10px; color: rgb(36, 31, 13);}
     .notification-item.critical{background:#fff5f5}
     .notification-item.warning{background:#fffdf0}
-    .notif-icon{flex-shrink:0}
+    .notif-icon {flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width:16px; height: 16px;}
+    .notif-icon svg { display: block; }
+    .notification-item.critical .notif-icon { color: #cc0000; }
+    .notification-item.warning  .notif-icon { color: #cc6600; }
     .notif-text{flex:1}
     .notif-close{background:none;border:none;cursor:pointer;color:#999;font-size:10px;padding:2px 4px}
     .notif-close:hover{color:#cc0000}
     .notif-toggle{width:100%;padding:4px;background:none;border:none;cursor:pointer;font-size:9px;color:#0a246a}
     .filter-bar{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#f8f8f8;border:1px solid #c0c0c0;position:sticky;top:0;z-index:10}
-    .table-container{background:#fff;border:1px solid #c0c0c0;overflow-y:auto;max-height:calc(100vh - 280px)}
-    .data-table{width:100%;border-collapse:collapse}
-    .data-table th{background:#f0f4f8;padding:8px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:2px solid #d0d0d0;text-align:left;position:sticky;top:0;z-index:5;white-space:nowrap}
+    .table-container {
+  background: #fff;
+  border: 1px solid #c0c0c0;
+  overflow: auto;
+  max-height: calc(100vh - 280px);
+}
+  /* Force selection on ALL cell contents and their children */
+.data-table td, .data-table th, .data-table td *, .data-table th * { user-select: text !important; -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; }
+
+/* Give a text cursor to cells so users know they can select */
+.data-table td, .data-table th { cursor: text; }
+
+/* But keep the actions column clickable, not selectable */
+.data-table td.actions-cell, .data-table td.actions-cell * { user-select: none !important; -webkit-user-select: none !important; cursor: default !important; }
+
+/* Also keep the notification bell / badges clickable */
+.row-notif-badge, .row-notif-badge * { user-select: none !important; -webkit-user-select: none !important; cursor: help; }
+    .data-table{width:100%;border-collapse:collapse }
+    .data-table th{background:#f0f4f8;padding:8px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:2px solid #d0d0d0;text-align:left;position:sticky;top:5px;z-index:5;white-space:nowrap}
     .data-table td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10px;color:#333}
     .filter-input{padding:4px 8px;border:1px solid #c0c0c0;font-size:10px;width:160px}
     .filter-select{padding:4px 8px;border:1px solid #c0c0c0;font-size:10px}
@@ -2219,13 +2273,6 @@ selectedCleaningStorages: string[] = [];
   osList = ['Windows XP','Windows 7','Windows 7 Pro','Windows 8','Windows 8.1','Windows 10 Home','Windows 10 Pro','Windows 10 Enterprise','Windows 11 Home','Windows 11 Pro','Windows 11 Enterprise', 'Windows Server 2012','Windows Server 2016','Windows Server 2019','Windows Server 2022','Linux - Ubuntu','Linux - CentOS','macOS'];
   
   licenseGroups = [
-  // Windows OS Licenses
-  {label:'Windows 7', options:['Windows 7 Home', 'Windows 7 Pro', 'Windows 7 Enterprise']},
-  {label:'Windows 8/8.1', options:['Windows 8 Home', 'Windows 8 Pro', 'Windows 8.1 Home', 'Windows 8.1 Pro']},
-  {label:'Windows 10', options:['Windows 10 Home', 'Windows 10 Pro', 'Windows 10 Enterprise', 'Windows 10 Education', 'Windows 10 IoT']},
-  {label:'Windows 11', options:['Windows 11 Home', 'Windows 11 Pro', 'Windows 11 Enterprise', 'Windows 11 Education']},
-  {label:'Windows Server', options:['Windows Server 2012', 'Windows Server 2016', 'Windows Server 2019', 'Windows Server 2022', 'Windows Server 2025']},
-  
   // Microsoft Office Versions
   {label:'Microsoft Office 2010', options:['Microsoft Office 2010 Home & Student', 'Microsoft Office 2010 Home & Business', 'Microsoft Office 2010 Professional', 'Microsoft Office 2010 Standard']},
   {label:'Microsoft Office 2013', options:['Microsoft Office 2013 Home & Student', 'Microsoft Office 2013 Home & Business', 'Microsoft Office 2013 Professional', 'Microsoft Office 2013 Standard']},
@@ -2242,15 +2289,16 @@ selectedCleaningStorages: string[] = [];
 ];
   constructor(private http: HttpClient) {}
 
-  ngOnInit() {
-    this.loadFromCacheOrServer();
-    this.loadDepartments();
-    this.loadExistingLocations();
-    this.loadDismissedNotifications();
-    this.loadCleanedPCIds();
-    document.addEventListener('mousemove', this.onDragMove.bind(this));
-    document.addEventListener('mouseup', this.onDragEnd.bind(this));
-  }
+ngOnInit() {
+  this.loadDismissedNotifications();
+  this.loadFromCacheOrServer();
+  this.loadDepartments();
+  this.loadExistingLocations();
+  this.loadCleanedPCIds();
+  this.loadAllCleaningRecordsForDates();
+  document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
 
   ngOnDestroy() {
     document.removeEventListener('mousemove', this.onDragMove.bind(this));
@@ -3109,33 +3157,99 @@ removeCleaningStorage(index: number) {
   this.selectedCleaningStorages.splice(index, 1);
   this.cleaningForm.storage = this.selectedCleaningStorages.join(', ');
 }
-  private generateNotifications() {
-    this.notifications = [];
-    this.pcs.forEach(pc => {
-      const notifKey = `pc_${pc.id}`;
-      const licenseDays = this.getDaysRemaining(pc);
-      if (licenseDays <= 0 && pc.license_expiry && !this.dismissedNotifications.has(`${notifKey}_license_expired`)) {
-        this.notifications.push({id: `${notifKey}_license_expired`, type: 'expired', message: `🔴 ${pc.computer_name}: MS License EXPIRED on ${new Date(pc.license_expiry).toLocaleDateString()}`, pc: pc});
-      } else if (licenseDays <= 30 && licenseDays > 0 && !this.dismissedNotifications.has(`${notifKey}_license_expiring`)) {
-        this.notifications.push({id: `${notifKey}_license_expiring`, type: 'expiring', message: `🟡 ${pc.computer_name}: MS License expires in ${licenseDays} days (${new Date(pc.license_expiry).toLocaleDateString()})`, pc: pc});
-      }
-      const officeDays = this.getOfficeDaysRemaining(pc);
-      if (officeDays <= 0 && pc.office_expiry && !this.dismissedNotifications.has(`${notifKey}_office_expired`)) {
-        this.notifications.push({id: `${notifKey}_office_expired`, type: 'expired', message: `🔴 ${pc.computer_name}: Office activation EXPIRED`, pc: pc});
-      } else if (officeDays <= 30 && officeDays > 0 && !this.dismissedNotifications.has(`${notifKey}_office_expiring`)) {
-        this.notifications.push({id: `${notifKey}_office_expiring`, type: 'expiring', message: `🟡 ${pc.computer_name}: Office activation expires in ${officeDays} days`, pc: pc});
+ private generateNotifications() {
+  this.notifications = [];
+  this.pcs.forEach(pc => {
+    const safeName = (pc.computer_name || 'unknown').toLowerCase().trim();
+    const notifKey = `pc_${pc.id}_${safeName}`;
+    // RULE 1: Only notify PCs that have cleaning records
+    if (!this.hasCleaningRecords(pc)) return;
+    // ────────────── License ──────────────
+    const licenseDays = this.getDaysRemaining(pc);
+    if (licenseDays <= 0 && pc.license_expiry && !this.dismissedNotifications.has(`${notifKey}_license_expired`)) {
+      this.notifications.push({
+        id: `${notifKey}_license_expired`,
+        type: 'expired',
+        title: pc.computer_name,
+        subtitle: `MS License EXPIRED on ${new Date(pc.license_expiry).toLocaleDateString()}`,
+        icon: 'alert-circle',
+        pc
+      });
+    } else if (licenseDays <= 30 && licenseDays > 0 && !this.dismissedNotifications.has(`${notifKey}_license_expiring`)) {
+      this.notifications.push({
+        id: `${notifKey}_license_expiring`,
+        type: 'expiring',
+        title: pc.computer_name,
+        subtitle: `MS License expires in ${licenseDays} days (${new Date(pc.license_expiry).toLocaleDateString()})`,
+        icon: 'clock',
+        pc
+      });
+    }
+    // ────────────── Office ──────────────
+    const officeDays = this.getOfficeDaysRemaining(pc);
+    if (officeDays <= 0 && pc.office_expiry && !this.dismissedNotifications.has(`${notifKey}_office_expired`)) {
+      this.notifications.push({
+        id: `${notifKey}_office_expired`,
+        type: 'expired',
+        title: pc.computer_name,
+        subtitle: `Office activation EXPIRED`,
+        icon: 'alert-circle',
+        pc
+      });
+    } else if (officeDays <= 30 && officeDays > 0 && !this.dismissedNotifications.has(`${notifKey}_office_expiring`)) {
+      this.notifications.push({
+        id: `${notifKey}_office_expiring`,
+        type: 'expiring',
+        title: pc.computer_name,
+        subtitle: `Office activation expires in ${officeDays} days`,
+        icon: 'clock',
+        pc
+      });
+    }
+    // ────────────── Antivirus (Trellix only) ──────────────
+    if (this.isTrellix(pc)) {
+      const hasNoAVUpdate = !pc.av_last_update || pc.av_last_update === '0000-00-00' || pc.av_last_update === '';
+      if (hasNoAVUpdate && !this.dismissedNotifications.has(`${notifKey}_no_av_update`)) {
+        this.notifications.push({
+          id: `${notifKey}_no_av_update`,
+          type: 'expiring',
+          title: pc.computer_name,
+          subtitle: `Trellix has no update on record — schedule a cleaning`,
+          icon: 'shield',
+          pc
+        });
       }
       if (pc.av_next_update) {
-        const avDays = this.getDaysUntil(new Date(pc.av_next_update));
-        if (avDays <= 0 && !this.dismissedNotifications.has(`${notifKey}_av_overdue`)) {
-          this.notifications.push({id: `${notifKey}_av_overdue`, type: 'expired', message: `🔴 ${pc.computer_name}: Antivirus update OVERDUE`, pc: pc});
-        } else if (avDays <= 14 && avDays > 0 && !this.dismissedNotifications.has(`${notifKey}_av_due`)) {
-          this.notifications.push({id: `${notifKey}_av_due`, type: 'expiring', message: `🟡 ${pc.computer_name}: Antivirus update due in ${avDays} days`, pc: pc});
+        const avDays = this.getDaysUntilDate(pc.av_next_update);
+        if (avDays !== Infinity) {
+          if (avDays <= 0 && !this.dismissedNotifications.has(`${notifKey}_av_overdue`)) {
+            this.notifications.push({
+              id: `${notifKey}_av_overdue`,
+              type: 'expired',
+              title: pc.computer_name,
+              subtitle: `Trellix update OVERDUE`,
+              icon: 'shield-alert',
+              pc
+            });
+          } else if (avDays <= 14 && avDays > 0 && !this.dismissedNotifications.has(`${notifKey}_av_due`)) {
+            this.notifications.push({
+              id: `${notifKey}_av_due`,
+              type: 'expiring',
+              title: pc.computer_name,
+              subtitle: `Trellix update due in ${avDays} days`,
+              icon: 'shield',
+              pc
+            });
+          }
         }
       }
-    });
-    this.notifications.sort((a, b) => {const order: any = {expired: 0, expiring: 1, info: 2}; return order[a.type] - order[b.type];});
-  }
+    }
+  });
+  this.notifications.sort((a, b) => {
+    const order: any = { expired: 0, expiring: 1, info: 2 };
+    return order[a.type] - order[b.type];
+  });
+}
 
   private loadDismissedNotifications() {
     const stored = localStorage.getItem('dismissed_computer_notifications');
@@ -3159,10 +3273,24 @@ removeCleaningStorage(index: number) {
 
   get officeExpiringCount(): number {return this.pcs.filter(pc => this.isOfficeExpiring(pc)).length;}
   
-  get avUpdateCount(): number {
-    return this.pcs.filter(pc => {if (!pc.av_next_update) return false; return this.getDaysUntil(new Date(pc.av_next_update)) <= 14;}).length;
-  }
+ get avUpdateCount(): number {
+  return this.pcs.filter(pc => {
+    // 🔒 RULE 1: Only PCs with cleaning records
+    if (!this.hasCleaningRecords(pc)) return false;
 
+    // 🔒 RULE 2: Only Trellix
+    if (!this.isTrellix(pc)) return false;
+
+    // No update on record → needs attention
+    const hasNoAVUpdate = !pc.av_last_update || pc.av_last_update === '0000-00-00' || pc.av_last_update === '';
+    if (hasNoAVUpdate) return true;
+
+    // Overdue or due within 14 days
+    if (!pc.av_next_update) return false;
+    const days = this.getDaysUntilDate(pc.av_next_update);
+    return days !== Infinity && days <= 14;
+  }).length;
+}
   isOfficeExpiring(pc: any): boolean {const days = this.getOfficeDaysRemaining(pc); return days > 0 && days <= 30;}
   isOfficeExpired(pc: any): boolean {return this.getOfficeDaysRemaining(pc) <= 0 && !!pc.office_expiry;}
   
@@ -3192,13 +3320,21 @@ toggleCleaningSort() {
     return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-  getAVStatus(pc: any): string {
-    if (!pc.av_next_update) return 'unknown';
-    const days = this.getDaysUntil(new Date(pc.av_next_update));
-    if (days <= 0) return 'offline';
-    if (days <= 14) return 'warning';
-    return 'online';
-  }
+ getAVStatus(pc: any): string {
+  const avName = (pc.antivirus || '').trim().toLowerCase();
+  const hasNoAV = !avName || avName === 'none' || avName === 'n/a' || avName === 'null' || avName === 'undefined';
+  if (hasNoAV) return 'offline';
+
+  const hasNoAVUpdate = !pc.av_last_update || pc.av_last_update === '0000-00-00' || pc.av_last_update === '';
+  if (hasNoAVUpdate) return 'warning';
+
+  if (!pc.av_next_update) return 'warning';
+  const days = this.getDaysUntilDate(pc.av_next_update);
+  if (days === Infinity) return 'warning';
+  if (days <= 0) return 'offline';
+  if (days <= 14) return 'warning';
+  return 'online';
+}
 // Add this method to load all computers that have cleaning records
 loadCleanedPCIds() {
   const headers = this.getHeaders();
@@ -3211,17 +3347,17 @@ loadCleanedPCIds() {
       this.mergeLocalCleaningIds();
       this.cleanedPCsCount = this.allCleanedPCIds.size;
       
-      // ✅ Only apply filters if NOT in cleaning mode
-      // (cleaning mode has its own data loading)
       if (!this.showCleanedOnly) {
         this.applyFilters();
       }
+      this.generateNotifications();  
     },
     error: () => {
       this.loadFromLocalStorage();
       if (!this.showCleanedOnly) {
         this.applyFilters();
       }
+      this.generateNotifications(); 
     }
   });
 }
@@ -3342,11 +3478,9 @@ private formatDate(dateStr: any): string {
  saveCleaningRecord() {
   const headers = this.getHeaders();
   const data = {...this.cleaningForm};
-  
   if (this.cleaningTarget && this.cleaningTarget.id) {
     data.computer_id = this.cleaningTarget.id;
   }
-  
   if (data.office_activation_date && data.office_expiry) {
     const now = new Date();
     const expiry = new Date(data.office_expiry);
@@ -3354,7 +3488,6 @@ private formatDate(dateStr: any): string {
   } else if (data.office_activation_date) {
     data.office_activation = 'Activated';
   }
-  
   this.http.post(`${this.apiUrl}/api/computers/cleaning`, data, {headers}).subscribe({
     next: (response: any) => {
       this.showCleaningModal = false;
@@ -3374,13 +3507,17 @@ private formatDate(dateStr: any): string {
           this.pcs[idx].office_activation_date = data.office_activation_date;
           this.pcs[idx].office_duration = data.office_duration;
           this.pcs[idx].office_expiry = data.office_expiry;
-          
-          this.saveToCache(this.pcs);
+                   this.saveToCache(this.pcs);
+          const safeName = (this.pcs[idx].computer_name || 'unknown').toLowerCase().trim();
+          const notifKey = `pc_${this.pcs[idx].id}_${safeName}`;
+          const avName = (this.pcs[idx].antivirus || '').trim().toLowerCase();
+          const hasNoAV = !avName || avName === 'none' || avName === 'n/a';
+          if (!hasNoAV) this.dismissedNotifications.add(`${notifKey}_no_av`);
+          if (this.pcs[idx].av_last_update) this.dismissedNotifications.add(`${notifKey}_no_av_update`);
+          this.saveDismissedNotifications();
           this.generateNotifications();
         }
       }
-      
-      // ✅ Reload cleaning data to update counts and dates
       if (this.showCleanedOnly) {
         // If in cleaning mode, reload everything
         this.loadAllCleaningData();
@@ -3388,8 +3525,7 @@ private formatDate(dateStr: any): string {
         // Otherwise just update the badge count
         this.loadCleanedPCIds();
       }
-      
-      this.showToastMsg('✅ Cleaning record saved!', 'success');
+      this.showToastMsg('Cleaning record saved!', 'success');
     },
     error: () => {
       // Local fallback
@@ -3414,12 +3550,17 @@ private formatDate(dateStr: any): string {
           this.pcs[idx].office_activation_date = data.office_activation_date || '';
           this.pcs[idx].office_duration = data.office_duration || '';
           this.pcs[idx].office_expiry = data.office_expiry || '';
-          
-          this.saveToCache(this.pcs);
+         this.saveToCache(this.pcs);
+          const safeName = (this.pcs[idx].computer_name || 'unknown').toLowerCase().trim();
+          const notifKey = `pc_${this.pcs[idx].id}_${safeName}`;
+          const avName = (this.pcs[idx].antivirus || '').trim().toLowerCase();
+          const hasNoAV = !avName || avName === 'none' || avName === 'n/a';
+          if (!hasNoAV) this.dismissedNotifications.add(`${notifKey}_no_av`);
+          if (this.pcs[idx].av_last_update) this.dismissedNotifications.add(`${notifKey}_no_av_update`);
+          this.saveDismissedNotifications();
           this.generateNotifications();
         }
       }
-      
       this.showCleaningModal = false;
       
       if (this.showCleanedOnly) {
@@ -3427,8 +3568,7 @@ private formatDate(dateStr: any): string {
       } else {
         this.loadCleanedPCIds();
       }
-      
-      this.showToastMsg('✅ Record saved locally', 'success');
+      this.showToastMsg('Record saved locally', 'success');
     }
   });
 }
@@ -4073,17 +4213,16 @@ loadAllCleaningRecordsForDates() {
     }
   });
 }
-// ✅ Helper methods for AV status in detail modal
 isAVExpiring(pc: any): boolean {
   if (!pc.av_next_update) return false;
-  const days = this.getDaysUntil(new Date(pc.av_next_update));
-  return days <= 14 && days > 0;
+  const days = this.getDaysUntilDate(pc.av_next_update);
+  return days !== Infinity && days <= 14 && days > 0;
 }
 
 isAVExpired(pc: any): boolean {
   if (!pc.av_next_update) return false;
-  const days = this.getDaysUntil(new Date(pc.av_next_update));
-  return days <= 0;
+  const days = this.getDaysUntilDate(pc.av_next_update);
+  return days !== Infinity && days <= 0;
 }
 
 // Helper to get days until a date (reusable)
@@ -4127,7 +4266,7 @@ updateAntivirus(pc: any) {
         this.pcs[idx].av_next_update = updateData.av_next_update;
         this.saveToCache(this.pcs);
         
-        // ✅ Dismiss any existing AV notifications for this PC
+        //  Dismiss any existing AV notifications for this PC
         this.dismissAVNotifications(pc);
         
         this.applyFilters();
@@ -4143,7 +4282,7 @@ updateAntivirus(pc: any) {
         this.pcs[idx].av_next_update = updateData.av_next_update;
         this.saveToCache(this.pcs);
         
-        // ✅ Dismiss any existing AV notifications for this PC
+        //  Dismiss any existing AV notifications for this PC
         this.dismissAVNotifications(pc);
         
         this.applyFilters();
@@ -4154,72 +4293,97 @@ updateAntivirus(pc: any) {
   });
 }
 
-// ✅ Add this helper method to dismiss AV notifications for a PC
+// Add this helper method to dismiss AV notifications for a PC
 private dismissAVNotifications(pc: any) {
-  const notifKey = `pc_${pc.id}`;
+  const safeName = (pc.computer_name || 'unknown').toLowerCase().trim();
+  const notifKey = `pc_${pc.id}_${safeName}`;
   this.dismissedNotifications.add(`${notifKey}_av_overdue`);
   this.dismissedNotifications.add(`${notifKey}_av_due`);
+  this.dismissedNotifications.add(`${notifKey}_no_av`);
+  this.dismissedNotifications.add(`${notifKey}_no_av_update`);
   this.saveDismissedNotifications();
   this.notifications = this.notifications.filter(n => n.pc && Number(n.pc.id) !== Number(pc.id));
 }
 private loadPCsFromServer(silent: boolean = false) {
-    const headers = this.getHeaders();
-    this.http.get<any>(`${this.apiUrl}/api/computers`, {headers}).subscribe({
-      next: (response) => {
-        let rawData: any[] = [];
-        if (Array.isArray(response)) rawData = response;
-        else if (response?.computers) rawData = response.computers;
-        else if (response?.data) rawData = response.data;
-        
-        if (rawData.length > 0) {
-          // ✅ Cache the raw data immediately
-          this.saveToCache(rawData);
-          
-          const existingMap = new Map();
-          
-          // Preserve existing local data first
-          this.pcs.forEach(pc => { 
-            if (pc.id) existingMap.set(Number(pc.id), pc); 
-          });
-          
-          // Merge server data
-          rawData.forEach((serverPC: any) => {
-            const id = Number(serverPC.id);
-            if (id) {
-              const existing = existingMap.get(id);
-              if (existing) {
-                serverPC.office_activation = serverPC.office_activation || existing.office_activation;
-                serverPC.office_activation_date = serverPC.office_activation_date || existing.office_activation_date;
-                serverPC.office_duration = serverPC.office_duration || existing.office_duration;
-                serverPC.office_expiry = serverPC.office_expiry || existing.office_expiry;
-                serverPC.av_last_update = serverPC.av_last_update || existing.av_last_update;
-                serverPC.av_next_update = serverPC.av_next_update || existing.av_next_update;
-              }
-              existingMap.set(id, serverPC);
-            }
-          });
-          
-          this.pcs = Array.from(existingMap.values());
-          // ✅ Update cache with merged data
-          this.saveToCache(this.pcs);
+  const headers = this.getHeaders();
+
+  this.http.get<any>(`${this.apiUrl}/api/computers`, { headers }).subscribe({
+    next: (response) => {
+      let rawData: any[] = [];
+      if (Array.isArray(response)) rawData = response;
+      else if (response?.computers) rawData = response.computers;
+      else if (response?.data) rawData = response.data;
+
+      //Always process the response — whether it has data or not
+      if (rawData.length > 0) {
+        //Cache the raw data immediately
+        this.saveToCache(rawData);
+
+        const existingMap = new Map<number, any>();
+
+        // Preserve existing local data first
+        this.pcs.forEach(pc => {
+          if (pc.id) existingMap.set(Number(pc.id), pc);
+        });
+
+        // Merge server data
+        rawData.forEach((serverPC: any) => {
+          const id = Number(serverPC.id);
+          if (!id) return;
+
+          const existing = existingMap.get(id);
+          if (existing) {
+            // Preserve locally-tracked fields that the backend may not return
+            serverPC.office_activation       = serverPC.office_activation       || existing.office_activation;
+            serverPC.office_activation_date  = serverPC.office_activation_date  || existing.office_activation_date;
+            serverPC.office_duration         = serverPC.office_duration         || existing.office_duration;
+            serverPC.office_expiry           = serverPC.office_expiry           || existing.office_expiry;
+            serverPC.av_last_update          = serverPC.av_last_update          || existing.av_last_update;
+            serverPC.av_next_update          = serverPC.av_next_update          || existing.av_next_update;
+            serverPC.status                  = serverPC.status                  || existing.status;
+          }
+          existingMap.set(id, serverPC);
+        });
+
+        this.pcs = Array.from(existingMap.values());
+
+        // Update cache with merged data
+        this.saveToCache(this.pcs);
+
+        if (!silent) {
+          console.log('loadPCsFromServer: loaded', this.pcs.length, 'computers');
+        }
+      }
+
+      //ALWAYS run these — outside the `if` so they run even for empty responses
+      this.extractLocationsFromPCs();
+      this.generateNotifications();
+      this.applyFilters();
+      this.isFromCache = false;
+
+      if (silent) {
+        // Silent mode — skip any toast/log noise (nothing to do here currently)
+      }
+    },
+    error: (err) => {
+      console.error('❌ loadPCsFromServer failed:', err?.status, err?.message);
+
+      // Fallback: only use cache if we don't already have live data
+      if (this.pcs.length === 0) {
+        const cachedData = this.getFromCache();
+        if (cachedData && cachedData.length > 0) {
+          this.pcs = cachedData;
           this.extractLocationsFromPCs();
           this.generateNotifications();
-          this.isFromCache = false;
-        }
-        this.applyFilters();
-      },
-      error: () => {
-        if (this.pcs.length === 0) {
-          const cachedData = this.getFromCache();
-          if (cachedData && cachedData.length > 0) {
-            this.pcs = cachedData;
-            this.applyFilters();
-            this.generateNotifications();
+          this.applyFilters();
+          if (!silent) {
+            console.log('Loaded from cache after server error:', cachedData.length);
           }
         }
       }
-    });
-  }
+    }
+  });
+}
 // Calculate office expiry for the Add/Edit form
 calculateOfficeExpiryForForm() {
   if (this.formData.office_activation_date && this.formData.office_duration) {
@@ -4287,15 +4451,53 @@ isOfficeExpiredForm(): boolean {
   }
 
   forceRefresh() {this.loadPCsFromServer(false); this.showToastMsg('🔄 Refreshing...', 'success');}
+/**
+ * Returns true if this PC has at least one cleaning record.
+ * Uses the already-loaded allCleaningRecordsForFilter + localStorage fallback.
+ */
+private hasCleaningRecords(pc: any): boolean {
+  const pcId = Number(pc?.id);
+  const pcName = (pc?.computer_name || '').toLowerCase().trim();
+  if (!pcId) return false;
 
+  // 1) Check API-loaded records
+  if (this.allCleaningRecordsForFilter?.length) {
+    const found = this.allCleaningRecordsForFilter.some((r: any) => {
+      const rId = Number(r.computer_id);
+      const rName = (r.computer_name || '').toLowerCase().trim();
+      return rId === pcId || (rName && rName === pcName);
+    });
+    if (found) return true;
+  }
+
+  // 2) Fallback: localStorage
+  try {
+    const local = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+    return local.some((r: any) => {
+      const rId = Number(r.computer_id);
+      const rName = (r.computer_name || '').toLowerCase().trim();
+      return rId === pcId || (rName && rName === pcName);
+    });
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns true if the antivirus is Trellix (case-insensitive, trimmed).
+ */
+private isTrellix(pc: any): boolean {
+  const av = (pc?.antivirus || '').trim().toLowerCase();
+  return av === 'trellix';
+}
 savePC() {
-  // ✅ Check required fields
+  //  Check required fields
   if (!this.formData.computer_name || !this.formData.ip_address) {
     this.showToastMsg('Computer Name and IP Address are required!', 'error'); 
     return;
   }
   
-  // ✅ Check for duplicate computer name
+  // Check for duplicate computer name
   const trimmedName = this.formData.computer_name.trim();
   const existingPC = this.pcs.find(pc => 
     pc.computer_name && 
@@ -4340,23 +4542,28 @@ savePC() {
           Object.assign(this.pcs[idx], this.formData);
         }
       } else {
-        // Adding new PC - add to local array
         const newId = response?.id || Date.now();
         this.pcs.push({ ...this.formData, id: newId, status: 'online' });
       }
-      
-      // Save to cache and refresh display
       this.saveToCache(this.pcs);
+      const updatedPC = this.pcs.find(p => Number(p.id) === Number(response?.id)) 
+      || this.pcs.find(p => Number(p.id) === Number(this.editingPC?.id));
+      if (updatedPC) {
+        const safeName = (updatedPC.computer_name || 'unknown').toLowerCase().trim();
+        const notifKey = `pc_${updatedPC.id}_${safeName}`;
+        const avName = (updatedPC.antivirus || '').trim().toLowerCase();
+        const hasNoAV = !avName || avName === 'none' || avName === 'n/a';
+        if (!hasNoAV) this.dismissedNotifications.add(`${notifKey}_no_av`);
+        if (updatedPC.av_last_update) this.dismissedNotifications.add(`${notifKey}_no_av_update`);
+        this.saveDismissedNotifications();
+      }
       this.extractLocationsFromPCs();
       this.applyFilters();
       this.generateNotifications();
       this.originalIpAddress = '';
-      this.originalComputerName = '';  // ✅ Reset computer name
+      this.originalComputerName = '';
       this.isFromCache = false;
-      
-      this.showToastMsg(this.editingPC ? '✅ PC updated!' : '✅ PC added!', 'success');
-      
-      // ✅ Refresh from server in background (without clearing local data)
+      this.showToastMsg(this.editingPC ? ' PC updated!' : ' PC added!', 'success');
       this.loadPCsFromServer(true);
     },
     error: (err) => {
@@ -4368,7 +4575,7 @@ savePC() {
 }
  deletePC(pc: any) {
   this.deleteTarget = pc;
-  this.centerModal('deleteModal'); // ✅ Center the modal
+  this.centerModal('deleteModal');
   this.showDeleteModal = true;
 }
 
@@ -4379,7 +4586,7 @@ savePC() {
       next: () => {
         this.pcs = this.pcs.filter(p => p.id !== this.deleteTarget.id);
         this.saveToCache(this.pcs); this.extractLocationsFromPCs(); this.applyFilters(); this.generateNotifications();
-        this.closeDeleteModal(); this.showToastMsg('✅ Computer deleted!', 'success');
+        this.closeDeleteModal(); this.showToastMsg('Computer deleted!', 'success');
       },
       error: () => {this.showToastMsg('Failed to delete', 'error'); this.closeDeleteModal();}
     });
@@ -4389,8 +4596,6 @@ savePC() {
   closeDeleteModal() {this.showDeleteModal = false; this.deleteTarget = null;}
 applyFilters() {
   let filtered = [...this.pcs];
-  
-  // Search filter (always applies)
   if (this.searchTerm.trim()) {
     const term = this.searchTerm.toLowerCase();
     filtered = filtered.filter(pc => 
@@ -4400,16 +4605,11 @@ applyFilters() {
       pc.location?.toLowerCase().includes(term)
     );
   }
-  
   if (this.showCleanedOnly) {
-    // ✅ Cleaning mode: only filter by cleaned PCs + search
     filtered = filtered.filter(pc => this.allCleanedPCIds.has(Number(pc.id)));
-    
-    // Sort by cleaning date
     filtered.sort((a, b) => {
       const dateA = this.getLastCleaningDate(a.id) ? new Date(this.getLastCleaningDate(a.id)!).getTime() : 0;
       const dateB = this.getLastCleaningDate(b.id) ? new Date(this.getLastCleaningDate(b.id)!).getTime() : 0;
-      
       if (this.cleaningSortDirection === 'newest') {
         return dateB - dateA;
       } else {
@@ -4417,20 +4617,27 @@ applyFilters() {
       }
     });
   } else {
-    // ✅ Normal mode: apply expiry + location filters
     if (this.filterExpiry === 'expiring') filtered = filtered.filter(pc => this.isExpiring(pc));
     else if (this.filterExpiry === 'expired') filtered = filtered.filter(pc => this.isExpired(pc));
     else if (this.filterExpiry === 'active') filtered = filtered.filter(pc => !this.isExpired(pc) && !this.isExpiring(pc));
     else if (this.filterExpiry === 'office') filtered = filtered.filter(pc => this.isOfficeExpiring(pc) || this.isOfficeExpired(pc));
-    else if (this.filterExpiry === 'av') filtered = filtered.filter(pc => pc.av_next_update && this.getDaysUntil(new Date(pc.av_next_update)) <= 14);
-    
+   else if (this.filterExpiry === 'av') {
+  filtered = filtered.filter(pc => {
+    // Same rules as the notification + stat count
+    if (!this.hasCleaningRecords(pc)) return false;
+    if (!this.isTrellix(pc)) return false;
+
+    const hasNoAVUpdate = !pc.av_last_update || pc.av_last_update === '0000-00-00' || pc.av_last_update === '';
+    if (hasNoAVUpdate) return true;
+
+    if (!pc.av_next_update) return false;
+    const days = this.getDaysUntilDate(pc.av_next_update);
+    return days !== Infinity && days <= 14;
+  });
+}
     if (this.filterLocation !== 'all') filtered = filtered.filter(pc => pc.location === this.filterLocation);
-    
-    // Default sort by IP when NOT in cleaning mode
     filtered.sort((a, b) => this.ipToNumber(a.ip_address) - this.ipToNumber(b.ip_address));
   }
-  
-  // ✅ Mark PCs that have active notifications (both modes)
   filtered = filtered.map(pc => {
     const pcNotifications = this.getPCNotifications(pc);
     return {
@@ -4443,7 +4650,6 @@ applyFilters() {
   
   this.filteredPCs = filtered;
 }
-// ✅ Add this method to get notifications for a specific PC
 getPCNotifications(pc: any): any[] {
   return this.notifications.filter(n => n.pc && Number(n.pc.id) === Number(pc.id));
 }
@@ -4454,14 +4660,14 @@ getPCNotifications(pc: any): any[] {
 
 viewDetail(pc: any) {
   this.selectedPC = pc;
-  this.detailTab = 'general'; // ✅ Reset to general tab
+  this.detailTab = 'general'; 
   this.centerModal('detailModal');
   this.showDetailModal = true;
 }
   closeDetailModal() {this.showDetailModal = false; this.selectedPC = null;}
   checkLicenseStatus(pc: any) {
   this.selectedPC = pc;
-  this.centerModal('licenseModal'); // ✅ Center the modal
+  this.centerModal('licenseModal'); 
   this.showLicenseModal = true;
 }
   closeLicenseModal() {this.showLicenseModal = false;}
@@ -4472,9 +4678,9 @@ private centerModal(modalId: string) {
  addPC() {
   this.editingPC = null; 
   this.originalIpAddress = ''; 
-  this.originalComputerName = '';  // ✅ NEW
+  this.originalComputerName = '';  
   this.ipDuplicateError = '';
-  this.computerNameDuplicateError = '';  // ✅ NEW
+  this.computerNameDuplicateError = '';  
   this.formData = this.getEmptyFormData();
   this.selectedStorages = [];
   this.centerModal('editModal');
@@ -4487,20 +4693,15 @@ private centerModal(modalId: string) {
   this.originalComputerName = pc.computer_name;
   this.ipDuplicateError = '';
    this.computerNameDuplicateError = ''; 
-  // ✅ Get the LATEST version of this PC from the array
   const latestPC = this.pcs.find(p => p.id === pc.id) || pc;
-  
-  // ✅ Ensure the current OS value exists in osList
   if (latestPC.os && !this.osList.includes(latestPC.os)) {
     this.osList.push(latestPC.os);
   }
-  // ✅ Populate selected storages from existing data
 if (latestPC.storage) {
   this.selectedStorages = latestPC.storage.split(',').map((s: string) => s.trim());
 } else {
   this.selectedStorages = [];
 }
-  // ✅ Use latestPC which has the most current data
   this.formData = {
     computer_name: latestPC.computer_name || '',
     user_name: latestPC.user_name || '',
@@ -4527,7 +4728,6 @@ if (latestPC.storage) {
     av_next_update: latestPC.av_next_update || ''
   };
   
-  // ✅ Debug log
   console.log('Edit PC data loaded:', {
     name: this.formData.computer_name,
     office_activation_date: this.formData.office_activation_date,
@@ -4543,8 +4743,8 @@ if (latestPC.storage) {
   this.showModal = false; 
   this.editingPC = null; 
   this.ipDuplicateError = '';
-  this.computerNameDuplicateError = '';  // ✅ NEW
-  this.originalComputerName = '';  // ✅ NEW
+  this.computerNameDuplicateError = ''; 
+  this.originalComputerName = '';  
 }
 
   showToastMsg(msg: string, type: 'success' | 'error') {

@@ -16,46 +16,56 @@ import { RouterLink } from '@angular/router';
   template: `
     <div class="req-list-container">
       <!-- Header -->
-      <div class="view-header">
-  <h2>📩 {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
- <div class="header-actions">
+   <div class="view-header">
+  <h2><span class="header-icon">&#9993;</span> {{ viewMode === 'our' ? 'Our Requisitions' : 'Request Management' }}</h2>
+  <div class="header-actions">
     <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
-      📤 Our Requests
+      <span class="btn-icon">&#10132;</span> Our Requests
       <span class="notif-badge our" *ngIf="ourNotificationCount > 0">{{ ourNotificationCount }}</span>
     </button>
     <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
-      📥 Request Management
+      <span class="btn-icon">&#10133;</span> Request Management
       <span class="notif-badge incoming" *ngIf="incomingNotificationCount > 0">{{ incomingNotificationCount }}</span>
     </button>
     <button class="classic-btn primary" (click)="newRequisition()">
-  <span>➕</span> New Requisition
-</button>
+      <span class="btn-icon">&#10133;</span> New Requisition
+    </button>
   </div>
 </div>
-
-      <div class="status-tabs">
-  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">📋 All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span></button>
-  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">⏳ Pending <span class="tab-count">{{ getFilteredStatusCount('pending') }}</span></button>
-  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">📥 Accepted <span class="tab-count">{{ getFilteredStatusCount('approved') }}</span></button>
+  <div class="status-tabs">
+  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
+    <span class="tab-icon">&#9776;</span> All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+    <span class="tab-icon">&#8987;</span> Pending <span class="tab-count">{{ getFilteredStatusCount('pending') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
+    <span class="tab-icon">&#10003;</span> Accepted <span class="tab-count">{{ getFilteredStatusCount('approved') }}</span>
+  </button>
   <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
-  📤 Forwarded <span class="tab-count forwarded-count">{{ getFilteredStatusCount('forwarded') }}</span>
-</button>
-  <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">⚙️ Processing <span class="tab-count">{{ getFilteredStatusCount('processing') }}</span></button>
-  <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">📦 Released <span class="tab-count">{{ getFilteredStatusCount('released') }}</span></button>
-  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">❌ Rejected <span class="tab-count">{{ getFilteredStatusCount('rejected') }}</span></button>
+    <span class="tab-icon">&#10132;</span> Forwarded <span class="tab-count forwarded-count">{{ getFilteredStatusCount('forwarded') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'processing'" (click)="setActiveTab('processing')">
+    <span class="tab-icon">&#9881;</span> Processing <span class="tab-count">{{ getFilteredStatusCount('processing') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'released'" (click)="setActiveTab('released')">
+    <span class="tab-icon">&#9635;</span> Released <span class="tab-count">{{ getFilteredStatusCount('released') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
+    <span class="tab-icon">&#10007;</span> Rejected <span class="tab-count">{{ getFilteredStatusCount('rejected') }}</span>
+  </button>
 </div>
-      <!-- Filter Bar -->
+<!-- Filter Bar -->
 <div class="filter-bar">
- <div class="filter-group">
-  <label>Branch:</label>
-  <select class="classic-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
-    <option value="">All Branches</option>
-    <option *ngFor="let branch of filteredBranches" [value]="branch.id">
-      🏢 {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
-    </option>
-  </select>
-</div>
-  
+  <div class="filter-group">
+    <label>Branch:</label>
+    <select class="classic-select" [(ngModel)]="filters.branchId" (change)="onFilterBranchChange()">
+      <option value="">All Branches</option>
+      <option *ngFor="let branch of filteredBranches" [value]="branch.id">
+        <span class="icon-building">&#127970;</span> {{ branch.name }} <small>({{ branch.company_name || '' }})</small>
+      </option>
+    </select>
+  </div>
 <div class="filter-group">
   <label>Request From:</label>
   <select class="classic-select" [(ngModel)]="filters.requestFromDept" (change)="applyFilters()">
@@ -68,22 +78,20 @@ import { RouterLink } from '@angular/router';
   <div class="filter-group search-group">
     <label>Search:</label>
     <input type="text" class="classic-input" placeholder="REQ #, ATTN, name..." 
-           [(ngModel)]="searchTerm" (input)="applyFilters()">
+    [(ngModel)]="searchTerm" (input)="applyFilters()">
   </div>
-  
   <button class="classic-btn" (click)="clearFilters()">
     <span>🔄</span> Clear
   </button>
 </div>
-<!-- Status Bar with Bulk Actions - UPDATED -->
+<!-- Status Bar with Bulk Actions -->
 <div class="classic-status-bar">
   <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Requests' : '📥 Request Management' }}</strong></span>
   <span class="status-sep">|</span>
   <span>Showing: <strong>{{ filteredReqs.length }}</strong> requisitions</span>
   <span class="status-sep">|</span>
   <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
-  
-  <!-- ✅ Bulk Actions - ONLY for authorized users -->
+  <!-- Bulk Actions - ONLY for authorized users -->
   <ng-container *ngIf="canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
     <span class="status-sep">|</span>
     <label class="select-all-label">
@@ -99,8 +107,7 @@ import { RouterLink } from '@angular/router';
       🗑️ Delete ({{ selectedReqIds.length }})
     </button>
   </ng-container>
-  
-  <!-- ✅ Message for unauthorized users -->
+  <!--  Message for unauthorized users -->
   <ng-container *ngIf="!canPerformBulkActions() && viewMode === 'incoming' && (activeTab === 'approved' || activeTab === 'forwarded' || activeTab === 'processing' || activeTab === 'released' || activeTab === 'rejected')">
     <span class="status-sep">|</span>
     <span class="permission-hint" style="font-size: 11px; color: #888; font-style: italic;">
@@ -108,7 +115,6 @@ import { RouterLink } from '@angular/router';
     </span>
   </ng-container>
 </div>
-
       <div class="table-container">
         <table class="data-table">
       <thead>
@@ -547,12 +553,12 @@ import { RouterLink } from '@angular/router';
     .stat-item.rejected { border-left-color: #cc0000; }
     .stat-label { display: block; font-size: 11px; text-transform: uppercase; color: #888; }
     .stat-value { font-size: 22px; font-weight: 700; color: #333; }
-    .status-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
-    .status-tab { flex: 1; padding: 10px 16px; background: white; border: 1px solid #c0c0c0; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .status-tabs { display: flex; gap: 4px; margin-bottom: 1px; margin-right: 15px; margin-top: -11px;}
+    .status-tab { flex: 1; padding: 10px 12px; background: white; border: 1px solid #c0c0c0; cursor: pointer; font-size: 12px; font-weight: 600; border-radius: 6px; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .status-tab.active { background: #0a246a; color: white; border-color: #0a246a; }
     .tab-count { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; background: #e0e0e0; color: #555; }
     .status-tab.active .tab-count { background: rgba(255,255,255,0.3); color: white; }
-    .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; padding: 10px 14px; background: white; border: 1px solid #c0c0c0; border-radius: 6px; }
+    .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 1px; padding: 10px 14px; background: white; border: 1px solid #c0c0c0; border-radius: 6px; }
     .filter-input { padding: 5px 10px; border: 1px solid #c0c0c0; border-radius: 4px; font-size: 11px; width: 200px; }
     .btn { padding: 6px 12px; border: 1px solid #c0c0c0; background: white; cursor: pointer; border-radius: 4px; font-size: 11px; }
     .count-badge { margin-left: auto; color: #888; font-size: 11px; }
@@ -875,18 +881,18 @@ import { RouterLink } from '@angular/router';
   white-space: nowrap;
   font-style: italic;
 }
-  .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
+  .req-list-container { padding: 1px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; }
 .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
 .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
 .header-actions { display: flex; gap: 6px; align-items: center; }
 .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
 .classic-btn:hover { background: #dde8f0; }
-.classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
+.classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; margin-right: 18px; }
 .classic-btn.primary:hover { background: #1a3a8a; }
 .classic-btn.active { background: #0a246a; color: white; border-color: #0a246a; }
 .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 11px; background: white; }
 .classic-select option small { font-size: 11px; color: #888; }
-.classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 11px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 11px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 1px; }
 .filter-group { display: flex; align-items: center; gap: 4px; }
 .filter-group label { font-size: 11px; font-weight: bold; color: #000; }
 .search-group .classic-input { width: 160px; }
@@ -953,6 +959,61 @@ import { RouterLink } from '@angular/router';
     .warning-message h3 { margin: 0 0 6px 0; font-size: 13px; color: #000; font-weight: bold; }
     .warning-hint { font-size: 11px; padding: 6px 10px; border-radius: 3px; margin-top: 8px; line-height: 1.4; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .req-list-container, .req-list-container * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .req-list-container button, .req-list-container button *, .req-list-container select, .req-list-container select *, .req-list-container .classic-btn, .req-list-container .classic-btn *, .req-list-container .status-tab, .req-list-container .status-tab *, .req-list-container .action-btn, .req-list-container .action-btn *, .req-list-container .modal-close, .req-list-container .modal-header, .req-list-container .modal-header *, .req-list-container .modal-titlebar, .req-list-container .modal-titlebar *, .req-list-container .confirm-modal-header, .req-list-container .confirm-modal-header *, .req-list-container .clickable-row, .req-list-container .clickable-row *, .req-list-container .view-mode-btn, .req-list-container .view-mode-btn *, .req-list-container .notif-badge, .req-list-container .select-all-label, .req-list-container .select-all-label *, .req-list-container .checkbox-label, .req-list-container .checkbox-label * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .req-list-container .data-table td, .req-list-container .data-table th, .req-list-container .data-table td *, .req-list-container .data-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .req-list-container .data-table td.action-cell, .req-list-container .data-table td.action-cell *, .req-list-container .data-table th:first-child, .req-list-container .data-table th:first-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .req-list-container .detail-value, .req-list-container .detail-value *, .req-list-container .remarks-text, .req-list-container .remarks-text *, .req-list-container .detail-table td, .req-list-container .detail-table th, .req-list-container .detail-table td *, .req-list-container .detail-table th *, .req-list-container .sig-info strong, .req-list-container .sig-info span, .req-list-container .confirm-info-row, .req-list-container .confirm-info-row *, .req-list-container .confirm-modal-body p, .req-list-container .warning-message, .req-list-container .warning-message *, .req-list-container .resolve-title, .req-list-container .empty-text { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .req-list-container input, .req-list-container textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    /* ===== MODAL TEXT SELECTION SUPPORT ===== */
+/* Make modal content selectable (overrides any user-select:none) */
+.modal-content, .modal-content *,
+.modal-window, .modal-window *,
+.confirm-modal, .confirm-modal * {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  cursor: text;
+}
+
+/* Keep modal headers/titlebars non-selectable (so dragging works cleanly) */
+.modal-header, .modal-header *,
+.modal-titlebar, .modal-titlebar *,
+.confirm-modal-header, .confirm-modal-header * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  cursor: grab;
+}
+
+.modal-header:active, .modal-titlebar:active, .confirm-modal-header:active {
+  cursor: grabbing;
+}
+
+/* Keep buttons/selects/inputs non-selectable inside modals */
+.modal-content button, .modal-content button *,
+.modal-content select, .modal-content select *,
+.modal-window button, .modal-window button *,
+.modal-window select, .modal-window select *,
+.confirm-modal button, .confirm-modal button * {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  cursor: pointer;
+}
+
+/* Inputs/textareas stay selectable */
+.modal-content input, .modal-content textarea,
+.modal-window input, .modal-window textarea {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  cursor: text;
+}
   `]
 })
 export class RequisitionsManagementComponent implements OnInit {

@@ -908,16 +908,16 @@ Clear
     </div>
   `,
  styles: [`
-    .req-list-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; }
-    .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
+    .req-list-container { padding: 3px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 12px; margin:5px;}
+    .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
     .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 12px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
     .classic-btn:hover { background: #dde8f0; }
-    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
+    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; margin-right: 10px;}
     .classic-btn.primary:hover { background: #1a3a8a; }
     .classic-btn.danger { background: #cc0000; color: white; border-color: #cc0000; }
     .classic-btn.danger:hover { background: #aa0000; }
-    .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 6px; flex-wrap: wrap; }
+    .status-tabs-bar { display: flex; gap: 2px; padding: 4px 6px; background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 1px; flex-wrap: wrap; }
     .status-tab { background: #d4d0c8; border: 2px solid; border-color: #fff #808080 #808080 #fff; border-radius: 2px 2px 0 0; padding: 5px 12px; cursor: pointer; font-size: 12px; color: #333; display: inline-flex; align-items: center; gap: 6px; }
     .status-tab:hover { background: #e8e8e8; }
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
@@ -927,12 +927,12 @@ Clear
     .tab-count.approved-count { background: #008800; }
     .tab-count.released-count { background: #0066cc; }
     .tab-count.rejected-count { background: #cc0000; }
-    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 4px; flex-wrap: wrap; }
+    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 1px; flex-wrap: wrap; }
     .filter-group { display: flex; align-items: center; gap: 4px; }
     .filter-group label { font-size: 12px; font-weight: bold; color: #000; }
     .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 12px; background: white; }
     .search-group .classic-input { width: 160px; }
-    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 1px; }
     .status-sep { color: #b0b0b0; }
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
     .classic-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -1210,7 +1210,18 @@ Clear
 .accept-btn:hover { background: #eeffee; border-color: #008800; color: #008800; }
 .reject-btn { color: #cc0000; }
 .reject-btn:hover { background: #ffecec; border-color: #cc0000; color: #cc0000; }
-    @media (max-width: 768px) { .view-modal { max-width: 95% !important; width: 95%; } .view-signatures { grid-template-columns: 1fr; } .view-grid { grid-template-columns: 1fr; } }
+     @media (max-width: 768px) { .view-modal { max-width: 95% !important; width: 95%; } .view-signatures { grid-template-columns: 1fr; } .view-grid { grid-template-columns: 1fr; } }
+    .req-list-container, .req-list-container * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .req-list-container button, .req-list-container button *, .req-list-container select, .req-list-container select *, .req-list-container .classic-btn, .req-list-container .classic-btn *, .req-list-container .status-tab, .req-list-container .status-tab *, .req-list-container .action-btn, .req-list-container .action-btn *, .req-list-container .modal-close, .req-list-container .modal-titlebar, .req-list-container .modal-titlebar *, .req-list-container .clickable-row, .req-list-container .select-all-label, .req-list-container .select-all-label *, .req-list-container .tab-count, .req-list-container .status-badge, .req-list-container .notif-badge, .req-list-container .direction-tag, .req-list-container .toast-notification { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .req-list-container .classic-table td, .req-list-container .classic-table th, .req-list-container .classic-table td *, .req-list-container .classic-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .req-list-container .classic-table td.action-cell, .req-list-container .classic-table td.action-cell *, .req-list-container .classic-table th:last-child, .req-list-container .classic-table th:last-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .req-list-container .req-num, .req-list-container .req-num *, .req-list-container .date-cell, .req-list-container .date-cell *, .req-list-container .dept-name-small, .req-list-container .branch-tag-tiny, .req-list-container .company-tag-tiny, .req-list-container .creator-label, .req-list-container .forward-label, .req-list-container .forward-dept, .req-list-container .forward-company, .req-list-container .forward-by, .req-list-container .role-tag-tiny, .req-list-container .worker-label, .req-list-container .status-forwarded-sub, .req-list-container .total-cell, .req-list-container .items-cell, .req-list-container .warning-message, .req-list-container .warning-message *, .req-list-container .resolve-title, .req-list-container .empty-state p, .req-list-container .view-field span, .req-list-container .view-req-number code, .req-list-container .view-remarks, .req-list-container .view-sig-name, .req-list-container .view-sig-date, .req-list-container .no-items-text, .req-list-container .request-type-badge, .req-list-container .warning-hint { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .req-list-container input, .req-list-container textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .modal-overlay, .modal-overlay *, .modal-window, .modal-window * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .modal-window button, .modal-window button *, .modal-window select, .modal-window select *, .modal-close, .modal-titlebar, .modal-titlebar * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .modal-titlebar { cursor: grab; }
+    .modal-titlebar:active { cursor: grabbing; }
+    .modal-window .view-field span, .modal-window .view-field span *, .modal-window .view-req-number code, .modal-window .view-remarks, .modal-window .view-remarks *, .modal-window .view-items-table td, .modal-window .view-items-table th, .modal-window .view-items-table td *, .modal-window .view-items-table th *, .modal-window .view-sig-name, .modal-window .view-sig-date, .modal-window .warning-message, .modal-window .warning-message *, .modal-window .resolve-title, .modal-window .no-items-text { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
   `]
 })
 export class ClientRequisitionListComponent implements OnInit, OnDestroy {

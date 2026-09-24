@@ -89,17 +89,18 @@ export class AuthService {
   }
 
 logout(): void {
-  // ✅ Clear BOTH notification services BEFORE clearing auth state
   this.clientNotificationService.handleLogout();
   this.notificationService.handleLogout();
-
   if (this.isBrowser) {
     localStorage.removeItem('token');
     sessionStorage.removeItem('token');
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('client_computer_monitoring_cache_v1');
+    localStorage.removeItem('client_computer_monitoring_cache_expiry_v1');
+    localStorage.removeItem('client_computer_monitoring_cache_branch');
+    localStorage.removeItem('client_cleaning_records');
   }
   this.currentUserSubject.next(null);
-  
   const currentUrl = this.router.url;
   if (currentUrl.startsWith('/client')) {
     this.router.navigate(['/client/login']);

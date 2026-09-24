@@ -456,7 +456,7 @@ app.post('/api/auth/login', async (req, res) => {
         console.log('✅ User activity tracked:', user.username);
         // Generate token
         const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role, userTable: userTable },
+    { id: user.id, username: user.username, role: user.role, userTable: userTable, branch_id: user.branch_id, department_id: user.department_id, },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRY }
 );
@@ -3461,45 +3461,6 @@ app.post('/api/departments', async (req, res) => {
     }
 });
 
-// POST - Create department
-app.post('/api/departments', async (req, res) => {
-    try {
-       if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const allowedRoles = ['admin', 'head/manager', 'head manager', 'supervisor', 'branch manager'];
-if (!allowedRoles.includes((decoded.role || '').toLowerCase())) {
-    return res.status(403).json({ error: 'Access denied.' });
-}
-        
-        const { name, location, branch_id } = req.body;
-        
-        if (!name) {
-            return res.status(400).json({ error: 'Department name is required' });
-        }
-        if (!branch_id) {
-            return res.status(400).json({ error: 'Branch ID is required' });
-        }
-        
-        // Check if branch exists
-        const [branchCheck] = await pool.query(
-            'SELECT id FROM branches WHERE id = ?',
-            [branch_id]
-        );
-        if (branchCheck.length === 0) {
-            return res.status(400).json({ error: 'Invalid branch selected' });
-        }
-        
-        const [result] = await pool.query(
-            'INSERT INTO departments (name, location, branch_id) VALUES (?, ?, ?)',
-            [name, location || null, branch_id]
-        );
-        
-        res.json({ success: true, id: result.insertId, message: 'Department created' });
-    } catch (error) {
-        console.error('❌ Error creating department:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
 // PUT - Update department
 app.put('/api/departments/:id', async (req, res) => {
     try {
@@ -3563,6 +3524,32 @@ app.delete('/api/departments/:id', async (req, res) => {
         }
     } catch (error) {
         console.error('❌ Error deleting department:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// GET - Departments that have roles defined, scoped to a branch
+app.get('/api/public/branches/:branchId/role-departments', async (req, res) => {
+    try {
+        const branchId = parseInt(req.params.branchId, 10);
+        if (!branchId) return res.status(400).json({ error: 'Invalid branch ID' });
+
+        const [rows] = await pool.query(
+            `SELECT DISTINCT 
+                d.id,
+                d.name,
+                d.branch_id,
+                d.location
+             FROM departments d
+             INNER JOIN department_roles dr 
+                ON LOWER(TRIM(dr.department_name)) = LOWER(TRIM(d.name))
+             WHERE d.branch_id = ?
+             ORDER BY d.name ASC`,
+            [branchId]
+        );
+
+        res.json(rows);
+    } catch (error) {
+        console.error('❌ Error fetching role-departments:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -10817,302 +10804,389 @@ function extractKeywords(prompt) {
     return allKeywords.join(', ');
 }
 // ═══════════════════════════════════════════════════
-// CLIENT COMPUTER MONITORING ROUTES
+// CLIENT COMPUTER MONITORING ROUTES — BRANCH-SCOPED
 // ═══════════════════════════════════════════════════
 
+// Helper — extract current user's branch_id from the decoded JWT payload
+function getBranchId(req) {
+  return Number(req.decodedUser?.branch_id) || null;
+}
+
 // ─────────────────────────────────────────
-// ✅ SPECIFIC ROUTES FIRST (must come before /:id)
+// ✅ SPECIFIC ROUTES FIRST (before /:id)
 // ─────────────────────────────────────────
 
-// GET - List all client computers (scoped to user's branch if applicable)
+// GET - List computers scoped to user's branch
 app.get('/api/client-computers', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
 
-        const [rows] = await pool.query(
-            `SELECT * FROM client_computer_monitoring 
-             ORDER BY ip_address ASC`
-        );
-        res.json(rows);
-    } catch (error) {
-        console.error('GET /api/client-computers error:', error);
-        res.status(500).json({ error: error.message });
-    }
+    const [rows] = await pool.query(
+      `SELECT * FROM client_computer_monitoring
+       WHERE branch_id = ?
+       ORDER BY ip_address ASC`,
+      [branchId]
+    );
+    res.json(rows);
+  } catch (error) {
+    console.error('GET /api/client-computers error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// GET - List all unique locations ⭐ MUST BE BEFORE /:id
+// GET - Locations (scoped)
 app.get('/api/client-computers/locations', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
 
-        const [rows] = await pool.query(
-            `SELECT DISTINCT location 
-             FROM client_computer_monitoring 
-             WHERE location IS NOT NULL AND location != '' 
-             ORDER BY location ASC`
-        );
-
-        res.json(rows.map(r => r.location));
-    } catch (error) {
-        console.error('GET /api/client-computers/locations error:', error);
-        res.status(500).json({ error: error.message });
-    }
+    const [rows] = await pool.query(
+      `SELECT DISTINCT location
+       FROM client_computer_monitoring
+       WHERE branch_id = ?
+         AND location IS NOT NULL
+         AND location != ''
+       ORDER BY location ASC`,
+      [branchId]
+    );
+    res.json(rows.map(r => r.location));
+  } catch (error) {
+    console.error('GET /api/client-computers/locations error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// GET - List all cleaning records
+// GET - All cleaning records (scoped)
 app.get('/api/client-computers/cleaning/all-records', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const [rows] = await pool.query(
-            `SELECT * FROM client_computer_cleaning_records 
-             ORDER BY cleaning_date DESC`
-        );
-        res.json(rows);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [rows] = await pool.query(
+      `SELECT * FROM client_computer_cleaning_records
+       WHERE branch_id = ?
+       ORDER BY cleaning_date DESC`,
+      [branchId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// GET - All PC IDs that have cleaning records
+// GET - All PC IDs with cleaning records (scoped)
 app.get('/api/client-computers/cleaning/all-ids', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const [rows] = await pool.query(
-            `SELECT DISTINCT computer_id FROM client_computer_cleaning_records`
-        );
-        res.json(rows);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [rows] = await pool.query(
+      `SELECT DISTINCT computer_id
+       FROM client_computer_cleaning_records
+       WHERE branch_id = ?`,
+      [branchId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// GET - Cleaning records for one computer
+// GET - Cleaning records for one computer (scoped)
 app.get('/api/client-computers/cleaning/:computerId', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const [rows] = await pool.query(
-            `SELECT * FROM client_computer_cleaning_records 
-             WHERE computer_id = ? 
-             ORDER BY cleaning_date DESC`,
-            [req.params.computerId]
-        );
-        res.json(rows);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [rows] = await pool.query(
+      `SELECT * FROM client_computer_cleaning_records
+       WHERE computer_id = ?
+         AND branch_id = ?
+       ORDER BY cleaning_date DESC`,
+      [req.params.computerId, branchId]
+    );
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // ─────────────────────────────────────────
-// ⚠️ GENERIC ROUTES LAST (with :id params)
+// GENERIC ROUTES LAST
 // ─────────────────────────────────────────
-
-// GET - Single computer ⚠️ MUST BE LAST among GETs
+// GET - Single computer (scoped)
 app.get('/api/client-computers/:id', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const [rows] = await pool.query(
-            'SELECT * FROM client_computer_monitoring WHERE id = ?',
-            [req.params.id]
-        );
-        if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
-        res.json(rows[0]);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [rows] = await pool.query(
+      `SELECT * FROM client_computer_monitoring
+       WHERE id = ?
+         AND branch_id = ?`,
+      [req.params.id, branchId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Not found' });
+    res.json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// POST - Add a new client computer
+// POST - Add a new client computer (stamps user's branch)
 app.post('/api/client-computers', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
 
-        const {
-            computer_name, user_name, location, ip_address, mac_address,
-            department, os, bit, ram, storage, processor, gpu,
-            antivirus, av_last_update, av_next_update,
-            ms_license_type, license_activation, license_duration, license_expiry,
-            office_activation, office_activation_date, office_duration, office_expiry,
-            host_type
-        } = req.body;
+    const {
+      computer_name, user_name, location, ip_address, mac_address,
+      department, os, bit, ram, storage, processor, gpu,
+      antivirus, av_last_update, av_next_update,
+      ms_license_type, license_activation, license_duration, license_expiry,
+      office_activation, office_activation_date, office_duration, office_expiry,
+      host_type
+    } = req.body;
 
-        if (!computer_name || !ip_address) {
-            return res.status(400).json({ error: 'Computer name and IP are required' });
-        }
-
-        // Check duplicate name
-        const [dupName] = await pool.query(
-            'SELECT id FROM client_computer_monitoring WHERE computer_name = ?',
-            [computer_name.trim()]
-        );
-        if (dupName.length > 0) {
-            return res.status(400).json({ error: 'Computer name already exists' });
-        }
-
-        const [result] = await pool.query(
-            `INSERT INTO client_computer_monitoring 
-             (computer_name, user_name, location, ip_address, mac_address,
-              department, os, bit, ram, storage, processor, gpu,
-              antivirus, av_last_update, av_next_update,
-              ms_license_type, license_activation, license_duration, license_expiry,
-              office_activation, office_activation_date, office_duration, office_expiry,
-              host_type, created_by, status)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')`,
-            [
-                computer_name.trim(),
-                user_name || null, location || null, ip_address, mac_address || null,
-                department || null, os || null, bit || '64', ram || null,
-                storage || null, processor || null, gpu || null,
-                antivirus || null,
-                av_last_update || null, av_next_update || null,
-                ms_license_type || null,
-                license_activation || null, license_duration || null, license_expiry || null,
-                office_activation || null,
-                office_activation_date || null, office_duration || null, office_expiry || null,
-                host_type || null,
-                req.decodedUser.id || null
-            ]
-        );
-
-        res.status(201).json({ success: true, id: result.insertId });
-    } catch (error) {
-        console.error('POST /api/client-computers error:', error);
-        res.status(500).json({ error: error.message });
+    if (!computer_name || !ip_address) {
+      return res.status(400).json({ error: 'Computer name and IP are required' });
     }
+
+    // Duplicate name check — scoped to this branch
+    const [dupName] = await pool.query(
+      `SELECT id FROM client_computer_monitoring
+       WHERE computer_name = ?
+         AND branch_id = ?`,
+      [computer_name.trim(), branchId]
+    );
+    if (dupName.length > 0) {
+      return res.status(400).json({ error: 'Computer name already exists in your branch' });
+    }
+
+    const [result] = await pool.query(
+      `INSERT INTO client_computer_monitoring
+        (computer_name, user_name, location, ip_address, mac_address,
+         department, os, bit, ram, storage, processor, gpu,
+         antivirus, av_last_update, av_next_update,
+         ms_license_type, license_activation, license_duration, license_expiry,
+         office_activation, office_activation_date, office_duration, office_expiry,
+         host_type, created_by, branch_id, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'online')`,
+      [
+        computer_name.trim(),
+        user_name || null, location || null, ip_address, mac_address || null,
+        department || null, os || null, bit || '64', ram || null,
+        storage || null, processor || null, gpu || null,
+        antivirus || null, av_last_update || null, av_next_update || null,
+        ms_license_type || null,
+        license_activation || null, license_duration || null, license_expiry || null,
+        office_activation || null, office_activation_date || null,
+        office_duration || null, office_expiry || null,
+        host_type || null,
+        req.decodedUser.id || null,
+        branchId
+      ]
+    );
+
+    res.status(201).json({ success: true, id: result.insertId });
+  } catch (error) {
+    console.error('POST /api/client-computers error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// PUT - Update client computer
+// PUT - Update (scoped)
 app.put('/api/client-computers/:id', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const id = req.params.id;
-        const {
-            computer_name, user_name, location, ip_address, mac_address,
-            department, os, bit, ram, storage, processor, gpu,
-            antivirus, av_last_update, av_next_update,
-            ms_license_type, license_activation, license_duration, license_expiry,
-            office_activation, office_activation_date, office_duration, office_expiry,
-            host_type, status
-        } = req.body;
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+    const id = req.params.id;
 
-        // Check duplicate name (excluding this row)
-        const [dup] = await pool.query(
-            'SELECT id FROM client_computer_monitoring WHERE computer_name = ? AND id != ?',
-            [computer_name.trim(), id]
-        );
-        if (dup.length > 0) {
-            return res.status(400).json({ error: 'Computer name already exists' });
-        }
+    const {
+      computer_name, user_name, location, ip_address, mac_address,
+      department, os, bit, ram, storage, processor, gpu,
+      antivirus, av_last_update, av_next_update,
+      ms_license_type, license_activation, license_duration, license_expiry,
+      office_activation, office_activation_date, office_duration, office_expiry,
+      host_type, status
+    } = req.body;
 
-        await pool.query(
-            `UPDATE client_computer_monitoring SET
-                computer_name = ?, user_name = ?, location = ?, ip_address = ?, mac_address = ?,
-                department = ?, os = ?, bit = ?, ram = ?, storage = ?, processor = ?, gpu = ?,
-                antivirus = ?, av_last_update = ?, av_next_update = ?,
-                ms_license_type = ?, license_activation = ?, license_duration = ?, license_expiry = ?,
-                office_activation = ?, office_activation_date = ?, office_duration = ?, office_expiry = ?,
-                host_type = ?, status = ?
-             WHERE id = ?`,
-            [
-                computer_name.trim(), user_name || null, location || null, ip_address, mac_address || null,
-                department || null, os || null, bit || '64', ram || null,
-                storage || null, processor || null, gpu || null,
-                antivirus || null, av_last_update || null, av_next_update || null,
-                ms_license_type || null,
-                license_activation || null, license_duration || null, license_expiry || null,
-                office_activation || null,
-                office_activation_date || null, office_duration || null, office_expiry || null,
-                host_type || null, status || 'online',
-                id
-            ]
-        );
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('PUT /api/client-computers error:', error);
-        res.status(500).json({ error: error.message });
+    // Duplicate check within the same branch (excluding this row)
+    const [dup] = await pool.query(
+      `SELECT id FROM client_computer_monitoring
+       WHERE computer_name = ?
+         AND branch_id = ?
+         AND id != ?`,
+      [computer_name.trim(), branchId, id]
+    );
+    if (dup.length > 0) {
+      return res.status(400).json({ error: 'Computer name already exists in your branch' });
     }
+
+    const [result] = await pool.query(
+      `UPDATE client_computer_monitoring SET
+          computer_name = ?, user_name = ?, location = ?, ip_address = ?, mac_address = ?,
+          department = ?, os = ?, bit = ?, ram = ?, storage = ?, processor = ?, gpu = ?,
+          antivirus = ?, av_last_update = ?, av_next_update = ?,
+          ms_license_type = ?, license_activation = ?, license_duration = ?, license_expiry = ?,
+          office_activation = ?, office_activation_date = ?, office_duration = ?, office_expiry = ?,
+          host_type = ?, status = ?
+       WHERE id = ?
+         AND branch_id = ?`,
+      [
+        computer_name.trim(), user_name || null, location || null, ip_address, mac_address || null,
+        department || null, os || null, bit || '64', ram || null,
+        storage || null, processor || null, gpu || null,
+        antivirus || null, av_last_update || null, av_next_update || null,
+        ms_license_type || null,
+        license_activation || null, license_duration || null, license_expiry || null,
+        office_activation || null, office_activation_date || null,
+        office_duration || null, office_expiry || null,
+        host_type || null, status || 'online',
+        id,
+        branchId
+      ]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Record not found in your branch' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('PUT /api/client-computers error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// DELETE - Delete client computer
+// DELETE - Delete (scoped)
 app.delete('/api/client-computers/:id', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        await pool.query('DELETE FROM client_computer_monitoring WHERE id = ?', [req.params.id]);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [result] = await pool.query(
+      `DELETE FROM client_computer_monitoring
+       WHERE id = ?
+         AND branch_id = ?`,
+      [req.params.id, branchId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Record not found in your branch' });
     }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// POST - Save a cleaning record
+// POST - Save cleaning record (stamps branch)
 app.post('/api/client-computers/cleaning', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        const d = req.body;
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+    const d = req.body;
 
-        const [result] = await pool.query(
-            `INSERT INTO client_computer_cleaning_records
-             (computer_id, computer_name, location, department, ip_address,
-              os, bit, ram, storage, processor, gpu,
-              antivirus, av_last_update,
-              office_activation, office_activation_date, office_duration, office_expiry,
-              cleaning_date, notes, performed_by)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-                d.computer_id, d.computer_name, d.location || null, d.department || null,
-                d.ip_address || null, d.os || null, d.bit || '64', d.ram || null,
-                d.storage || null, d.processor || null, d.gpu || null,
-                d.antivirus || null, d.av_last_update || null,
-                d.office_activation || null, d.office_activation_date || null,
-                d.office_duration || null, d.office_expiry || null,
-                d.cleaning_date || new Date().toISOString().split('T')[0],
-                d.notes || null,
-                req.decodedUser.id || null
-            ]
-        );
-
-        // Also sync back to main computer row
-        await pool.query(
-            `UPDATE client_computer_monitoring SET
-                location = COALESCE(?, location),
-                os = COALESCE(?, os),
-                bit = COALESCE(?, bit),
-                ram = COALESCE(?, ram),
-                storage = COALESCE(?, storage),
-                processor = COALESCE(?, processor),
-                gpu = COALESCE(?, gpu),
-                antivirus = COALESCE(?, antivirus),
-                av_last_update = COALESCE(?, av_last_update),
-                office_activation = COALESCE(?, office_activation),
-                office_activation_date = COALESCE(?, office_activation_date),
-                office_duration = COALESCE(?, office_duration),
-                office_expiry = COALESCE(?, office_expiry)
-             WHERE id = ?`,
-            [
-                d.location, d.os, d.bit, d.ram, d.storage,
-                d.processor, d.gpu, d.antivirus, d.av_last_update,
-                d.office_activation, d.office_activation_date,
-                d.office_duration, d.office_expiry,
-                d.computer_id
-            ]
-        );
-
-        res.status(201).json({ success: true, id: result.insertId });
-    } catch (error) {
-        console.error('POST /api/client-computers/cleaning error:', error);
-        res.status(500).json({ error: error.message });
+    // Ensure the computer belongs to this branch
+    const [owner] = await pool.query(
+      `SELECT id FROM client_computer_monitoring
+       WHERE id = ?
+         AND branch_id = ?`,
+      [d.computer_id, branchId]
+    );
+    if (owner.length === 0) {
+      return res.status(403).json({ error: 'Computer is not in your branch' });
     }
+
+    const [result] = await pool.query(
+      `INSERT INTO client_computer_cleaning_records
+         (computer_id, computer_name, location, department, ip_address,
+          os, bit, ram, storage, processor, gpu,
+          antivirus, av_last_update,
+          office_activation, office_activation_date, office_duration, office_expiry,
+          cleaning_date, notes, performed_by, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        d.computer_id, d.computer_name, d.location || null, d.department || null,
+        d.ip_address || null, d.os || null, d.bit || '64', d.ram || null,
+        d.storage || null, d.processor || null, d.gpu || null,
+        d.antivirus || null, d.av_last_update || null,
+        d.office_activation || null, d.office_activation_date || null,
+        d.office_duration || null, d.office_expiry || null,
+        d.cleaning_date || new Date().toISOString().split('T')[0],
+        d.notes || null,
+        req.decodedUser.id || null,
+        branchId
+      ]
+    );
+
+    // Sync back to main computer (scoped)
+    await pool.query(
+      `UPDATE client_computer_monitoring SET
+          location = COALESCE(?, location),
+          os = COALESCE(?, os),
+          bit = COALESCE(?, bit),
+          ram = COALESCE(?, ram),
+          storage = COALESCE(?, storage),
+          processor = COALESCE(?, processor),
+          gpu = COALESCE(?, gpu),
+          antivirus = COALESCE(?, antivirus),
+          av_last_update = COALESCE(?, av_last_update),
+          office_activation = COALESCE(?, office_activation),
+          office_activation_date = COALESCE(?, office_activation_date),
+          office_duration = COALESCE(?, office_duration),
+          office_expiry = COALESCE(?, office_expiry)
+       WHERE id = ?
+         AND branch_id = ?`,
+      [
+        d.location, d.os, d.bit, d.ram, d.storage,
+        d.processor, d.gpu, d.antivirus, d.av_last_update,
+        d.office_activation, d.office_activation_date,
+        d.office_duration, d.office_expiry,
+        d.computer_id,
+        branchId
+      ]
+    );
+
+    res.status(201).json({ success: true, id: result.insertId });
+  } catch (error) {
+    console.error('POST /api/client-computers/cleaning error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-// DELETE - Delete a cleaning record
+// DELETE - Delete cleaning record (scoped)
 app.delete('/api/client-computers/cleaning/:id', async (req, res) => {
-    try {
-        if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
-        await pool.query('DELETE FROM client_computer_cleaning_records WHERE id = ?', [req.params.id]);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: error.message });
+  try {
+    if (!req.decodedUser) return res.status(401).json({ error: 'Invalid token' });
+    const branchId = getBranchId(req);
+    if (!branchId) return res.status(403).json({ error: 'No branch associated with user' });
+
+    const [result] = await pool.query(
+      `DELETE FROM client_computer_cleaning_records
+       WHERE id = ?
+         AND branch_id = ?`,
+      [req.params.id, branchId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Record not found in your branch' });
     }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 // GET - Single branch by ID
 app.get('/api/public/branches/:id', async (req, res) => {

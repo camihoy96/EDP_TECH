@@ -17,11 +17,10 @@ import { ClientNotificationService } from '../../services/client-notification.se
       <!-- Header -->
       <div class="view-header">
         <h2>My Support Tickets</h2>
-        <button class="classic-btn primary" (click)="newTicket()">
-          <span>📄</span> New Ticket
-        </button>
+       <button class="classic-btn primary" (click)="newTicket()">
+  <span class="btn-icon">&#43;</span> New Ticket
+</button>
       </div>
-
       <!-- Status Tabs -->
       <div class="status-tabs-bar">
         <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
@@ -31,7 +30,6 @@ import { ClientNotificationService } from '../../services/client-notification.se
   </svg>
   All <span class="tab-count">{{ myTickets.length }}</span>
 </button>
-
 <button class="status-tab" [class.active]="activeTab === 'new'" (click)="setActiveTab('new')">
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"/>
@@ -423,7 +421,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
   `,
   styles: [`
     .ticket-list-view {
-      padding: 10px;
+      padding: 2px;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       font-size: 12px;
     }
@@ -432,12 +430,11 @@ import { ClientNotificationService } from '../../services/client-notification.se
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
-      padding-bottom: 8px;
+      margin-bottom: 2px;
+      padding-bottom: 2px;
       border-bottom: 2px solid #0a246a;
     }
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
-
     .classic-btn {
       background: #f0f0f0;
       border: 1px solid #a0a0a0;
@@ -451,14 +448,14 @@ import { ClientNotificationService } from '../../services/client-notification.se
       color: #000;
     }
     .classic-btn:hover { background: #dde8f0; }
-    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; }
+    .classic-btn.primary { background: #0a246a; color: white; border-color: #0a246a; margin-right: 8px;}
     .classic-btn.primary:hover { background: #1a3a8a; }
     .classic-btn.danger { background: #cc0000; color: white; border-color: #cc0000; }
     .classic-btn.danger:hover { background: #aa0000; }
 
     .status-tabs-bar {
       display: flex; gap: 2px; padding: 4px 6px;
-      background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 6px;
+      background: #e8e8e8; border: 1px solid #a0a0a0; margin-bottom: 1px;
       flex-wrap: wrap;
     }
     .status-tab {
@@ -489,7 +486,7 @@ import { ClientNotificationService } from '../../services/client-notification.se
     .classic-status-bar {
       background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none;
       padding: 3px 10px; font-size: 11px; color: #333;
-      display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+      display: flex; gap: 8px; align-items: center; margin-bottom: 1px;
     }
     .status-sep { color: #b0b0b0; }
 
@@ -657,6 +654,13 @@ import { ClientNotificationService } from '../../services/client-notification.se
 .filter-toggle-btn.active .filter-count {
   background: rgba(255,255,255,0.3);
 }
+  .filter-toggle-btn.active .filter-count { background: rgba(255,255,255,0.3); }
+    .ticket-list-view, .ticket-list-view * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .ticket-list-view button, .ticket-list-view button *, .ticket-list-view select, .ticket-list-view select *, .ticket-list-view .classic-btn, .ticket-list-view .classic-btn *, .ticket-list-view .status-tab, .ticket-list-view .status-tab *, .ticket-list-view .action-btn, .ticket-list-view .action-btn *, .ticket-list-view .modal-close, .ticket-list-view .modal-titlebar, .ticket-list-view .modal-titlebar *, .ticket-list-view .modal-window, .ticket-list-view .modal-window *, .ticket-list-view .clickable-row, .ticket-list-view .agent-item, .ticket-list-view .agent-item *, .ticket-list-view .filter-toggle-btn, .ticket-list-view .filter-toggle-btn *, .ticket-list-view .filter-indicator, .ticket-list-view .tab-count, .ticket-list-view .priority-badge, .ticket-list-view .status-badge { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .ticket-list-view .classic-table td, .ticket-list-view .classic-table th, .ticket-list-view .classic-table td *, .ticket-list-view .classic-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .ticket-list-view .classic-table td.action-cell, .ticket-list-view .classic-table td.action-cell *, .ticket-list-view .classic-table th:first-child, .ticket-list-view .classic-table th:first-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .ticket-list-view .ticket-num, .ticket-list-view .ticket-num *, .ticket-list-view .ticket-title, .ticket-list-view .ticket-title *, .ticket-list-view .date-cell, .ticket-list-view .date-cell *, .ticket-list-view .dept-name-small, .ticket-list-view .branch-tag-tiny, .ticket-list-view .worker-label, .ticket-list-view .agent-name-display, .ticket-list-view .creator-label, .ticket-list-view .creator-dept, .ticket-list-view .unassigned, .ticket-list-view .resolve-title, .ticket-list-view .warning-message, .ticket-list-view .warning-message *, .ticket-list-view .assigned-to-info, .ticket-list-view .assigned-to-info *, .ticket-list-view .assign-info, .ticket-list-view .selected-count, .ticket-list-view .agent-name, .ticket-list-view .agent-role, .ticket-list-view .empty-state p { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .ticket-list-view input, .ticket-list-view textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text;}
   `]
 })
 export class ClientTicketListComponent implements OnInit {

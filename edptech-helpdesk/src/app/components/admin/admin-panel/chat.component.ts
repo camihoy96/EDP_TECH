@@ -46,7 +46,14 @@ interface ChatMessage {
     <div class="chat-container">
       <div class="chat-header">
         <div class="chat-header-left">
-          <h2>💬 Messages</h2>
+          <h2 class="messages-title">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+  Messages
+</h2>
         </div>
         <div class="chat-header-right">
           <span class="online-count">Total: {{ users.length }} users</span>
@@ -55,27 +62,46 @@ interface ChatMessage {
 
       <div class="tabs-bar">
   <button class="tab-btn" [class.active]="activeTab === 'staff'" (click)="setActiveTab('staff')">
-    👨‍💼 Team ({{ staffUsers.length }})
-    <span class="tab-badge" *ngIf="staffUnreadCount > 0">{{ staffUnreadCount > 99 ? '99+' : staffUnreadCount }}</span>
-  </button>
-  <button class="tab-btn" [class.active]="activeTab === 'clients'" (click)="setActiveTab('clients')">
-    👤 Clients ({{ clientUsers.length }})
-    <span class="tab-badge" *ngIf="clientUnreadCount > 0">{{ clientUnreadCount > 99 ? '99+' : clientUnreadCount }}</span>
-  </button>
+  <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+    <circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+  </svg>
+  Team ({{ staffUsers.length }})
+  <span class="tab-badge" *ngIf="staffUnreadCount > 0">{{ staffUnreadCount > 99 ? '99+' : staffUnreadCount }}</span>
+</button>
+ <button class="tab-btn" [class.active]="activeTab === 'clients'" (click)="setActiveTab('clients')">
+  <svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+    <circle cx="12" cy="7" r="4"/>
+  </svg>
+  Clients ({{ clientUsers.length }})
+  <span class="tab-badge" *ngIf="clientUnreadCount > 0">{{ clientUnreadCount > 99 ? '99+' : clientUnreadCount }}</span>
+</button>
 </div>
 
       <div class="chat-layout">
         <div class="chat-users-panel">
           <div class="search-box">
             <input type="text" [(ngModel)]="searchTerm" (input)="filterUsers()" placeholder="Search users..." class="search-input">
-            <span class="search-icon">🔍</span>
+            <span class="search-icon">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="11" cy="11" r="8"/>
+    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+</span>
           </div>
-          
           <div class="users-list">
           <div class="user-item" *ngFor="let user of filteredUsers" 
      [class.active]="selectedUser?.username === user.username" 
      (click)="selectUser(user)">
-  
   <div class="user-avatar-wrapper" 
        (mouseenter)="showUserInfo = user; tooltipX = $event.clientX; tooltipY = $event.clientY" 
        (mouseleave)="showUserInfo = null">
@@ -84,7 +110,6 @@ interface ChatMessage {
       <span *ngIf="!user.photo_url">{{ getInitials(user.fullname) }}</span>
       <span class="status-dot" [class.online]="isUserOnline(user)"></span>
     </div>
-    
     <!-- ✅ Popup info card that appears on hover -->
     <div class="user-info-popup" *ngIf="showUserInfo === user">
       <div class="popup-name">{{ user.fullname }}</div>
@@ -126,7 +151,15 @@ interface ChatMessage {
 </div>
   </div>
   <div class="chat-header-actions">
-    <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
+    <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation"> <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg></button>
   </div>
 </div>
 
@@ -146,8 +179,29 @@ interface ChatMessage {
             <div class="message" *ngFor="let msg of messages" [class.my-message]="msg.from_username === currentUsername">
               <!-- Reply button on ALL messages, Delete only on OWN messages -->
               <div class="message-actions">
-                <button class="action-btn reply-btn" (click)="replyToMessage(msg)" title="Reply">↩️</button>
-                <button class="action-btn delete-btn" *ngIf="msg.from_username === currentUsername" (click)="deleteMessage(msg.id)" title="Delete">🗑️</button>
+               <button class="action-btn reply-btn" (click)="replyToMessage(msg)" title="Reply" aria-label="Reply">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="9 17 4 12 9 7"/>
+    <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+  </svg>
+</button>
+               <button class="action-btn delete-btn"
+        *ngIf="msg.from_username === currentUsername"
+        (click)="deleteMessage(msg.id)"
+        title="Delete"
+        aria-label="Delete">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+</button>
               </div>
               <div class="message-bubble" [class.has-reply]="msg.reply_to_id">
                 <!-- Reply Reference -->
@@ -162,7 +216,13 @@ interface ChatMessage {
                     <img [src]="this.apiUrl + msg.file_url" [alt]="msg.file_name" (click)="openImage(this.apiUrl + msg.file_url)">
                   </div>
                   <div class="file-info" *ngIf="!isImageFile(msg.file_type)">
-                    <span class="file-icon">📎</span>
+                    <span class="file-icon" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </svg>
+</span>
                     <a [href]="this.apiUrl + msg.file_url" target="_blank" class="file-name">{{ msg.file_name }}</a>
                   </div>
                 </div>
@@ -187,7 +247,15 @@ interface ChatMessage {
           <!-- File Preview Before Sending -->
           <div class="file-send-preview" *ngIf="selectedFile">
             <div class="file-send-info">
-              <span class="file-icon">📎</span>
+              <span class="file-icon"><span class="file-icon" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <rect x="6" y="4" width="12" height="18" rx="1"/>
+    <rect x="8" y="2" width="8" height="4" rx="1"/>
+    <line x1="9" y1="10" x2="15" y2="10"/>
+  </svg>
+</span></span>
               <span class="file-name">{{ selectedFile.name }}</span>
               <span class="file-size">({{ formatFileSize(selectedFile.size) }})</span>
             </div>
@@ -196,7 +264,15 @@ interface ChatMessage {
 
           <div class="message-input-area">
             <label class="attach-btn" title="Attach file">
-              📎
+              <span class="file-icon" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <rect x="6" y="4" width="12" height="18" rx="1"/>
+    <rect x="8" y="2" width="8" height="4" rx="1"/>
+    <line x1="9" y1="10" x2="15" y2="10"/>
+  </svg>
+</span>
               <input type="file" (change)="onFileSelected($event)" accept="image/*,.pdf,.doc,.docx,.txt,.xls,.xlsx" hidden>
             </label>
             <textarea [(ngModel)]="newMessage" (keyup.enter)="sendMessage($event)" placeholder="Type your message..." rows="2" class="message-input"></textarea>
@@ -205,7 +281,11 @@ interface ChatMessage {
         </div>
 
         <div class="no-user-selected" *ngIf="!selectedUser">
-          <div class="no-user-content">💬<h3>Select a conversation</h3><p>Choose a user from the list to start chatting</p></div>
+          <div class="no-user-content"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg><h3>Select a conversation</h3><p>Choose a user from the list to start chatting</p></div>
         </div>
       </div>
       
@@ -218,7 +298,15 @@ interface ChatMessage {
       <!-- Confirmation Dialog -->
       <div class="confirm-overlay" *ngIf="showConfirmDialog" (click)="cancelConfirm()">
         <div class="confirm-dialog" (click)="$event.stopPropagation()">
-          <div class="confirm-icon">⚠️</div>
+          <div class="confirm-icon" aria-hidden="true">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+    <line x1="12" y1="9" x2="12" y2="13"/>
+    <line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+</div>
           <h3>Confirm Action</h3>
           <p>{{ confirmMessage }}</p>
           <div class="confirm-actions">
@@ -415,7 +503,22 @@ interface ChatMessage {
     .file-attachment { margin-bottom: 8px; }
     .file-preview img { max-width: 200px; max-height: 150px; border-radius: 8px; cursor: pointer; }
     .file-info { display: flex; align-items: center; gap: 8px; padding: 8px; background: rgba(0,0,0,0.05); border-radius: 8px; }
-    .file-icon { font-size: 20px; }
+    .file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #0a246a;              /* or 'currentColor' to inherit */
+  vertical-align: middle;
+  /* remove: font-size: 20px  ← it does nothing for SVG */
+}
+  .file-icon svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  stroke: currentColor;
+  display: block;              /* prevents baseline gap */
+}
     .file-name { color: #0a246a; text-decoration: none; font-size: 12px; }
     .file-name:hover { text-decoration: underline; }
 

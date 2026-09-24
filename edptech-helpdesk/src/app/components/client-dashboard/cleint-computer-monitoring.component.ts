@@ -236,7 +236,6 @@ import * as XLSX from 'xlsx';
         <th>Office Activation</th>
         <th>Office Expiry</th>
         <th>AV Status</th>
-        <!-- ✅ Show Cleaning Date column when in cleaning mode -->
         <th *ngIf="showCleanedOnly">Cleaning Date</th>
         <th>Status</th>
         <th>Actions</th>
@@ -250,11 +249,17 @@ import * as XLSX from 'xlsx';
   
   <td>
     <strong>{{ pc.computer_name }}</strong>
-    <!-- ✅ Show notification badge if this PC has active notifications -->
+    <!-- Show notification badge if this PC has active notifications -->
     <span *ngIf="pc.hasWarning" class="row-notif-badge" [title]="pc.activeNotifications[0]?.message">
-      {{ pc.notificationCount > 1 ? '🔔×' + pc.notificationCount : '🔔' }}
-    </span>
-  </td>
+  <svg class="bell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+  </svg>
+  <span class="bell-count" *ngIf="pc.notificationCount > 1">×{{ pc.notificationCount }}</span>
+</span>
+  </td>     
         <td>{{ pc.user_name || '—' }}</td>
         <td><span class="location-badge" *ngIf="pc.location">📍 {{ pc.location }}</span><span *ngIf="!pc.location">—</span></td>
         <td><code>{{ pc.ip_address }}</code></td>
@@ -291,7 +296,7 @@ import * as XLSX from 'xlsx';
             <small>Updated: {{ pc.av_last_update | date:'MMM yyyy' }}</small>
           </div>
         </td>
-        <!-- ✅ Show last cleaning date for this PC -->
+        <!--  Show last cleaning date for this PC -->
          <td *ngIf="showCleanedOnly">
   <span class="cleaning-date-badge">{{ getLastCleaningDate(pc.id) | date:'MMM d, yyyy' }}</span>
 </td>
@@ -366,7 +371,6 @@ import * as XLSX from 'xlsx';
       <div class="empty-title">No computers yet</div>
       <div class="empty-sub">Please add a computer to get started.</div>
     </div>
-
     <!-- Filtered out -->
     <div *ngIf="!isLoading && pcs.length > 0">No computers found</div>
   </td>
@@ -375,7 +379,6 @@ import * as XLSX from 'xlsx';
   </table>
 </div>
     </div>
-
     <!-- Add/Edit Modal - Original format restored -->
     <div class="modal-overlay" *ngIf="showModal">
   <div class="modal-content" id="editModal" (click)="$event.stopPropagation()" 
@@ -576,7 +579,7 @@ import * as XLSX from 'xlsx';
             </div>
             <div class="form-group half"></div>
           </div>
-          <!-- ✅ ADD THESE OFFICE FIELDS TO THE ADD/EDIT MODAL -->
+          <!--  ADD THESE OFFICE FIELDS TO THE ADD/EDIT MODAL -->
 <div class="form-row">
   <div class="form-group half">
     <label>Office Activation Date:</label>
@@ -823,7 +826,7 @@ import * as XLSX from 'xlsx';
   </div>
   <small class="hint-text" *ngIf="selectedCleaningStorages.length === 0">Add one or more storage devices</small>
 </div>
-            <!-- ✅ ADD PROCESSOR FIELD -->
+            <!--  ADD PROCESSOR FIELD -->
 <div class="form-group">
   <label>Processor:</label>
   <input type="text" [(ngModel)]="cleaningForm.processor" class="form-input" placeholder="e.g., Intel Core i5-12400, AMD Ryzen 5">
@@ -926,7 +929,7 @@ import * as XLSX from 'xlsx';
             </select>
           </div>
           
-          <!-- ✅ ADD SORTING CONTROLS -->
+          <!-- ADD SORTING CONTROLS -->
           <div class="filter-group">
             <label>Sort By:</label>
             <select [(ngModel)]="cleaningSortField" (change)="applyCleaningFilters()" class="form-input">
@@ -1203,7 +1206,22 @@ import * as XLSX from 'xlsx';
     </div>
   `,
    styles: [`
-    .monitoring-container{padding:16px;font-family:'Segoe UI',sans-serif;font-size:11px}
+    html,
+body {
+  user-select: text;
+  -webkit-user-select: text;
+}
+  .app-container,
+.client-dashboard,
+.monitoring-container,
+.content-area,
+.main-content,
+.main-layout,
+.table-container {
+  user-select: text;
+  -webkit-user-select: text;
+}
+    .monitoring-container{padding:3px;font-family:'Segoe UI',sans-serif;font-size:11px}
     .page-header{margin-bottom:12px;padding-bottom:8px;border-bottom:2px solid #e0e0e0}
     .page-header h2{margin:0 0 2px 0;color:#0a246a;font-size:16px}
     .header-sub{color:#666;font-size:10px}
@@ -1229,9 +1247,18 @@ import * as XLSX from 'xlsx';
     .notif-close:hover{color:#cc0000}
     .notif-toggle{width:100%;padding:4px;background:none;border:none;cursor:pointer;font-size:9px;color:#0a246a}
     .filter-bar{display:flex;gap:8px;align-items:center;padding:8px 10px;background:#f8f8f8;border:1px solid #c0c0c0;position:sticky;top:0;z-index:10}
-    .table-container{background:#fff;border:1px solid #c0c0c0;overflow-y:auto;max-height:calc(100vh - 280px)}
-    .data-table{width:100%;border-collapse:collapse}
-    .data-table th{background:#f0f4f8;padding:8px 8px;font-size:9px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:2px solid #d0d0d0;text-align:left;position:sticky;top:0;z-index:5;white-space:nowrap}
+    .table-container{background:#fff;border:1px solid #c0c0c0;overflow-y:auto;}
+    .table-container {
+  background: #fff;
+  border: 1px solid #c0c0c0;
+  overflow: auto;
+  max-height: calc(100vh - 280px);
+}
+.data-table td, .data-table th, .data-table td *, .data-table th * { user-select: text !important; -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; }
+.data-table td, .data-table th { cursor: text; }
+.data-table td.actions-cell, .data-table td.actions-cell * { user-select: none !important; -webkit-user-select: none !important; cursor: default !important; }
+.row-notif-badge, .row-notif-badge * { user-select: none !important; -webkit-user-select: none !important; cursor: help; }
+    .data-table th{background:#f0f4f8;padding:8px 8px;font-size:10px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:2px solid #d0d0d0;text-align:center;position:sticky;top:1px;z-index:5;white-space:nowrap}
     .data-table td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10px;color:#333}
     .filter-input{padding:4px 8px;border:1px solid #c0c0c0;font-size:10px;width:160px}
     .filter-select{padding:4px 8px;border:1px solid #c0c0c0;font-size:10px}
@@ -1265,9 +1292,9 @@ import * as XLSX from 'xlsx';
     .action-btn.clean:hover{background:#e8ffe8;border-color:#008800}
     .empty-row{text-align:center;padding:24px;color:#888}
     .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000}
-    /* ✅ SINGLE modal-content rule with centering */
+    /* SINGLE modal-content rule with centering */
     .modal-content{background:#fff;width:90%;max-width:650px;max-height:85vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,0.3);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%)}
-    /* ✅ When dragged (has inline left style), remove the transform centering */
+    /* When dragged (has inline left style), remove the transform centering */
     .modal-content[style*="left:"]{transform:none}
     .detail-modal{max-width:700px}
     .confirm-modal{max-width:380px}
@@ -2257,15 +2284,31 @@ selectedCleaningStorages: string[] = [];
 ];
   constructor(private http: HttpClient) {}
 
-  ngOnInit() {
-    this.loadFromCacheOrServer();
-    this.loadDepartments();
-    this.loadExistingLocations();
-    this.loadDismissedNotifications();
-    this.loadCleanedPCIds();
-    document.addEventListener('mousemove', this.onDragMove.bind(this));
-    document.addEventListener('mouseup', this.onDragEnd.bind(this));
+ngOnInit() {
+  // ✅ Cache-branch guard: clear cache if the logged-in user belongs to
+  //    a different branch than the one the cache was built for.
+  const cachedBranch = localStorage.getItem('client_computer_monitoring_cache_branch');
+  const currentBranch = String(
+    JSON.parse(localStorage.getItem('currentUser') || '{}')?.branch_id || ''
+  );
+
+  if (cachedBranch && cachedBranch !== currentBranch) {
+    console.log(`🗑️ Branch changed (${cachedBranch} → ${currentBranch}) — clearing cache`);
+    localStorage.removeItem('client_computer_monitoring_cache_v1');
+    localStorage.removeItem('client_computer_monitoring_cache_expiry_v1');
+    localStorage.removeItem('client_cleaning_records');
   }
+  localStorage.setItem('client_computer_monitoring_cache_branch', currentBranch);
+
+  // Everything else runs as before
+  this.loadFromCacheOrServer();
+  this.loadDepartments();
+  this.loadExistingLocations();
+  this.loadDismissedNotifications();
+  this.loadCleanedPCIds();
+  document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+}
 
   ngOnDestroy() {
     document.removeEventListener('mousemove', this.onDragMove.bind(this));
@@ -4281,23 +4324,24 @@ isOfficeExpiredForm(): boolean {
     } catch { return null; }
   }
 
-  saveToCache(data: any[]) {
-    if (!data || data.length === 0) return;
-    try {
-      localStorage.setItem(this.cacheKey, JSON.stringify(data));
-      localStorage.setItem(this.cacheExpiryKey, (Date.now() + this.CACHE_DURATION).toString());
-    } catch (e) {
-      console.warn('Cache save failed:', e);
-    }
+ saveToCache(data: any[]) {
+  if (!data || data.length === 0) return;
+  try {
+    localStorage.setItem(this.cacheKey, JSON.stringify(data));
+    localStorage.setItem(this.cacheExpiryKey, (Date.now() + this.CACHE_DURATION).toString());
+    const currentBranch = String(
+      JSON.parse(localStorage.getItem('currentUser') || '{}')?.branch_id || ''
+    );
+    localStorage.setItem('client_computer_monitoring_cache_branch', currentBranch);
+  } catch (e) {
+    console.warn('Cache save failed:', e);
   }
+}
 savePC() {
-  // ✅ Check required fields
   if (!this.formData.computer_name || !this.formData.ip_address) {
     this.showToastMsg('Computer Name and IP Address are required!', 'error'); 
     return;
   }
-  
-  // ✅ Check for duplicate computer name
   const trimmedName = this.formData.computer_name.trim();
   const existingPC = this.pcs.find(pc => 
     pc.computer_name && 
@@ -4315,8 +4359,6 @@ savePC() {
   const url = this.editingPC 
     ? `${this.apiUrl}/api/client-computers/${this.editingPC.id}` 
     : `${this.apiUrl}/api/client-computers`;
-  
-  // ✅ Calculate office activation status before saving
   if (this.formData.office_activation_date && this.formData.office_expiry) {
     const now = new Date();
     const expiry = new Date(this.formData.office_expiry);
@@ -4331,28 +4373,23 @@ savePC() {
   request.subscribe({
     next: (response: any) => {
       this.showModal = false;
-      // ✅ Update local pcs array immediately
       if (this.editingPC) {
-        // Editing existing PC
         const idx = this.pcs.findIndex(p => p.id === this.editingPC!.id);
         if (idx >= 0) {
-          // Update the local PC data with form data
           Object.assign(this.pcs[idx], this.formData);
         }
       } else {
-        // Adding new PC - add to local array
         const newId = response?.id || Date.now();
         this.pcs.push({ ...this.formData, id: newId, status: 'online' });
       }
-      // Save to cache and refresh display
       this.saveToCache(this.pcs);
       this.extractLocationsFromPCs();
       this.applyFilters();
       this.generateNotifications();
       this.originalIpAddress = '';
-      this.originalComputerName = '';  // ✅ Reset computer name
+      this.originalComputerName = '';
       this.isFromCache = false;
-      this.showToastMsg(this.editingPC ? '✅ PC updated!' : '✅ PC added!', 'success');
+      this.showToastMsg(this.editingPC ? ' PC updated!' : ' PC added!', 'success');
       this.loadPCsFromServer(true);
     },
     error: (err) => {
@@ -4364,7 +4401,7 @@ savePC() {
 }
  deletePC(pc: any) {
   this.deleteTarget = pc;
-  this.centerModal('deleteModal'); // ✅ Center the modal
+  this.centerModal('deleteModal');
   this.showDeleteModal = true;
 }
   confirmDelete() {

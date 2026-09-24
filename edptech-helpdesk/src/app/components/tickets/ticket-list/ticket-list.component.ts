@@ -662,6 +662,7 @@ import { ClientNotificationService } from '../../../services/client-notification
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
     .clickable-row { cursor: pointer; }
     .clickable-row:hover { background: #e8f0ff; }
     /* Ticket Code & Creator */
@@ -766,6 +767,8 @@ import { ClientNotificationService } from '../../../services/client-notification
   vertical-align: middle;
   margin: 0;
 }
+  .retro-table td, .retro-table th, .retro-table td *, .retro-table th * { user-select: text !important; -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; cursor: text; }
+.retro-table td.action-cell, .retro-table td.action-cell *, .retro-table th:first-child, .retro-table th:first-child * { user-select: none !important; -webkit-user-select: none !important; cursor: default !important; }
     .action-btn:hover { background: #e8f0ff; }
     .action-btn:active { border-color: #808080 #fff #fff #808080; }
     .empty-row td { text-align: center; padding: 30px; background: #f9f9f9; }

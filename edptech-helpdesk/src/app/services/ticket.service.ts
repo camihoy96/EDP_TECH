@@ -136,6 +136,11 @@ private startPolling(): void {
       this.lastCheckTime = new Date();
     });
 }
+getDepartmentsByBranch(branchId: number) {
+  return this.http.get<any[]>(
+    `${environment.apiUrl}/api/public/branches/${branchId}/role-departments`
+  );
+}
 private hasTicketDataChanged(newTickets: Ticket[]): boolean {
   const currentStored = this.ticketsSubject.value;
   if (currentStored.length !== newTickets.length) return true;

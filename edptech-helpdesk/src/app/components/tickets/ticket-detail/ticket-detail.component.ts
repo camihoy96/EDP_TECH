@@ -413,7 +413,7 @@ import { ClientNotificationService } from '../../../services/client-notification
   <button class="retro-btn" (click)="goBack()">Go Back</button>
 </div>
   `,
-  styles: [`
+ styles: [`
     :host { display: block; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
     
     .ticket-detail-view { padding: 8px; background: #d4d0c8; min-height: 100%; }
@@ -883,6 +883,10 @@ import { ClientNotificationService } from '../../../services/client-notification
     .status-pending { background: #ffe0cc; color: #cc6600; }
     .status-resolved { background: #ccffcc; color: #008800; }
     .status-closed { background: #f0f0f0; color: #666; }
+    .ticket-detail-view, .ticket-detail-view * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .ticket-detail-view button, .ticket-detail-view button *, .ticket-detail-view select, .ticket-detail-view select *, .ticket-detail-view .retro-btn, .ticket-detail-view .retro-btn *, .ticket-detail-view .modal-close, .ticket-detail-view .comment-action-btn, .ticket-detail-view .comment-action-btn *, .ticket-detail-view .file-download, .ticket-detail-view .viewer-close, .ticket-detail-view .viewer-nav, .ticket-detail-view .agent-item, .ticket-detail-view .agent-item *, .ticket-detail-view .agent-checkbox, .ticket-detail-view .image-thumb, .ticket-detail-view .image-thumb *, .ticket-detail-view .badge-group, .ticket-detail-view .badge-group * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .ticket-detail-view .info-value, .ticket-detail-view .info-value *, .ticket-detail-view .description-content, .ticket-detail-view .description-content *, .ticket-detail-view .comment-text, .ticket-detail-view .comment-text *, .ticket-detail-view .comment-author, .ticket-detail-view .comment-date, .ticket-detail-view .ticket-title, .ticket-detail-view .retro-header h2, .ticket-detail-view .file-name, .ticket-detail-view .file-size, .ticket-detail-view .assign-display, .ticket-detail-view .assign-display *, .ticket-detail-view .warning-message, .ticket-detail-view .warning-message *, .ticket-detail-view .resolve-title, .ticket-detail-view .comment-preview, .ticket-detail-view .summary-label, .ticket-detail-view .summary-count, .ticket-detail-view .selected-count, .ticket-detail-view .empty-state p, .ticket-detail-view .loading-state p, .ticket-detail-view .error-state p { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .ticket-detail-view input, .ticket-detail-view textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
   `]
 })
 export class TicketDetailComponent implements OnInit {

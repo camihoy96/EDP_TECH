@@ -45,7 +45,14 @@ interface ChatMessage {
     <div class="chat-container">
       <div class="chat-header">
         <div class="chat-header-left">
-          <h2>💬 Messages</h2>
+          <h2 class="messages-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2"
+         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    Messages
+  </h2>
         </div>
         <div class="chat-header-right">
           <span class="branch-badge" *ngIf="currentBranch">🏢 {{ currentBranch.name }}</span>
@@ -107,7 +114,17 @@ interface ChatMessage {
 </div>
             </div>
             <div class="chat-header-actions">
-              <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">🗑️</button>
+             <button class="delete-convo-btn" (click)="deleteConversation()" title="Delete conversation">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6"/>
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg>
+</button>
             </div>
           </div>
 
@@ -127,7 +144,15 @@ interface ChatMessage {
             <div class="message" *ngFor="let msg of messages" [class.my-message]="msg.from_username === currentUsername">
               <div class="message-actions">
                 <button class="action-btn reply-btn" (click)="replyToMessage(msg)" title="Reply">↩️</button>
-                <button class="action-btn delete-btn" *ngIf="msg.from_username === currentUsername" (click)="deleteMessage(msg.id)" title="Delete">🗑️</button>
+                <button class="action-btn delete-btn" *ngIf="msg.from_username === currentUsername" (click)="deleteMessage(msg.id)" title="Delete">  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="3 6 5 6 21 6"/> 
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+    <path d="M10 11v6"/>
+    <path d="M14 11v6"/>
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+  </svg></button>
               </div>
               <div class="message-bubble" [class.has-reply]="msg.reply_to_id">
                 <div class="reply-reference" *ngIf="msg.reply_to_id" (click)="scrollToMessage(msg.reply_to_id)">
@@ -141,7 +166,13 @@ interface ChatMessage {
                     <img [src]="apiUrl + msg.file_url" [alt]="msg.file_name" (click)="openImage(apiUrl + msg.file_url)">
                   </div>
                   <div class="file-info" *ngIf="!isImageFile(msg.file_type)">
-                    <span class="file-icon">📎</span>
+                    <span class="file-icon" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </svg>
+</span>
                     <a [href]="apiUrl + msg.file_url" target="_blank" class="file-name">{{ msg.file_name }}</a>
                   </div>
                 </div>
@@ -153,7 +184,13 @@ interface ChatMessage {
               </div>
             </div>
             <div class="no-messages" *ngIf="messages.length === 0">
-              <span>💬</span>
+              <span class="ico-wrap" aria-hidden="true">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+</span>
               <p>Start a conversation!</p>
             </div>
             
@@ -189,7 +226,11 @@ interface ChatMessage {
 
         <div class="no-user-selected" *ngIf="!selectedUser">
           <div class="no-user-content">
-            <span>💬</span>
+            <span> <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+       stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg></span>
             <h3>Select a conversation</h3>
             <p>Choose a user from the list to start chatting</p>
           </div>

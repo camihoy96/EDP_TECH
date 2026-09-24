@@ -904,10 +904,21 @@ import { environment } from '../../../../environments/environment';
     .modal-titlebar.warning {
         background: linear-gradient(180deg, #ffc107 0%, #d39e00 100%);
     }
-    
-    .modal-titlebar.info {
+      .modal-titlebar.info {
         background: linear-gradient(180deg, #17a2b8 0%, #117a8b 100%);
     }
+    .user-mgmt-container, .user-mgmt-container * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .user-mgmt-container button, .user-mgmt-container button *, .user-mgmt-container select, .user-mgmt-container select *, .user-mgmt-container .retro-btn, .user-mgmt-container .retro-btn *, .user-mgmt-container .status-tab, .user-mgmt-container .status-tab *, .user-mgmt-container .action-btn, .user-mgmt-container .action-btn *, .user-mgmt-container .modal-close, .user-mgmt-container .modal-titlebar, .user-mgmt-container .modal-titlebar *, .user-mgmt-container .page-btn, .user-mgmt-container .page-btn *, .user-mgmt-container .clickable-avatar, .user-mgmt-container .role-badge, .user-mgmt-container .status-with-dot, .user-mgmt-container .user-avatar-sm, .user-mgmt-container .tab-count { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .user-mgmt-container .retro-table td, .user-mgmt-container .retro-table th, .user-mgmt-container .retro-table td *, .user-mgmt-container .retro-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .user-mgmt-container .retro-table td.action-cell, .user-mgmt-container .retro-table td.action-cell *, .user-mgmt-container .retro-table th:last-child, .user-mgmt-container .retro-table th:last-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .user-mgmt-container .branch-group-header td, .user-mgmt-container .branch-group-header td *, .user-mgmt-container .dept-group-header td, .user-mgmt-container .dept-group-header td * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .user-mgmt-container .key-code, .user-mgmt-container .key-code *, .user-mgmt-container .you-label, .user-mgmt-container .empty-row, .user-mgmt-container .page-info, .user-mgmt-container .retro-status-bar, .user-mgmt-container .retro-status-bar * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .user-mgmt-container input, .user-mgmt-container textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .modal-overlay, .modal-overlay *, .modal-window, .modal-window * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .modal-window button, .modal-window button *, .modal-window select, .modal-window select *, .modal-close, .modal-titlebar, .modal-titlebar * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .modal-titlebar { cursor: grab; }
+    .modal-titlebar:active { cursor: grabbing; }
+    .modal-window .warning-message, .modal-window .warning-message *, .modal-window .warning-hint, .modal-window .form-field label, .modal-window .notification-message, .modal-window .notification-message *, .modal-window .notification-details, .modal-window .profile-field, .modal-window .profile-field *, .modal-window .profile-header-info h3, .modal-window .profile-section-title, .modal-window .profile-role-badge, .modal-window .profile-status, .modal-window .locked-info, .modal-window .failed-attempts { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
   `]
 })
 export class UserManagementComponent implements OnInit {

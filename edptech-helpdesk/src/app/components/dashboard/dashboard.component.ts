@@ -108,18 +108,26 @@ import { ReportModalComponent } from './report-modal.component';
   
   <!-- Show/Hide Sidebar -->
   <div class="dropdown-item" (click)="toggleSidebar()">
-    <svg *ngIf="sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-      <polyline points="12 11 15 14 12 17"/>
-      <line x1="15" y1="14" x2="9" y2="14"/>
-    </svg>
-    <svg *ngIf="!sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-      <polyline points="9 11 6 14 9 17"/>
-      <line x1="6" y1="14" x2="12" y2="14"/>
-    </svg>
+  <svg *ngIf="sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    <polyline points="12 11 15 14 12 17"/>
+    <line x1="15" y1="14" x2="9" y2="14"/>
+  </svg>
+  <svg *ngIf="!sidebarHidden" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    <polyline points="9 11 6 14 9 17"/>
+    <line x1="6" y1="14" x2="12" y2="14"/>
+  </svg>
+
+  <span class="dropdown-label">
     {{ sidebarHidden ? 'Show Sidebar' : 'Hide Sidebar' }}
-  </div>
+  </span>
+
+  <!-- Combined notification count badge -->
+  <span *ngIf="getSidebarDropdownCount() > 0" class="dropdown-badge">
+    {{ getSidebarDropdownCount() > 99 ? '99+' : getSidebarDropdownCount() }}
+  </span>
+</div>
   
   <div class="dropdown-divider"></div>
   
@@ -1842,6 +1850,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   totalUnreadCount: number = 0;
   unreadMessagesCount = 0;
   showLogoutConfirmModal = false;
+  private notifCountInterval: any;
   // Dragging properties
 private isDragging = false;
 private dragOffsetX = 0;
@@ -1869,24 +1878,47 @@ private get seenReqNotificationIds(): Set<number> {
   @ViewChild(AiAssistantComponent) aiAssistant!: AiAssistantComponent;
 
   ngOnInit() {
-   this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
-    this.setupSubscriptions();
-     this.loadNotificationCount();
-    this.verifyAuthentication();
-    this.loadReadOrdersFromStorage();
-    this.loadNotificationMapFromStorage();
-    this.loadJobOrdersCount();
-    document.addEventListener('mousemove', this.onDragMove.bind(this));
-    document.addEventListener('mouseup', this.onDragEnd.bind(this));
-    this.router.events.pipe(
-  filter(event => event instanceof NavigationEnd)
-).subscribe((event: any) => {
-  if (event.url.includes('/admin/requisitions')) {
-    this.markRequisitionNotificationsAsRead();
-  }
-  setInterval(() => this.loadNotificationCount(), 30000);
-});
-  }
+  this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+  this.setupSubscriptions();
+  //  Initial badge render from whatever's already in localStorage
+  this.loadNotificationCount();
+  this.verifyAuthentication();
+  this.loadReadOrdersFromStorage();
+  this.loadNotificationMapFromStorage();
+  this.loadJobOrdersCount();
+  document.addEventListener('mousemove', this.onDragMove.bind(this));
+  document.addEventListener('mouseup', this.onDragEnd.bind(this));
+  // OPTION A: Fetch cleaning records once so Rule 1 works on first load
+  this.loadCleaningRecordsForBadge().then(records => {
+    try {
+      localStorage.setItem('cleaning_records_api_cache', JSON.stringify(records));
+    } catch (e) {
+      console.warn('Could not cache cleaning records (quota?):', e);
+    }
+    // Re-run badge count with the fresh cleaning records available
+    this.loadNotificationCount();
+  });
+  // Poll the badge count every 15 seconds (was 30s, and wrongly nested before)
+  this.notifCountInterval = setInterval(() => this.loadNotificationCount(), 15000);
+  // Router events — only handle requisition read-marking here
+  this.router.events
+    .pipe(
+      filter(event => event instanceof NavigationEnd),
+      takeUntil(this.destroy$)
+    )
+    .subscribe((event: any) => {
+      if (event.url.includes('/admin/requisitions')) {
+        this.markRequisitionNotificationsAsRead();
+      }
+      // Refresh badge when navigating (in case user left a page that changed data)
+      this.loadNotificationCount();
+    });
+}
+// Add this listener so the badge updates when the user returns to the tab
+@HostListener('window:focus')
+onWindowFocus() {
+  this.loadNotificationCount();
+}
 checkSystemStatus() {
   // Check API connection
   this.ticketService.getTickets().subscribe({
@@ -1948,20 +1980,53 @@ startDrag(event: MouseEvent, modalId: string) {
   event.preventDefault();
 }
 loadNotificationCount() {
-    // Get dismissed notifications with proper type casting
-    const stored = localStorage.getItem('dismissed_computer_notifications');
-    let dismissedSet: Set<string> = new Set<string>();
-    
-    if (stored) {
-      try {
-        const parsed: string[] = JSON.parse(stored);
-        dismissedSet = new Set<string>(parsed);
-      } catch (e) {
-        dismissedSet = new Set<string>();
-      }
+  const stored = localStorage.getItem('dismissed_computer_notifications');
+  let dismissedSet: Set<string> = new Set<string>();
+
+  if (stored) {
+    try {
+      const parsed: string[] = JSON.parse(stored);
+      dismissedSet = new Set<string>(parsed);
+    } catch {
+      dismissedSet = new Set<string>();
     }
-    
-    this.computerMonitoringNotifCount = this.getActiveNotificationCount(dismissedSet);
+  }
+
+  this.computerMonitoringNotifCount = this.getActiveNotificationCount(dismissedSet);
+}
+
+// ✅ Load cleaning records once so the badge respects Rule 1
+private loadCleaningRecordsForBadge(): Promise<any[]> {
+  return new Promise((resolve) => {
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    if (!token) { resolve([]); return; }
+    const headers = { 'Authorization': `Bearer ${token}` };
+    this.http.get<any[]>(
+      `${environment.apiUrl}/api/computers/cleaning/all-records`,
+      { headers }
+    ).subscribe({
+      next: (data) => {
+        const apiRecords = Array.isArray(data) ? data : [];
+        // Merge localStorage (offline fallback)
+        try {
+          const local = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+          local.forEach((lr: any) => {
+            const exists = apiRecords.some((r: any) => Number(r.id) === Number(lr.id));
+            if (!exists) apiRecords.push(lr);
+          });
+        } catch { /* ignore */ }
+        resolve(apiRecords);
+      },
+      error: () => {
+        // Fallback to localStorage only
+        try {
+          resolve(JSON.parse(localStorage.getItem('cleaning_records') || '[]'));
+        } catch {
+          resolve([]);
+        }
+      }
+    });
+  });
 }
 getUserPhotoUrl(): string {
   if (!this.currentUser?.photo_url) return '';
@@ -1985,46 +2050,95 @@ getUserPhotoUrl(): string {
 onUserPhotoError() {
   this.userPhotoError = true;
 }
-  getActiveNotificationCount(dismissedSet: Set<string>): number {
-    const stored = localStorage.getItem('computer_monitoring_cache_v3');
-    if (!stored) return 0;
-    
-    let pcs: any[] = [];
-    try {
-      pcs = JSON.parse(stored);
-      if (!Array.isArray(pcs)) return 0;
-    } catch (e) {
-      return 0;
+/**
+ * Count active notifications the same way the computer-monitoring page does.
+ * Rules:
+ *  1. Only PCs that have at least one cleaning record
+ *  2. AV notifications only fire for Trellix
+ *  3. Key format matches `pc_${id}_${safeName}`
+ */
+getActiveNotificationCount(dismissedSet: Set<string>): number {
+  const stored = localStorage.getItem('computer_monitoring_cache_v3');
+  if (!stored) return 0;
+
+  let pcs: any[] = [];
+  try {
+    pcs = JSON.parse(stored);
+    if (!Array.isArray(pcs)) return 0;
+  } catch {
+    return 0;
+  }
+
+  // Build a set of PC IDs that have cleaning records (Rule 1)
+  const cleanedIds = new Set<number>();
+  const cleanedNames = new Set<string>();
+
+  // From localStorage (fast, available immediately)
+  try {
+    const localRecords = JSON.parse(localStorage.getItem('cleaning_records') || '[]');
+    localRecords.forEach((r: any) => {
+      if (r.computer_id) cleanedIds.add(Number(r.computer_id));
+      if (r.computer_name) cleanedNames.add(String(r.computer_name).toLowerCase().trim());
+    });
+  } catch { /* ignore */ }
+
+  // From API cache (may be populated by loadCleaningRecordsForBadge)
+  try {
+    const apiCache = JSON.parse(localStorage.getItem('cleaning_records_api_cache') || '[]');
+    apiCache.forEach((r: any) => {
+      if (r.computer_id) cleanedIds.add(Number(r.computer_id));
+      if (r.computer_name) cleanedNames.add(String(r.computer_name).toLowerCase().trim());
+    });
+  } catch { /* ignore */ }
+
+  let count = 0;
+
+  pcs.forEach((pc: any) => {
+    const pcId = Number(pc.id);
+    if (!pcId) return;
+
+    const pcName = (pc.computer_name || 'unknown').toLowerCase().trim();
+
+    // RULE 1: Skip if this PC has no cleaning records
+    const hasCleaning = cleanedIds.has(pcId) || cleanedNames.has(pcName);
+    if (!hasCleaning) return;
+
+    // Key format must match computer-monitoring.component.ts
+    const notifKey = `pc_${pc.id}_${pcName}`;
+
+    // ── License ──
+    if (pc.license_expiry) {
+      const days = this.getDaysRemaining(pc.license_expiry);
+      if (days <= 0 && !dismissedSet.has(`${notifKey}_license_expired`)) count++;
+      else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_license_expiring`)) count++;
     }
-    
-    let count = 0;
-    
-    pcs.forEach((pc: any) => {
-      const notifKey = `pc_${pc.id}`;
-      
-      // Check license expiry
-      if (pc.license_expiry) {
-        const days = this.getDaysRemaining(pc.license_expiry);
-        if (days <= 0 && !dismissedSet.has(`${notifKey}_license_expired`)) count++;
-        else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_license_expiring`)) count++;
-      }
-      
-      // Check office expiry
-      if (pc.office_expiry) {
-        const days = this.getDaysRemaining(pc.office_expiry);
-        if (days <= 0 && !dismissedSet.has(`${notifKey}_office_expired`)) count++;
-        else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_office_expiring`)) count++;
-      }
-      
-      // Check AV updates
+
+    // ── Office ──
+    if (pc.office_expiry) {
+      const days = this.getDaysRemaining(pc.office_expiry);
+      if (days <= 0 && !dismissedSet.has(`${notifKey}_office_expired`)) count++;
+      else if (days <= 30 && days > 0 && !dismissedSet.has(`${notifKey}_office_expiring`)) count++;
+    }
+
+    // ── AV (Trellix only — Rule 2) ──
+    const avName = (pc.antivirus || '').trim().toLowerCase();
+    if (avName === 'trellix') {
+      // No AV update on record
+      const hasNoAVUpdate = !pc.av_last_update || pc.av_last_update === '0000-00-00' || pc.av_last_update === '';
+      if (hasNoAVUpdate && !dismissedSet.has(`${notifKey}_no_av_update`)) count++;
+
+      // Overdue / due soon
       if (pc.av_next_update) {
         const days = this.getDaysRemaining(pc.av_next_update);
-        if (days <= 0 && !dismissedSet.has(`${notifKey}_av_overdue`)) count++;
-        else if (days <= 14 && days > 0 && !dismissedSet.has(`${notifKey}_av_due`)) count++;
+        if (days !== Infinity) {
+          if (days <= 0 && !dismissedSet.has(`${notifKey}_av_overdue`)) count++;
+          else if (days <= 14 && days > 0 && !dismissedSet.has(`${notifKey}_av_due`)) count++;
+        }
       }
-    });
-    
-    return count;
+    }
+  });
+
+  return count;
 }
    getDaysRemaining(dateStr: string): number {
     if (!dateStr) return Infinity;
@@ -2354,6 +2468,7 @@ ngOnDestroy() {
     if (this.inactivityTimer) clearTimeout(this.inactivityTimer);
     if (this.sessionCheckInterval) clearInterval(this.sessionCheckInterval);
     if (this.tokenCheckInterval) clearInterval(this.tokenCheckInterval);
+     if (this.notifCountInterval) clearInterval(this.notifCountInterval); 
     this.clearLogoutTimers();
     this.destroy$.next();
     this.destroy$.complete();
@@ -3598,7 +3713,9 @@ startDatabaseBackup() {
     }
   });
 }
-
+getSidebarDropdownCount(): number {
+  return this.pendingJobOrdersCount + this.requisitionsNotificationCount;
+}
   restoreData() {
     const input = document.createElement('input');
     input.type = 'file';

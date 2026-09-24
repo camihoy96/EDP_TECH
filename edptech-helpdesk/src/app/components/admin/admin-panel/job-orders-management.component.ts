@@ -17,55 +17,53 @@ import { ClientNotificationService } from '../../../services/client-notification
 <div class="view-header">
   <h2>📋 {{ viewMode === 'our' ? 'Our Job Orders' : 'J.O. Request Management' }}</h2>
   <div class="header-actions">
-    <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
-      📤 Our Job Orders
-      <span class="notification-badge" *ngIf="ourOrdersUnreadCount > 0">
-        {{ ourOrdersUnreadCount }}
-      </span>
-    </button>
-    <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
-      📥 J.O. Request Management
-      <span class="notification-badge" *ngIf="incomingOrdersUnreadCount > 0">
-        {{ incomingOrdersUnreadCount }}
-      </span>
-    </button>
-    <button class="classic-btn primary" (click)="newJobOrder()">
-      <span>➕</span> New Job Order
-    </button>
-  </div>
+  <button class="classic-btn" [class.active]="viewMode === 'our'" (click)="setViewMode('our')">
+    <span class="btn-icon">&#10132;</span> Our Job Orders
+    <span class="notification-badge" *ngIf="ourOrdersUnreadCount > 0">
+      {{ ourOrdersUnreadCount }}
+    </span>
+  </button>
+  <button class="classic-btn" [class.active]="viewMode === 'incoming'" (click)="setViewMode('incoming')">
+    <span class="btn-icon">&#10148;</span> J.O. Request Management
+    <span class="notification-badge" *ngIf="incomingOrdersUnreadCount > 0">
+      {{ incomingOrdersUnreadCount }}
+    </span>
+  </button>
+  <button class="classic-btn primary" (click)="newJobOrder()">
+    <span class="btn-icon">&#10133;</span> New Job Order
+  </button>
 </div>
-
-<!-- ✅ Optional: Mark all as read button -->
+</div>
+<!--  Optional: Mark all as read button -->
 <div class="mark-read-bar" *ngIf="(viewMode === 'our' && ourOrdersUnreadCount > 0) || (viewMode === 'incoming' && incomingOrdersUnreadCount > 0)">
   <button class="classic-btn" (click)="markAllAsRead()">
-    ✅ Mark all as read
+     Mark all as read
   </button>
 </div>
       <!-- Status Tabs -->
       <div class="status-tabs">
-        <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
-          📋 All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
-          ⏳ Pending <span class="tab-count pending">{{ getFilteredStatusCount('pending') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
-          📥 Received <span class="tab-count approved">{{ getFilteredStatusCount('approved') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
-          👤 Assigned <span class="tab-count assigned">{{ getFilteredStatusCount('assigned') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
-          📤 Forwarded <span class="tab-count forwarded">{{ getFilteredStatusCount('forwarded') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'done'" (click)="setActiveTab('done')">
-          ✅ Done <span class="tab-count done">{{ getFilteredStatusCount('done') }}</span>
-        </button>
-        <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
-          ❌ Rejected <span class="tab-count rejected">{{ getFilteredStatusCount('rejected') }}</span>
-        </button>
-      </div>
-
+  <button class="status-tab" [class.active]="activeTab === 'all'" (click)="setActiveTab('all')">
+    <span class="tab-icon">&#9776;</span> All <span class="tab-count">{{ getFilteredStatusCount('all') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'pending'" (click)="setActiveTab('pending')">
+    <span class="tab-icon">&#8987;</span> Pending <span class="tab-count pending">{{ getFilteredStatusCount('pending') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'approved'" (click)="setActiveTab('approved')">
+    <span class="tab-icon">&#10148;</span> Received <span class="tab-count approved">{{ getFilteredStatusCount('approved') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'assigned'" (click)="setActiveTab('assigned')">
+    <span class="tab-icon">&#9679;</span> Assigned <span class="tab-count assigned">{{ getFilteredStatusCount('assigned') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'forwarded'" (click)="setActiveTab('forwarded')">
+    <span class="tab-icon">&#10132;</span> Forwarded <span class="tab-count forwarded">{{ getFilteredStatusCount('forwarded') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'done'" (click)="setActiveTab('done')">
+    <span class="tab-icon">&#10003;</span> Done <span class="tab-count done">{{ getFilteredStatusCount('done') }}</span>
+  </button>
+  <button class="status-tab" [class.active]="activeTab === 'rejected'" (click)="setActiveTab('rejected')">
+    <span class="tab-icon">&#10007;</span> Rejected <span class="tab-count rejected">{{ getFilteredStatusCount('rejected') }}</span>
+  </button>
+</div>
      <!-- Filter Bar -->
 <div class="filter-bar">
   <div class="filter-group">
@@ -98,19 +96,21 @@ import { ClientNotificationService } from '../../../services/client-notification
   </div>
   
   <button class="classic-btn" (click)="loadAllOrders()">
-    <span>🔄</span> Refresh
-  </button>
+  <span class="btn-icon">&#8635;</span> Refresh
+</button>
 </div>
-
       <!-- Status Bar -->
       <div class="classic-status-bar">
-        <span>View: <strong>{{ viewMode === 'our' ? '📤 Our Job Orders' : '📥 J.O. Management' }}</strong></span>
-        <span class="status-sep">|</span>
-        <span>Showing: <strong>{{ filteredOrders.length }}</strong> job orders</span>
-        <span class="status-sep">|</span>
-        <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
-      </div>
-
+  <span>View: <strong>
+    <span class="status-icon" *ngIf="viewMode === 'our'">&#10132;</span>
+    <span class="status-icon" *ngIf="viewMode === 'incoming'">&#10148;</span>
+    {{ viewMode === 'our' ? 'Our Job Orders' : 'J.O. Management' }}
+  </strong></span>
+  <span class="status-sep">|</span>
+  <span>Showing: <strong>{{ filteredOrders.length }}</strong> job orders</span>
+  <span class="status-sep">|</span>
+  <span>Status: <strong>{{ activeTab === 'all' ? 'All' : (activeTab | titlecase) }}</strong></span>
+</div>
       <!-- Table -->
       <div class="classic-table-container">
         <table class="classic-table" *ngIf="filteredOrders.length > 0">
@@ -202,17 +202,17 @@ import { ClientNotificationService } from '../../../services/client-notification
   <button class="action-btn print-btn" (click)="printOrder(jo)" title="Print">🖨️</button>
   <button class="action-btn edit-btn" *ngIf="jo.status === 'pending'" (click)="editOrder(jo)" title="Edit">✏️</button>
   
-  <!-- ✅ Receive button - for pending orders -->
+  <!--  Receive button - for pending orders -->
   <button class="action-btn accept-btn" 
         *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
         (click)="receiveOrder(jo)" title="Receive">📥</button>
   
-  <!-- ✅ Forward button - appears after receiving (status = approved/received) -->
+  <!--  Forward button - appears after receiving (status = approved/received) -->
   <button class="action-btn forward-btn" 
           *ngIf="viewMode === 'incoming' && jo.status === 'approved'" 
           (click)="openForwardModal(jo)" title="Forward">➡️</button>
   
-  <!-- ✅ Assign button - ONLY in J.O. Request Management for approved orders -->
+  <!--  Assign button - ONLY in J.O. Request Management for approved orders -->
   <button class="action-btn assign-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'approved' || (jo.is_forwarded && jo.forwarded_status === 'approved'))" 
           (click)="assignOrder(jo)" 
@@ -220,7 +220,7 @@ import { ClientNotificationService } from '../../../services/client-notification
     👤
   </button>
   
-  <!-- ✅ Reassign button - ONLY in J.O. Request Management for assigned orders -->
+  <!--  Reassign button - ONLY in J.O. Request Management for assigned orders -->
   <button class="action-btn assign-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'assigned' || (jo.is_forwarded && jo.forwarded_status === 'assigned'))" 
           (click)="assignOrder(jo)" 
@@ -228,17 +228,17 @@ import { ClientNotificationService } from '../../../services/client-notification
     🔄
   </button>
   
-  <!-- ✅ Done button - ONLY in J.O. Request Management -->
+  <!--  Done button - ONLY in J.O. Request Management -->
   <button class="action-btn done-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'assigned' || (jo.is_forwarded && jo.forwarded_status === 'assigned'))" 
-          (click)="markAsDone(jo)" title="Mark as Done">✅</button>
+          (click)="markAsDone(jo)" title="Mark as Done"></button>
   
-  <!-- ✅ Reject button - ONLY in J.O. Request Management -->
+  <!--  Reject button - ONLY in J.O. Request Management -->
   <button class="action-btn reject-btn" 
           *ngIf="viewMode === 'incoming' && (jo.status === 'pending' || (jo.is_forwarded && jo.forwarded_status === 'pending'))" 
           (click)="updateStatus(jo, 'rejected')" title="Reject">❌</button>
   
-  <!-- ✅ Delete button - Show in both views -->
+  <!--  Delete button - Show in both views -->
   <button class="action-btn delete-btn" *ngIf="canDelete(jo)" (click)="deleteOrder(jo)" title="Delete">🗑️</button>
 </td>
             </tr>
@@ -291,7 +291,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         </div>
       </div>
 
-      <!-- ✅ Conditional: Recipient (Our) vs Request From (Incoming) -->
+      <!--  Conditional: Recipient (Our) vs Request From (Incoming) -->
       <div class="detail-section">
         <h4>{{ viewMode === 'our' ? '📥 Recipient' : '📤 Request From' }}</h4>
         <div class="detail-info-row">
@@ -310,7 +310,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         </div>
       </div>
 
-      <!-- ✅ Show Request From for incoming -->
+      <!--  Show Request From for incoming -->
       <div class="detail-section" *ngIf="viewMode === 'incoming' && selectedOrder.request_dept">
         <h4>📋 Request Department</h4>
         <div class="detail-info-row">
@@ -325,7 +325,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         </div>
       </div>
 
-      <!-- ✅ Forwarded Info -->
+      <!--  Forwarded Info -->
       <div class="detail-section" *ngIf="selectedOrder.is_forwarded">
         <h4>📤 Forwarded Information</h4>
         <div class="detail-info-row">
@@ -352,7 +352,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         <h4>📝 Particulars / Description</h4>
         <div class="detail-desc">{{ selectedOrder.particulars || selectedOrder.remarks || 'No details' }}</div>
       </div>
-<!-- ✅ Signatures -->
+<!--  Signatures -->
 <div class="detail-section">
   <h4>✍️ Signatures</h4>
   <div class="detail-signatures">
@@ -363,7 +363,7 @@ import { ClientNotificationService } from '../../../services/client-notification
       <span class="sig-date">{{ formatDateMonth(selectedOrder.requested_date) }}</span>
     </div>
     <div class="sig-box" *ngIf="selectedOrder.approved_signature || selectedOrder.approved_name">
-      <h5>✅ Approved By</h5>
+      <h5> Approved By</h5>
       <div class="sig-name">{{ selectedOrder.approved_name || '—' }}</div>
       <img [src]="selectedOrder.approved_signature" alt="Signature" *ngIf="selectedOrder.approved_signature">
       <span class="sig-date">{{ formatDateMonth(selectedOrder.approved_date) }}</span>
@@ -376,9 +376,9 @@ import { ClientNotificationService } from '../../../services/client-notification
     </div>
   </div>
 </div>
-      <!-- ✅ Done Info -->
+      <!--  Done Info -->
       <div class="detail-section" *ngIf="selectedOrder.status === 'done' && selectedOrder.done_name">
-        <h4>✅ Completed</h4>
+        <h4> Completed</h4>
         <div class="detail-info-row">
           <div class="detail-info-item">
             <label>Done By:</label>
@@ -403,12 +403,12 @@ import { ClientNotificationService } from '../../../services/client-notification
              [class]="'header-' + (confirmAction || 'approve')"
              (mousedown)="startDrag($event, 'confirm')"
              style="cursor: move;">
-          <h3>{{ confirmAction === 'reject' ? '❌ Reject Job Order' : confirmAction === 'done' ? '✅ Mark as Done' : '🗑️ Delete Job Order' }}</h3>
+          <h3>{{ confirmAction === 'reject' ? '❌ Reject Job Order' : confirmAction === 'done' ? ' Mark as Done' : '🗑️ Delete Job Order' }}</h3>
           <button class="modal-close" (click)="cancelConfirm()">✕</button>
         </div>
         <div class="modal-body">
           <div class="confirm-content">
-            <span class="confirm-icon">{{ confirmAction === 'reject' ? '❌' : confirmAction === 'done' ? '✅' : '🗑️' }}</span>
+            <span class="confirm-icon">{{ confirmAction === 'reject' ? '❌' : confirmAction === 'done' ? '' : '🗑️' }}</span>
             <div class="confirm-message">
               <p>Job Order: <strong>#{{ confirmTarget?.job_order_number }}</strong></p>
               <p class="confirm-warning" *ngIf="confirmAction === 'delete'">⚠️ This action cannot be undone.</p>
@@ -418,7 +418,7 @@ import { ClientNotificationService } from '../../../services/client-notification
         <div class="modal-footer">
           <button class="btn" (click)="cancelConfirm()">Cancel</button>
           <button class="btn" [class]="'btn-' + (confirmAction || 'approve')" (click)="confirmAction === 'delete' ? confirmDelete() : confirmStatusUpdate()">
-            {{ confirmAction === 'reject' ? '❌ Reject' : confirmAction === 'done' ? '✅ Mark Done' : '🗑️ Delete' }}
+            {{ confirmAction === 'reject' ? '❌ Reject' : confirmAction === 'done' ? ' Mark Done' : '🗑️ Delete' }}
           </button>
         </div>
       </div>
@@ -557,8 +557,8 @@ import { ClientNotificationService } from '../../../services/client-notification
     </div>
   `,
   styles: [`
-    .admin-container { padding: 10px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
-    .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; }
+    .admin-container { padding: 1px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 11px; }
+    .view-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1px; padding-bottom: 8px; border-bottom: 2px solid #0a246a; margin-right: 15px;}
     .view-header h2 { margin: 0; font-size: 15px; font-weight: bold; color: #0a246a; }
     .header-actions { display: flex; gap: 6px; align-items: center; }
     .classic-btn { background: #f0f0f0; border: 1px solid #a0a0a0; border-radius: 3px; padding: 5px 14px; cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; color: #000; }
@@ -572,9 +572,9 @@ import { ClientNotificationService } from '../../../services/client-notification
     .status-tab.active { background: #fff; font-weight: bold; color: #0a3a8c; border-bottom-color: #fff; }
     .tab-count { background: #999; color: #fff; padding: 1px 6px; border-radius: 10px; font-size: 12px; font-weight: bold; }
     .status-tab.active .tab-count { background: #0a3a8c; }
-    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+    .filter-bar { background: #f0f0f0; border: 1px solid #a0a0a0; padding: 6px 10px; display: flex; gap: 12px; align-items: center; margin-bottom: 1px; margin-top: -10px; }
     .classic-select, .classic-input { padding: 3px 6px; border: 1px solid #a0a0a0; font-size: 12px; background: white; }
-    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .classic-status-bar { background: #f0f0f0; border: 1px solid #a0a0a0; border-top: none; padding: 3px 10px; font-size: 12px; color: #333; display: flex; gap: 8px; align-items: center; margin-bottom: 1px; }
     .status-sep { color: #b0b0b0; }
     .classic-table-container { border: 1px solid #a0a0a0; background: white; overflow-x: auto; }
     .classic-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -1049,7 +1049,12 @@ import { ClientNotificationService } from '../../../services/client-notification
     .assign-user-name { flex: 1; font-size: 12px; font-weight: 500; color: #333; }
     .assign-user-role { font-size: 12px; color: #888; background: #f0f0f0; padding: 2px 8px; border-radius: 3px; }
     .assign-empty { padding: 20px; text-align: center; color: #888; font-style: italic; }
-   
+    .admin-container, .admin-container * { -webkit-user-select: text; -moz-user-select: text; -ms-user-select: text; user-select: text; }
+    .admin-container button, .admin-container button *, .admin-container select, .admin-container select *, .admin-container .classic-btn, .admin-container .classic-btn *, .admin-container .status-tab, .admin-container .status-tab *, .admin-container .action-btn, .admin-container .action-btn *, .admin-container .modal-close, .admin-container .checkbox-label, .admin-container .checkbox-label *, .admin-container .assign-user-item, .admin-container .assign-user-item *, .admin-container .clickable-row, .admin-container .modal-header, .admin-container .modal-header *, .admin-container .modal-titlebar, .admin-container .modal-titlebar *, .admin-container .notification-badge, .admin-container .badge-group, .admin-container .badge-group * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default; }
+    .admin-container .classic-table td, .admin-container .classic-table th, .admin-container .classic-table td *, .admin-container .classic-table th * { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .admin-container .classic-table td.action-cell, .admin-container .classic-table td.action-cell *, .admin-container .classic-table th:first-child, .admin-container .classic-table th:first-child * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; cursor: default !important; }
+    .admin-container .detail-item span, .admin-container .detail-item span *, .admin-container .detail-desc, .admin-container .detail-desc *, .admin-container .detail-info-item span, .admin-container .detail-info-item span *, .admin-container .sig-name, .admin-container .sig-date, .admin-container .creator-label, .admin-container .creator-label-sm, .admin-container .forward-label, .admin-container .forward-dept, .admin-container .forward-company, .admin-container .status-forwarded-sub, .admin-container .assigned-under-status, .admin-container .received-by, .admin-container .assign-user-name, .admin-container .assign-user-role, .admin-container .assign-info, .admin-container .assign-info *, .admin-container .confirm-message, .admin-container .confirm-message *, .admin-container .empty-state p { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
+    .admin-container input, .admin-container textarea { -webkit-user-select: text !important; -moz-user-select: text !important; -ms-user-select: text !important; user-select: text !important; cursor: text; }
   `]
 })
 export class JobOrdersManagementComponent implements OnInit {
@@ -1068,11 +1073,11 @@ export class JobOrdersManagementComponent implements OnInit {
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
   private toastTimer: any;
-  // ✅ New properties for notifications
+  //  New properties for notifications
    ourOrdersUnreadCount: number = 0;
   incomingOrdersUnreadCount: number = 0;
   
-  // ✅ Track which orders have been viewed/read
+  //  Track which orders have been viewed/read
   readOrderIds: Set<number> = new Set<number>();
   notificationMap: Map<number, { type: 'incoming' | 'status_update', status: string }> = new Map();
   // Forward modal properties
@@ -1121,7 +1126,7 @@ export class JobOrdersManagementComponent implements OnInit {
   assignUsers: any[] = [];
   filteredAssignUsers: any[] = [];
   selectedAssignUsers: any[] = [];
-  // ✅ CACHING PROPERTIES
+  //  CACHING PROPERTIES
   private ordersCache: {
     data: any[];
     timestamp: number;
@@ -1161,12 +1166,12 @@ export class JobOrdersManagementComponent implements OnInit {
       }
     }, this.POLLING_INTERVAL);
 }
-    // ✅ Generate request signature for deduplication
+    //  Generate request signature for deduplication
   private getRequestSignature(): string {
     return `admin_jo_${this.currentUser?.id}_${this.currentUser?.branch_id}_${this.currentUser?.department_id}_${this.viewMode}_${this.activeTab}`;
   }
 
-  // ✅ Check if cache is still valid
+  //  Check if cache is still valid
   private isCacheValid(): boolean {
     if (!this.ordersCache) return false;
     if (!this.ordersCache.data || this.ordersCache.data.length === 0) return false;
@@ -1182,7 +1187,7 @@ export class JobOrdersManagementComponent implements OnInit {
     
     return false;
   }
-   // ✅ Check if cache is stale
+   //  Check if cache is stale
   private isCacheStale(): boolean {
     if (!this.ordersCache) return true;
     
@@ -1192,7 +1197,7 @@ export class JobOrdersManagementComponent implements OnInit {
     return cacheAge >= this.CACHE_DURATION_MS || 
            this.ordersCache.currentUserId !== this.currentUser?.id;
   }
-  // ✅ Check if cache is expired
+  //  Check if cache is expired
   private isCacheExpired(): boolean {
     if (!this.ordersCache) return true;
     
@@ -1202,7 +1207,7 @@ export class JobOrdersManagementComponent implements OnInit {
     return cacheAge >= this.STALE_DURATION_MS || 
            this.ordersCache.currentUserId !== this.currentUser?.id;
   }
- // ✅ Update cache with fresh data
+ //  Update cache with fresh data
   private updateCache(data: any[]): void {
     this.ordersCache = {
       data: data,
@@ -1222,7 +1227,7 @@ export class JobOrdersManagementComponent implements OnInit {
       // Ignore storage errors
     }
   }
-   // ✅ Load from sessionStorage as fallback
+   //  Load from sessionStorage as fallback
   private loadFromSessionStorage(): any[] | null {
     try {
       const cached = sessionStorage.getItem('admin_jo_cache');
@@ -1240,7 +1245,7 @@ export class JobOrdersManagementComponent implements OnInit {
     }
     return null;
   }
-  // ✅ Clear all caches
+  //  Clear all caches
   private clearCache(): void {
     this.ordersCache = null;
     try {
@@ -1279,7 +1284,7 @@ export class JobOrdersManagementComponent implements OnInit {
     }
   }
 }
-// ✅ Load read orders from localStorage
+//  Load read orders from localStorage
 loadReadOrdersFromStorage() {
   const stored = localStorage.getItem('readJobOrders');
   if (stored) {
@@ -1291,18 +1296,18 @@ loadReadOrdersFromStorage() {
     }
   }
 }
-  // ✅ Save read orders to localStorage
+  //  Save read orders to localStorage
   saveReadOrdersToStorage() {
     localStorage.setItem('readJobOrders', JSON.stringify(Array.from(this.readOrderIds)));
   }
 
-  // ✅ Mark order as read when viewed
+  //  Mark order as read when viewed
   markOrderAsRead(orderId: number) {
     if (orderId && !this.readOrderIds.has(orderId)) {
       this.readOrderIds.add(orderId);
       this.saveReadOrdersToStorage();
       
-      // ✅ Remove from notification map when read
+      //  Remove from notification map when read
       if (this.notificationMap.has(orderId)) {
         this.notificationMap.delete(orderId);
         this.saveNotificationMapToStorage();
@@ -1312,7 +1317,7 @@ loadReadOrdersFromStorage() {
     }
   }
 
-  // ✅ Mark all orders in current view as read
+  //  Mark all orders in current view as read
  markAllAsRead() {
     const currentOrders = this.filteredOrders || [];
     currentOrders.forEach(order => {
@@ -1328,7 +1333,7 @@ loadReadOrdersFromStorage() {
     this.updateNotificationCounts();
   }
 
-   // ✅ Update notification counts
+   //  Update notification counts
   updateNotificationCounts() {
     // 📤 Our Job Orders: Count orders with status updates (received, assigned, forwarded, etc.)
     const ourOrders = this.getAllOurOrders();
@@ -1344,26 +1349,26 @@ loadReadOrdersFromStorage() {
              this.notificationMap.get(o.id)?.type === 'incoming';
     }).length;
   }
-    // ✅ Check if order has a status update notification
+    //  Check if order has a status update notification
   shouldShowStatusUpdate(order: any): boolean {
     if (!order || !order.id) return false;
     return this.notificationMap.has(order.id) && 
            this.notificationMap.get(order.id)?.type === 'status_update';
   }
- // ✅ Check if order has an incoming notification
+ //  Check if order has an incoming notification
   shouldShowIncomingNotification(order: any): boolean {
     if (!order || !order.id) return false;
     return this.notificationMap.has(order.id) && 
            this.notificationMap.get(order.id)?.type === 'incoming';
   }
-  // ✅ Add notification for status update (called when status changes)
+  //  Add notification for status update (called when status changes)
   addStatusUpdateNotification(orderId: number, status: string) {
     if (!orderId) return;
     this.notificationMap.set(orderId, { type: 'status_update', status });
     this.saveNotificationMapToStorage();
     this.updateNotificationCounts();
   }
-   // ✅ Add notification for incoming order (called when new or forwarded)
+   //  Add notification for incoming order (called when new or forwarded)
   addIncomingNotification(orderId: number) {
     if (!orderId) return;
     if (!this.notificationMap.has(orderId)) {
@@ -1383,7 +1388,7 @@ loadReadOrdersFromStorage() {
   this.filteredFilterDepartments = [];
   this.applyFilters();
 }
- // ✅ Get all orders for "Our Job Orders" view (without filters)
+ //  Get all orders for "Our Job Orders" view (without filters)
   getAllOurOrders(): any[] {
     const currentUserBranchId = Number(this.currentUser?.branch_id);
     const currentUserDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
@@ -1404,7 +1409,7 @@ loadReadOrdersFromStorage() {
     });
   }
 
-  // ✅ Get all orders for "Incoming" view (without filters)
+  //  Get all orders for "Incoming" view (without filters)
   getAllIncomingOrders(): any[] {
     const currentUserBranchId = Number(this.currentUser?.branch_id);
     const currentUserDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
@@ -1471,9 +1476,9 @@ loadReadOrdersFromStorage() {
     return { 'Authorization': `Bearer ${token}` };
   }
 
-  // ✅ Override setViewMode to mark all as read when switching views
+  //  Override setViewMode to mark all as read when switching views
    setViewMode(mode: string) { 
-    // ✅ Mark all orders in the view as read when switching
+    //  Mark all orders in the view as read when switching
     if (mode === 'our') {
       this.markAllOrdersInViewAsRead('our');
     } else if (mode === 'incoming') {
@@ -1484,7 +1489,7 @@ loadReadOrdersFromStorage() {
     this.activeTab = 'all'; 
     this.applyFilters(); 
   }
-  // ✅ Mark all orders in a specific view as read
+  //  Mark all orders in a specific view as read
     markAllOrdersInViewAsRead(view: string) {
     let orders: any[] = [];
     if (view === 'our') {
@@ -1512,7 +1517,7 @@ loadReadOrdersFromStorage() {
     this.applyFilters(); 
   }
 
-  // ✅ Override loadAllOrders
+  //  Override loadAllOrders
    loadAllOrders(useCacheIfAvailable: boolean = false): void {
     // Check if we can use cache
     if (useCacheIfAvailable && this.isCacheValid()) {
@@ -1551,7 +1556,7 @@ loadReadOrdersFromStorage() {
     // Fetch fresh data
     this.fetchOrdersFromServer();
   }
-   // ✅ Fetch orders from server (deduplicated)
+   //  Fetch orders from server (deduplicated)
   private fetchOrdersFromServer(): void {
     const currentSignature = this.getRequestSignature();
     
@@ -1596,7 +1601,7 @@ loadReadOrdersFromStorage() {
       }
     });
   }
-   // ✅ Fetch in background
+   //  Fetch in background
   private fetchOrdersInBackground(): void {
     if (this.isFetching) return;
     
@@ -1620,14 +1625,14 @@ loadReadOrdersFromStorage() {
     });
   }
 
-  // ✅ Check for new or forwarded orders
+  //  Check for new or forwarded orders
   checkForNewOrders() {
     const currentUserBranchId = Number(this.currentUser?.branch_id);
     const currentUserDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
     const currentUserId = Number(this.currentUser?.id);
     
     this.allOrders.forEach(o => {
-      // ✅ Skip if already has a notification
+      //  Skip if already has a notification
       if (this.notificationMap.has(o.id)) return;
       
       const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
@@ -1643,14 +1648,14 @@ loadReadOrdersFromStorage() {
                              (forwardedToBranchId === currentUserBranchId && forwardedToDeptId === currentUserDeptId);
       const isFromOthers = !(submitterBranchId === currentUserBranchId && submitterDeptId === currentUserDeptId) && submittedById !== currentUserId;
       
-      // ✅ Check if it's a status update for Our Job Orders
+      //  Check if it's a status update for Our Job Orders
       const isStatusUpdate = o.status && ['approved', 'assigned', 'forwarded', 'done'].includes(o.status);
       
       if (isForUs && isFromOthers && (o.is_forwarded || isStatusUpdate)) {
-        // ✅ Incoming notification (new or forwarded order)
+        //  Incoming notification (new or forwarded order)
         this.addIncomingNotification(o.id);
       } else if (isStatusUpdate && (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname)) {
-        // ✅ Status update notification (for Our Job Orders)
+        //  Status update notification (for Our Job Orders)
         this.addStatusUpdateNotification(o.id, o.status);
       }
     });
@@ -1735,7 +1740,7 @@ loadReadOrdersFromStorage() {
     const currentUserId = Number(this.currentUser?.id);
     
     if (this.viewMode === 'our') {
-      // ✅ OUR JOB ORDERS: Show orders we created OR we received and forwarded
+      //  OUR JOB ORDERS: Show orders we created OR we received and forwarded
       filtered = filtered.filter(o => {
         const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
         const submitterDeptId = Number(o.submitter_dept_id || o.submitted_by_dept_id);
@@ -1772,7 +1777,7 @@ loadReadOrdersFromStorage() {
         );
       }
     } else if (this.viewMode === 'incoming') {
-    // ✅ J.O. REQUEST MANAGEMENT
+    //  J.O. REQUEST MANAGEMENT
     filtered = filtered.filter(o => {
         const submitterBranchId = Number(o.submitter_branch_id || o.submitted_by_branch_id);
         const submitterDeptId = Number(o.submitter_dept_id || o.submitted_by_dept_id);
@@ -1781,7 +1786,7 @@ loadReadOrdersFromStorage() {
         const orderDeptId = Number(o.department_id);
         const forwardedToBranchId = Number(o.forwarded_to_branch_id);
         const forwardedToDeptId = Number(o.forwarded_to_department_id);
-        // ✅ EXCLUDE: Unapproved orders (no approved_name and no approved_signature)
+        //  EXCLUDE: Unapproved orders (no approved_name and no approved_signature)
         if (o.status === 'pending' && !o.approved_name && !o.approved_signature) {
             return false;
         }
@@ -2041,7 +2046,7 @@ confirmForward() {
     
     this.http.put(`${environment.apiUrl}/api/admin/job-orders/${jo.id}/status`, payload, { headers }).subscribe({
       next: () => {
-        this.showToastMsg('✅ Users reassigned successfully!', 'success');
+        this.showToastMsg(' Users reassigned successfully!', 'success');
         setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: () => {
@@ -2075,7 +2080,7 @@ confirmForward() {
   }
 
  getStatusLabel(status: string, jo?: any): string {
-    // ✅ Check if it's pending but has no approval
+    //  Check if it's pending but has no approval
     if (status === 'pending' && jo && !jo.approved_name && !jo.approved_signature) {
         return 'For Approval';
     }
@@ -2091,13 +2096,13 @@ confirmForward() {
     return labels[status] || status || 'Pending';
 }
 
-     // ✅ Override viewDetail to mark as read
+     //  Override viewDetail to mark as read
   viewDetail(jo: any) { 
     this.selectedOrder = jo; 
     this.detailModalPos = { x: 0, y: 0 }; 
     this.showDetailModal = true;
     
-    // ✅ Mark as read when viewed
+    //  Mark as read when viewed
     if (jo.id) {
       this.markOrderAsRead(jo.id);
     }
@@ -2129,17 +2134,17 @@ confirmForward() {
     const isAdmin = role === 'admin';
     const isHeadOrSupervisor = role === 'head/manager' || role === 'supervisor' || role === 'branch manager';
     
-    // ✅ Admin can always delete
+    //  Admin can always delete
     if (isAdmin) return true;
     
-    // ✅ Head/Manager/Supervisor can delete in BOTH views
+    //  Head/Manager/Supervisor can delete in BOTH views
     if (isHeadOrSupervisor) return true;
     
     // ❌ For "J.O. Request Management" (incoming) view:
     // Regular users (Staff, Technician, etc.) CANNOT delete ANYTHING
     if (this.viewMode === 'incoming') return false;
     
-    // ✅ For "Our Job Orders" (our) view:
+    //  For "Our Job Orders" (our) view:
     // Regular users can ONLY delete their OWN pending orders
     if (this.viewMode === 'our') {
         const isOwner = jo.submitted_by === this.currentUser.id;
@@ -2288,7 +2293,7 @@ confirmForward() {
         this.showConfirmModal = false; 
         this.confirmTarget = null; 
         this.confirmAction = null;
-        this.showToastMsg(`✅ Job Order ${status === 'done' ? 'marked as Done' : 'rejected'}!`, 'success');
+        this.showToastMsg(` Job Order ${status === 'done' ? 'marked as Done' : 'rejected'}!`, 'success');
         setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: () => {
@@ -2320,25 +2325,25 @@ saveNotificationMapToStorage() {
     const jo = this.confirmTarget;
     const orderId = jo.id;
     
-    // ✅ CLEAR CACHE FIRST
+    //  CLEAR CACHE FIRST
     this.clearCache();
     
     // Optimistic delete
     this.allOrders = this.allOrders.filter(o => o.id !== orderId);
     
-    // ✅ Force close modal and reset
+    //  Force close modal and reset
     this.showConfirmModal = false; 
     this.confirmTarget = null; 
     this.confirmAction = null;
     
-    // ✅ Apply filters to update counts and display
+    //  Apply filters to update counts and display
     this.applyFilters();
     this.updateNotificationCounts();
     
     this.http.delete(`${environment.apiUrl}/api/admin/job-orders/${orderId}`, { headers: this.getAuthHeaders() }).subscribe({
       next: () => {
-        this.showToastMsg('✅ Job Order deleted!', 'success');
-        // ✅ Force fresh fetch from server
+        this.showToastMsg(' Job Order deleted!', 'success');
+        //  Force fresh fetch from server
         this.clearCache();
         this.fetchOrdersFromServer();
       },
@@ -2630,7 +2635,7 @@ getAttnRole(attnName: string): string {
                 jo, userName, assignedNames, jo.branch_id, jo.department_id
             );
         }
-        this.showToastMsg('✅ Users assigned successfully!', 'success');
+        this.showToastMsg(' Users assigned successfully!', 'success');
         setTimeout(() => this.fetchOrdersInBackground(), 1000);
       },
       error: () => {
