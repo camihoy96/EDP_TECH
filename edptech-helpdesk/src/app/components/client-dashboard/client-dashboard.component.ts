@@ -15,6 +15,7 @@ import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.compon
 import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { ClientCalendarModalComponent } from '../client-calendar-modal/client-calendar-modal.component';
 import { ClientReportsModalComponent } from '../client-reports/client-reports-modal.component';
+import { SecurityEventsService } from '../../services/security-events.service';
 interface ClientTicket {
   id: number;
   ticket_number: string;
@@ -1191,6 +1192,41 @@ Clear all
 </svg> Yes, Logout
       </button>
     </div>
+  </div>
+</div>
+<!-- ─── Security Alert Toast (new device login) ─────────────── -->
+<div class="security-toast" *ngIf="securityToast" (click)="$event.stopPropagation()">
+  <div class="security-toast-header">
+    <span class="security-toast-icon">🔔</span>
+    <strong>New login detected</strong>
+    <button class="security-toast-close" (click)="dismissSecurityToast()">✕</button>
+  </div>
+  <div class="security-toast-body">
+
+    <!-- Computer name (only if provided) -->
+    <div class="security-toast-line" *ngIf="securityToast.computerName">
+      <span class="label">Computer:</span>
+      <span class="value"><strong>{{ securityToast.computerName }}</strong></span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">Device:</span>
+      <span class="value">{{ securityToast.device }}</span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">IP:</span>
+      <span class="value"><code>{{ securityToast.ip }}</code></span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">Time:</span>
+      <span class="value">{{ securityToast.at | date:'medium' }}</span>
+    </div>
+
+    <p class="security-toast-warning">
+      If this wasn't you, log out immediately and change your password.
+    </p>
   </div>
 </div>
   `,
@@ -2680,6 +2716,98 @@ body.compact-mode .toolbar {
         display: none !important;
       }
     }
+      /* ═══════════════════════════════════════════════════
+   SECURITY ALERT TOAST (new device login)
+═══════════════════════════════════════════════════ */
+.security-toast {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 340px;
+  background: #fff;
+  border: 2px solid #cc6600;
+  border-left: 6px solid #cc6600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+  animation: slideInRight 0.35s ease;
+  font-family: var(--font);
+  border-radius: 0;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.security-toast-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff3e0;
+  border-bottom: 1px solid #ffcc80;
+}
+
+.security-toast-header strong {
+  flex: 1;
+  color: #cc6600;
+  font-size: 13px;
+}
+
+.security-toast-icon { font-size: 16px; }
+
+.security-toast-close {
+  background: transparent;
+  border: 1px solid #cc6600;
+  color: #cc6600;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.security-toast-close:hover {
+  background: #cc6600;
+  color: #fff;
+}
+
+.security-toast-body { padding: 12px; }
+
+.security-toast-line {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #333;
+}
+.security-toast-line .label {
+  min-width: 55px;
+  color: #888;
+  font-weight: 600;
+}
+.security-toast-line .value {
+  flex: 1;
+  word-break: break-word;
+}
+.security-toast-line code {
+  font-family: monospace;
+  background: #f5f5f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
+.security-toast-warning {
+  margin: 10px 0 0 0;
+  font-size: 11px;
+  color: #cc0000;
+  line-height: 1.4;
+  padding-top: 8px;
+  border-top: 1px dashed #ffcc80;
+}
   `]
 })
 export class ClientDashboardComponent implements OnInit, OnDestroy {
@@ -2720,11 +2848,8 @@ export class ClientDashboardComponent implements OnInit, OnDestroy {
   messageNotificationCount = 0;
   private messageCountInterval: any;
   private inactivityTimer: any;
-  private readonly INACTIVITY_TIMEOUT = 3 * 60 * 60 * 1000;  // 3 hours
-  private readonly SESSION_TIMEOUT = 3 * 60 * 60 * 1000 + 60 * 1000;  // 3 hours + 1 minute (buffer)
+  private readonly INACTIVITY_TIMEOUT = 5 * 60 * 60 * 1000;  // 5 hours
   private readonly WARNING_BEFORE = 60;
-  private readonly MAX_FAILED_ATTEMPTS = 5;
-  private readonly LOCKOUT_DURATION = 15 * 60 * 1000;
   private sessionCheckInterval: any;
   private tokenCheckInterval: any;
   isAuthenticated = false;
@@ -2743,11 +2868,11 @@ dragStartXTheme = 0;
 dragStartYTheme = 0;
 themeModalPos = { x: 0, y: 0 };
 private chatCountInterval: any;
-  // ✅ New properties for notifications
+  //  New properties for notifications
   ourOrdersUnreadCount: number = 0;
   incomingOrdersUnreadCount: number = 0;
   showCalendarModal = false;
-  // ✅ Track which orders have been viewed/read
+  //  Track which orders have been viewed/read
   readOrderIds: Set<number> = new Set<number>();
   notificationMap: Map<number, { type: 'incoming' | 'status_update', status: string }> = new Map();
 // Dragging properties for notification modal
@@ -2768,12 +2893,12 @@ dragStartYCalendar = 0;
 calendarModalPosition = { x: 0, y: 0 };
 private dragTargetNotif: HTMLElement | null = null;
 private dragTargetCalendar: HTMLElement | null = null;
-  // ✅ Store all orders
+  //  Store all orders
   allOrders: any[] = [];
   clientNotifications: ClientNotification[] = [];
   private _requisitionsNotificationCount: number = 0;
 announcements: any[] = [];
- // ✅ DEDUPLICATION CACHING PROPERTIES
+ //  DEDUPLICATION CACHING PROPERTIES
   private requestsCache = new Map<string, {
     data: any;
     timestamp: number;
@@ -2785,6 +2910,17 @@ announcements: any[] = [];
     accentColor: '#4f46e5',     // Default indigo
     activePreset: 'default'     // default, ocean, forest, sunset, midnight
   };
+  // ─── Security Alert Toast ───
+securityToast: {
+  message: string;
+  ip: string;
+  device: string;
+  platform?: string;
+  deviceClass?: string;
+  computerName?: string;
+  at: string;
+} | null = null;
+private securityToastTimer: any;
   showThemeModal = false;
   private readonly CACHE_DURATION_MS = 30000;  // 30 seconds
   private readonly STALE_DURATION_MS = 60000;  // 1 minute
@@ -2796,7 +2932,8 @@ announcements: any[] = [];
     private router: Router,
     private http: HttpClient,
     private clientNotificationService: ClientNotificationService,
-    private sanitizer: DomSanitizer
+    private sanitizer: DomSanitizer,
+    private securityEvents: SecurityEventsService 
   ) {}
 
   private destroy$ = new Subject<void>();
@@ -2853,7 +2990,7 @@ loadToolbarAiAvatar() {
     });
   }
 }
-  // ✅ Check if cache is stale (can use but should refresh)
+  //  Check if cache is stale (can use but should refresh)
   private isCacheStale(key: string): boolean {
     const cached = this.requestsCache.get(key);
     if (!cached) return true;
@@ -2862,7 +2999,7 @@ loadToolbarAiAvatar() {
     return age >= this.CACHE_DURATION_MS && age < this.STALE_DURATION_MS;
   }
 
-  // ✅ Deduplicated HTTP GET with caching
+  //  Deduplicated HTTP GET with caching
   private cachedHttpGet<T>(url: string, options?: any, forceRefresh: boolean = false): Promise<T> {
     const signature = this.getRequestSignature('GET', url, options?.params);
     
@@ -2901,8 +3038,29 @@ loadToolbarAiAvatar() {
     
     return this.fetchAndCache(url, options, signature);
   }
+private showSecurityToast(ev: any) {
+  this.securityToast = {
+    message: ev.message,
+    ip: ev.ip || 'unknown',
+    device: ev.device || 'Unknown device',
+    platform: ev.platform,
+    deviceClass: ev.deviceClass,
+    computerName: ev.computerName || undefined,
+    at: ev.at || new Date().toISOString(),
+  };
 
-  // ✅ Fetch and cache the data
+  if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
+  this.securityToastTimer = setTimeout(() => {
+    this.securityToast = null;
+  }, 12000);   // auto-dismiss after 12s
+}
+
+dismissSecurityToast() {
+  this.securityToast = null;
+  if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
+}
+
+  //  Fetch and cache the data
   private async fetchAndCache<T>(url: string, options: any, signature: string): Promise<T> {
     const pendingKey = `pending_${signature}`;
     
@@ -2964,13 +3122,13 @@ goToComputerMonitoring(): void {
   this.router.navigate(['/client/computer-monitoring']);
   this.activeMenu = null;
 }
-  // ✅ Clear specific cache entry
+  //  Clear specific cache entry
   private clearCacheEntry(url: string): void {
     const signature = this.getRequestSignature('GET', url);
     this.requestsCache.delete(signature);
   }
 
-  // ✅ Clear all dashboard caches
+  //  Clear all dashboard caches
   private clearAllCaches(): void {
     this.requestsCache.clear();
     this.pendingRequests.clear();
@@ -2988,21 +3146,21 @@ ngOnInit() {
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
   
-  // ✅ Reload announcements every 5 minutes
+  //  Reload announcements every 5 minutes
   setInterval(() => this.loadAnnouncements(), 300000);
   
-  // ✅ ADD THIS: Reload announcements when navigating back to dashboard
+  //  ADD THIS: Reload announcements when navigating back to dashboard
   this.router.events.subscribe((event: any) => {
     if (event.url && event.url.includes('/client/request')) {
       this.markRequisitionNotificationsAsRead();
     }
     
-    // ✅ Reload announcements when navigating to dashboard
+    //  Reload announcements when navigating to dashboard
     if (event.url && (event.url === '/client/dashboard' || event.url === '/client')) {
       this.loadAnnouncements();
     }
     
-    // ✅ Also reload when navigating to announcements page (to sync)
+    //  Also reload when navigating to announcements page (to sync)
     if (event.url && event.url.includes('/client/announcements')) {
       // Don't reload here, just let the announcements page handle it
     }
@@ -3153,7 +3311,7 @@ checkReportAccess() {
   console.log('👤 User Role:', this.userRole);
   console.log('🏢 User Department:', this.userDepartment);
   
-  // ✅ Match the same logic as isHeadOrSupervisor() in the requisition component
+  //  Match the same logic as isHeadOrSupervisor() in the requisition component
   // Branch Manager and Head/Manager can view reports
   this.canViewReports = 
     role === 'head/manager' || 
@@ -3162,7 +3320,7 @@ checkReportAccess() {
     role === 'branch manager' ||
     role === 'admin';
   
-  console.log('✅ Can view reports:', this.canViewReports);
+  console.log(' Can view reports:', this.canViewReports);
   
   // If still false, check department_roles table via API
   if (!this.canViewReports && currentUser.department_id) {
@@ -3193,7 +3351,7 @@ verifyRoleFromDepartmentRoles(departmentId: number) {
         
         if (hasReportAccess) {
           this.canViewReports = true;
-          console.log('✅ Reports access granted via department_roles check');
+          console.log(' Reports access granted via department_roles check');
         } else {
           console.log('❌ No report access via department_roles');
         }
@@ -3215,7 +3373,7 @@ verifyRoleFromApi(departmentId: number, branchId: number) {
         console.log('📋 Role from API:', data);
         if (data.role_name === 'Branch Manager' || data.role_name === 'Head/Manager') {
           this.canViewReports = true;
-          console.log('✅ Reports access granted via API check');
+          console.log(' Reports access granted via API check');
         }
       },
       error: (err) => {
@@ -3230,46 +3388,54 @@ closeReportModal() {
   // =============================================
   // AUTHENTICATION & SECURITY
   // =============================================
+private verifyAuthentication(): void {
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+  const currentUser = this.getStoredUser();
+  
+  if (!token || !currentUser) {
+    this.handleUnauthorized('No valid session found');
+    return;
+  }
 
-  private verifyAuthentication(): void {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
-    const currentUser = this.getStoredUser();
+  try {
+    const tokenData = this.parseJwt(token);
+    const now = Date.now() / 1000;
     
-    if (!token || !currentUser) {
-      this.handleUnauthorized('No valid session found');
+    if (tokenData && tokenData.exp && tokenData.exp < now) {
+      this.handleUnauthorized('Session expired');
       return;
     }
 
-    try {
-      const tokenData = this.parseJwt(token);
-      const now = Date.now() / 1000;
-      
-      if (tokenData && tokenData.exp && tokenData.exp < now) {
-        this.handleUnauthorized('Session expired');
-        return;
-      }
+    const headers = { 'Authorization': `Bearer ${token}` };
+    this.http.get<{valid: boolean}>(`${this.apiUrl}/api/auth/verify`, { headers }).subscribe({
+      next: (response: any) => {
+        if (response && response.valid) {
+          this.isAuthenticated = true;
+          this.isTokenValid = true;
+          this.initializeComponent();
+          this.startSecurityTimers();
 
-      const headers = { 'Authorization': `Bearer ${token}` };
-      this.http.get<{valid: boolean}>(`${this.apiUrl}/api/auth/verify`, { headers }).subscribe({
-        next: (response: any) => {
-          if (response && response.valid) {
-            this.isAuthenticated = true;
-            this.isTokenValid = true;
-            this.initializeComponent();
-            this.startSecurityTimers();
-          } else {
-            this.handleUnauthorized('User not authorized');
-          }
-        },
-        error: () => {
-          this.handleUnauthorized('Authentication failed');
+          //  NEW: Connect SSE after auth is confirmed
+          this.securityEvents.connect();
+          this.securityEvents.events
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(ev => {
+              if (ev.type === 'new_login') {
+                this.showSecurityToast(ev);
+              }
+            });
+        } else {
+          this.handleUnauthorized('User not authorized');
         }
-      });
-    } catch (error) {
-      this.handleUnauthorized('Invalid token');
-    }
+      },
+      error: () => {
+        this.handleUnauthorized('Authentication failed');
+      }
+    });
+  } catch (error) {
+    this.handleUnauthorized('Invalid token');
   }
-
+}
   private handleUnauthorized(reason: string): void {
     console.warn(`🔒 Unauthorized access attempt: ${reason}`);
     this.clearAllSessionData();
@@ -3292,7 +3458,7 @@ private startSecurityTimers(): void {
       this.validateToken();
     }, 300000);
 
-    // ✅ Make sure this is called
+    //  Make sure this is called
     this.resetInactivityTimer();
 }
   private checkSessionValidity(): void {
@@ -3360,7 +3526,7 @@ private startSecurityTimers(): void {
     sessionStorage.removeItem('currentUser');
     localStorage.removeItem('system_settings_cache');
     localStorage.removeItem('clientSidebarHidden');
-    this.clearAllCaches();  // ✅ Clear dashboard caches
+    this.clearAllCaches();  //  Clear dashboard caches
     sessionStorage.clear();
 }
 
@@ -3402,7 +3568,7 @@ private startSecurityTimers(): void {
 get requisitionsNotificationCount(): number {
   return this._requisitionsNotificationCount;
 }
-// ✅ Persist seen IDs to localStorage
+//  Persist seen IDs to localStorage
 private get seenReqNotificationIds(): Set<number> {
   const stored = localStorage.getItem('clientDash_seenReqIds');
   if (stored) {
@@ -3471,7 +3637,7 @@ private startLogoutCountdown(): void {
     this.clearLogoutTimers();
     this.showLogoutWarning = false;
     this.clearAllSessionData();
-    this.clearAllCaches();  // ✅ Clear all dashboard caches
+    this.clearAllCaches();  //  Clear all dashboard caches
     this.authService.logout();
     sessionStorage.setItem('logoutMessage', 'Your session has expired due to inactivity. Please login again.');
     this.router.navigate(['/login']);
@@ -3504,7 +3670,7 @@ clearLogoutTimers() {
     const cached = this.getCachedSettings();
     if (cached) {
       this.applySettings(cached);
-      console.log('✅ Using cached system settings');
+      console.log(' Using cached system settings');
       return;
     }
 
@@ -3512,7 +3678,7 @@ clearLogoutTimers() {
       next: (data) => {
         this.cacheSettings(data);
         this.applySettings(data);
-        console.log('✅ System settings loaded from API and cached');
+        console.log(' System settings loaded from API and cached');
       },
       error: (err) => {
         console.warn('Could not load system settings from public API:', err);
@@ -3609,7 +3775,7 @@ clearLogoutTimers() {
         const found = branches.find((b: any) => b.id === Number(branchId));
         if (found) {
           this.currentBranch = found;
-          console.log('✅ Loaded user branch from cache/API:', found);
+          console.log(' Loaded user branch from cache/API:', found);
         } else {
           console.log('⚠️ Branch not found');
           this.currentBranch = {
@@ -3747,7 +3913,7 @@ refreshAll() {
   dismissSingleNotification(id: string) { this.clientNotificationService.dismissNotification(id); }
 
   getNotifIcon(type: string): string {
-    const icons: Record<string, string> = { info: 'ℹ️', success: '✅', warning: '⚠️', error: '🚨' };
+    const icons: Record<string, string> = { info: 'ℹ️', success: '', warning: '⚠️', error: '🚨' };
     return icons[type] || '📢';
   }
 
@@ -3769,7 +3935,7 @@ refreshAll() {
 
 openAIAssistant() { 
   this.activeMenu = null; 
-  this.loadToolbarAiAvatar();  // ✅ Refresh avatar
+  this.loadToolbarAiAvatar();  //  Refresh avatar
   this.aiAssistant?.open(); 
 }
   clearFilters() { this.searchTerm = ''; this.currentView = 'all'; this.router.navigate(['/client/tickets']); this.activeMenu = null; }
@@ -3819,7 +3985,7 @@ closeCalendar() {
     URL.revokeObjectURL(url);
     this.activeMenu = null;
   }
-// ✅ Load read orders from localStorage
+//  Load read orders from localStorage
 loadReadOrdersFromStorage() {
   const stored = localStorage.getItem('clientReadJobOrders');
   if (stored) {
@@ -3831,11 +3997,11 @@ loadReadOrdersFromStorage() {
     }
   }
 }
-// ✅ Save read orders to localStorage
+//  Save read orders to localStorage
 saveReadOrdersToStorage() {
   localStorage.setItem('clientReadJobOrders', JSON.stringify(Array.from(this.readOrderIds)));
 }
-// ✅ Load notification map from localStorage
+//  Load notification map from localStorage
 loadNotificationMapFromStorage() {
   const stored = localStorage.getItem('clientJobOrderNotifications');
   if (stored) {
@@ -3847,7 +4013,7 @@ loadNotificationMapFromStorage() {
     }
   }
 }
-// ✅ Save notification map to localStorage
+//  Save notification map to localStorage
 saveNotificationMapToStorage() {
   localStorage.setItem('clientJobOrderNotifications', JSON.stringify(Array.from(this.notificationMap.entries())));
 }
@@ -3902,7 +4068,7 @@ loadThemeSettings() {
   if (saved) {
     try {
       this.themeSettings = JSON.parse(saved);
-      console.log('✅ Theme loaded:', this.themeSettings.activePreset);
+      console.log(' Theme loaded:', this.themeSettings.activePreset);
     } catch { 
       this.applyPreset('default'); 
     }
@@ -3933,7 +4099,7 @@ onThemeMouseUp() {
   document.removeEventListener('mousemove', this.onThemeMouseMove.bind(this));
   document.removeEventListener('mouseup', this.onThemeMouseUp.bind(this));
 }
-// ✅ Update notification counts
+//  Update notification counts
 updateNotificationCounts() {
   // 📤 Our Job Orders: Count orders with status updates
   const ourOrders = this.getAllOurOrders();
@@ -3949,10 +4115,10 @@ updateNotificationCounts() {
            this.notificationMap.get(o.id)?.type === 'incoming';
   }).length;
   
-  // ✅ Total unread count for the sidebar badge
+  //  Total unread count for the sidebar badge
   this.pendingJobOrdersCount = this.ourOrdersUnreadCount + this.incomingOrdersUnreadCount;
 }
-// ✅ Get all orders for "Our Job Orders" view
+//  Get all orders for "Our Job Orders" view
 getAllOurOrders(): any[] {
   const userBranchId = Number(this.currentUser?.branch_id);
   const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
@@ -3996,7 +4162,7 @@ getAllIncomingOrders(): any[] {
     const forwardedToBranchId = Number(jo.forwarded_to_branch_id);
     const forwardedToDeptId = Number(jo.forwarded_to_department_id);
     
-    // ✅ Forwarded TO us from another department
+    //  Forwarded TO us from another department
     if (jo.is_forwarded && 
         forwardedToBranchId === userBranchId && 
         forwardedToDeptId === userDeptId &&
@@ -4004,7 +4170,7 @@ getAllIncomingOrders(): any[] {
       return true;
     }
     
-    // ✅ Non-forwarded order destined for our department but NOT created by us
+    //  Non-forwarded order destined for our department but NOT created by us
     if (!jo.is_forwarded && 
         orderBranchId === userBranchId && 
         orderDeptId === userDeptId && 
@@ -4015,7 +4181,7 @@ getAllIncomingOrders(): any[] {
     return false;
   });
 }
-// ✅ Check for new or forwarded orders
+//  Check for new or forwarded orders
 checkForNewOrders() {
   const userBranchId = Number(this.currentUser?.branch_id);
   const userDeptId = Number(this.currentUser?.dept_id || this.currentUser?.department_id);
@@ -4036,13 +4202,13 @@ checkForNewOrders() {
                            (forwardedToBranchId === userBranchId && forwardedToDeptId === userDeptId);
     const isFromOthers = submittedById !== userId;
     
-    // ✅ Check for incoming notifications (new or forwarded orders)
+    //  Check for incoming notifications (new or forwarded orders)
     if ((isForUs || isForwardedToUs) && isFromOthers) {
       this.notificationMap.set(o.id, { type: 'incoming', status: '' });
       this.saveNotificationMapToStorage();
     }
     
-    // ✅ Check for status updates (for Our Job Orders)
+    //  Check for status updates (for Our Job Orders)
     const isStatusUpdate = o.status && ['approved', 'assigned', 'forwarded', 'done'].includes(o.status);
     if (isStatusUpdate && (o.is_forwarded && o.forwarded_by_name === this.currentUser?.fullname)) {
       if (!this.notificationMap.has(o.id)) {
@@ -4071,7 +4237,7 @@ checkForNewOrders() {
         this.pendingJobOrdersCount = 0;
       });
 }
-// ✅ Mark all job orders as read when clicking the link
+//  Mark all job orders as read when clicking the link
 markJobOrdersAsRead() {
   // Mark all orders in both views as read
   const ourOrders = this.getAllOurOrders();
@@ -4236,7 +4402,9 @@ ngOnDestroy() {
     if (this.sessionCheckInterval) clearInterval(this.sessionCheckInterval);
     if (this.tokenCheckInterval) clearInterval(this.tokenCheckInterval);
     if (this.chatCountInterval) clearInterval(this.chatCountInterval);
-    this.clearAllCaches();  // ✅ Clean up
+    this.securityEvents.disconnect();
+    if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
+    this.clearAllCaches(); 
     this.destroy$.next();
     this.clearLogoutTimers();
     this.destroy$.complete();
@@ -4275,7 +4443,7 @@ isEDPUser(): boolean {
   const dept = (this.currentUser.department || this.currentUser.department_name || '').toLowerCase().trim();
   const role = (this.currentUser.role || '').toLowerCase().trim();
   
-  // ✅ Check if user is Head/Manager, Supervisor, or Branch Manager
+  //  Check if user is Head/Manager, Supervisor, or Branch Manager
   const isManagementRole = role === 'head/manager' || 
                            role === 'head manager' ||
                            role === 'supervisor' || 
@@ -4284,7 +4452,7 @@ isEDPUser(): boolean {
   // If management role, allow chat access
   if (isManagementRole) return true;
   
-  // ✅ Exact match for EDP/IT department names
+  //  Exact match for EDP/IT department names
   const edpDepartments = [
     'edp',
     'it', 
@@ -4303,7 +4471,7 @@ isEDPUser(): boolean {
                     dept.endsWith('/edp') || 
                     dept.endsWith('/it');
   
-  // ✅ Also check if role is technician or main_edp_it
+  //  Also check if role is technician or main_edp_it
   const isEDPRole = role === 'technician' || 
                     role === 'main_edp_it' || 
                     role === 'edp_it' ||
@@ -4356,7 +4524,7 @@ private detectTicketChanges(tickets: any[]): void {
     
     const isFirstLoad = !prevStatus;
     
-    // ✅ ONLY notify if current user is the TICKET CREATOR
+    //  ONLY notify if current user is the TICKET CREATOR
     if (this.isCurrentUserCreator(ticket)) {
       if (isFirstLoad) return; // Don't notify on first load
       
@@ -4367,7 +4535,7 @@ private detectTicketChanges(tickets: any[]): void {
       }
     }
     
-    // ✅ ONLY notify if current user is an ASSIGNED AGENT
+    //  ONLY notify if current user is an ASSIGNED AGENT
     if (currentAssignedSnapshot.includes(currentUserId)) {
       const wasAssigned = prevAssignedSnapshot ? 
         prevAssignedSnapshot.includes(currentUserId) : false;
@@ -4455,7 +4623,7 @@ private isCurrentUserAssigned(ticket: any): boolean {
   }
 
   getStatusIcon(status: string): string {
-    const icons: Record<string, string> = { new: '🆕', assigned: '📌', in_progress: '⚙️', pending: '⏳', resolved: '✅', closed: '🔒' };
+    const icons: Record<string, string> = { new: '🆕', assigned: '📌', in_progress: '⚙️', pending: '⏳', resolved: '', closed: '🔒' };
     return icons[status] || '📋';
   }
 
@@ -4467,7 +4635,7 @@ loadAnnouncements() {
   
   const headers = { 'Authorization': `Bearer ${token}` };
   
-  // ✅ Use the same key as the announcements page
+  //  Use the same key as the announcements page
   // Try multiple possible keys for backwards compatibility
   let readIds: any[] = [];
   try {
@@ -4496,7 +4664,7 @@ loadAnnouncements() {
           id: a.id,
           type: (a.priority || a.tag || 'info').toLowerCase(),
           text: a.title,
-          isNew: !readIds.includes(a.id)  // ✅ Check against read IDs
+          isNew: !readIds.includes(a.id)  //  Check against read IDs
         }));
       
       console.log('📢 Announcements loaded:', this.announcements.length, 

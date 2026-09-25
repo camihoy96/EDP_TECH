@@ -11,6 +11,7 @@ const path = require('path');
 const os = require('os')
 const fs = require('fs');
 const app = express();
+const crypto = require('crypto'); 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const PORT = process.env.PORT || 6001;
@@ -88,6 +89,7 @@ const storage = multer.diskStorage({
     }
 });
 
+const sseClients = new Map(); 
 const upload = multer({ 
     storage,
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
@@ -113,33 +115,27 @@ const upload = multer({
 
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-//  Token authentication middleware
 function authenticateToken(req, res, next) {
-    // First check if the main middleware already decoded the token
-    if (req.decodedUser) {
-        req.user = req.decodedUser;
-        return next();
-    }
-    
+    let token = null;
+
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: 'Access denied. No token provided.' });
-    }
-    
+    if (authHeader) token = authHeader.split(' ')[1];
+
+    // Fallback for EventSource (which can't send headers)
+    if (!token && req.query?.token) token = String(req.query.token);
+
+    if (!token) return res.sendStatus(401);
+
     try {
-        // Try new secret first, fallback to old
-        let decoded;
+        req.decodedUser = jwt.verify(token, JWT_SECRET);
+        return next();
+    } catch (e) {
         try {
-            decoded = jwt.verify(token, JWT_SECRET);
-        } catch (e) {
-            decoded = jwt.verify(token, 'secret_key');
+            req.decodedUser = jwt.verify(token, 'secret_key');   // legacy fallback
+            return next();
+        } catch {
+            return res.sendStatus(403);
         }
-        req.user = decoded;
-        next();
-    } catch (error) {
-        return res.status(403).json({ error: 'Invalid or expired token.' });
     }
 }
 //  Optional: Role-based middleware
@@ -186,7 +182,46 @@ async function testConnection() {
         console.error('❌ Database connection error:', error.message);
     }
 }
+function sseSend(userId, payload) {
+  const set = sseClients.get(String(userId));
+  if (!set) return;
+  const data = `data: ${JSON.stringify(payload)}\n\n`;
+  for (const res of set) {
+    try { res.write(data); } catch { /* client gone */ }
+  }
+}
+global.sseSend = sseSend;
+function detectDeviceInfo(ua) {
+  if (!ua) return { device: 'Unknown device', platform: 'Unknown', deviceClass: 'Unknown' };
 
+  const s = ua.toLowerCase();
+
+  const browser = s.includes('edg/') ? 'Edge'
+                : s.includes('opr/') || s.includes('opera') ? 'Opera'
+                : s.includes('chrome') ? 'Chrome'
+                : s.includes('firefox') ? 'Firefox'
+                : s.includes('safari') ? 'Safari'
+                : 'Browser';
+
+  const platform = s.includes('windows nt 10') ? 'Windows 10/11'
+                 : s.includes('windows nt 6.3') ? 'Windows 8.1'
+                 : s.includes('windows nt 6.1') ? 'Windows 7'
+                 : s.includes('windows') ? 'Windows'
+                 : s.includes('mac os x') ? 'macOS'
+                 : s.includes('android') ? 'Android'
+                 : s.includes('iphone') ? 'iPhone'
+                 : s.includes('ipad') ? 'iPad'
+                 : s.includes('linux') ? 'Linux'
+                 : 'Unknown';
+
+  const deviceClass = /mobile|android|iphone|ipod/.test(s) ? 'Mobile'
+                    : /ipad|tablet/.test(s) ? 'Tablet'
+                    : 'Desktop';
+
+  const device = `${browser} on ${platform} (${deviceClass})`;
+
+  return { device, platform, deviceClass };
+}
 // ============================================
 // REGISTER USER (UPDATED)
 // ============================================
@@ -330,13 +365,10 @@ app.use('/api', (req, res, next) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        
         console.log('🔐 Login attempt - Username:', username);
         console.log('🔑 Password length:', password?.length);
-        
         let user = null;
         let userTable = '';
-        
         // First check users table with JOIN to get branch and company names
         const [usersResult] = await pool.query(
             `SELECT 
@@ -348,11 +380,10 @@ app.post('/api/auth/login', async (req, res) => {
             FROM users u
             LEFT JOIN branches b ON u.branch_id = b.id
             LEFT JOIN departments d ON u.department_id = d.id
-            WHERE u.username = ? OR u.email = ?`, 
+            WHERE u.username = ? OR u.email = ?`,
             [username, username]
         );
         console.log('📊 Users table result:', usersResult.length > 0 ? 'Found' : 'Not found');
-        
         if (usersResult.length > 0) {
             user = usersResult[0];
             userTable = 'users';
@@ -369,7 +400,7 @@ app.post('/api/auth/login', async (req, res) => {
                 FROM new_user nu
                 LEFT JOIN branches b ON nu.branch_id = b.id
                 LEFT JOIN departments d ON nu.department_id = d.id
-                WHERE nu.username = ? OR nu.email = ?`, 
+                WHERE nu.username = ? OR nu.email = ?`,
                 [username, username]
             );
             console.log('📊 new_user table result:', newUserResult.length > 0 ? 'Found' : 'Not found');
@@ -379,42 +410,33 @@ app.post('/api/auth/login', async (req, res) => {
                 console.log(' User found in new_user table:', user.username);
             }
         }
-        
         if (!user) {
             console.log('❌ User not found in either table');
-            //  LOG: Failed login - user not found
-            await logSystemEvent('WARNING', 'auth', null, username, null, 
+            await logSystemEvent('WARNING', 'auth', null, username, null,
                 `Failed login attempt - user not found: ${username}`, req.ip);
             return res.status(401).json({ success: false, message: 'Invalid username or password' });
         }
-        
         // Check if account is locked
         if (user.locked_until && new Date(user.locked_until) > new Date()) {
             const lockTime = new Date(user.locked_until);
             const minutesLeft = Math.ceil((lockTime.getTime() - Date.now()) / 60000);
             console.log('🔒 Account locked until:', user.locked_until);
-            //  LOG: Account locked
-            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
+            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable,
                 `Login attempt on locked account - locked for ${minutesLeft} more minutes`, req.ip);
-            return res.status(423).json({ 
-                success: false, 
-                message: `Account is locked. Try again in ${minutesLeft} minute(s).` 
+            return res.status(423).json({
+                success: false,
+                message: `Account is locked. Try again in ${minutesLeft} minute(s).`
             });
         }
-        
         // Compare password
         console.log('🔐 Comparing password for user:', user.username);
         const isValid = await bcrypt.compare(password, user.password);
         console.log(' Password match:', isValid);
-        
         if (!isValid) {
             console.log('❌ Password does not match for user:', user.username);
             const newFailedAttempts = (user.failed_attempts || 0) + 1;
-            
-            //  LOG: Failed password
-            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable, 
+            await logSystemEvent('WARNING', 'auth', user.id, user.username, userTable,
                 `Failed login - incorrect password (attempt ${newFailedAttempts}/10)`, req.ip);
-            
             if (newFailedAttempts >= 10) {
                 const lockUntil = new Date(Date.now() + 30 * 60 * 1000);
                 await pool.query(
@@ -422,12 +444,11 @@ app.post('/api/auth/login', async (req, res) => {
                     [newFailedAttempts, lockUntil, user.id]
                 );
                 console.log('🔒 Account locked for user:', user.username);
-                //  LOG: Account locked after max attempts
-                await logSystemEvent('ERROR', 'auth', user.id, user.username, userTable, 
+                await logSystemEvent('ERROR', 'auth', user.id, user.username, userTable,
                     'Account locked after 10 failed login attempts', req.ip);
-                return res.status(423).json({ 
-                    success: false, 
-                    message: 'Account locked due to too many failed attempts. Try again in 30 minutes.' 
+                return res.status(423).json({
+                    success: false,
+                    message: 'Account locked due to too many failed attempts. Try again in 30 minutes.'
                 });
             } else {
                 await pool.query(
@@ -436,10 +457,8 @@ app.post('/api/auth/login', async (req, res) => {
                 );
                 console.log('⚠️ Failed attempt count:', newFailedAttempts, 'for user:', user.username);
             }
-            
             return res.status(401).json({ success: false, message: 'Invalid username or password' });
         }
-        
         // Reset failed attempts on successful login
         if (user.failed_attempts > 0) {
             await pool.query(
@@ -448,20 +467,76 @@ app.post('/api/auth/login', async (req, res) => {
             );
             console.log(' Reset failed attempts for user:', user.username);
         }
-        
         console.log(' Login successful for user:', user.username);
-        
-        //  LOG: Successful login
-        await logSystemEvent('INFO', 'auth', user.id, user.username, userTable, 
+        await logSystemEvent('INFO', 'auth', user.id, user.username, userTable,
             'User logged in successfully', req.ip);
-       userActivity.set(user.username, Date.now());
+        userActivity.set(user.username, Date.now());
         console.log(' User activity tracked:', user.username);
-        // Generate token
+        // ══════════════════════════════════════════════════════
+        //  NEW: SESSION REGISTRATION
+        // ══════════════════════════════════════════════════════
+        const sessionId = crypto.randomBytes(32).toString('hex');
+        const clientIp = (req.headers['x-forwarded-for']?.split(',')[0]?.trim())
+                      || req.socket?.remoteAddress
+                      || req.ip
+                      || 'unknown';
+        const userAgent = (req.headers['user-agent'] || 'Unknown device').slice(0, 255);
+        const deviceInfo = detectDeviceInfo(userAgent);
+        const deviceLabel = deviceInfo.device;
+        // Determine whether this is a new device (IP + UA never seen before)
+        let isNewDevice = true;
+        try {
+            const [existingDevices] = await pool.query(
+                `SELECT id FROM user_sessions
+                 WHERE user_id = ? AND user_table = ? AND ip_address = ? AND user_agent = ?
+                 LIMIT 1`,
+                [user.id, userTable, clientIp, userAgent]
+            );
+            isNewDevice = existingDevices.length === 0;
+        } catch (e) {
+            console.warn('⚠️ Could not check existing devices:', e.message);
+        }
+        // Insert the session row
+        try {
+            await pool.query(
+                `INSERT INTO user_sessions
+                    (user_id, user_table, session_id, ip_address, user_agent,
+                     device_label, login_at, last_seen, is_active)
+                 VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), 1)`,
+                [user.id, userTable, sessionId, clientIp, userAgent, deviceLabel]
+            );
+            console.log(`📱 Session registered: ${sessionId.substring(0, 12)}… (${deviceLabel} @ ${clientIp})`);
+        } catch (e) {
+            console.error('❌ Failed to register session:', e.message);
+            // Do NOT abort login — session tracking failure shouldn't block authentication
+        }
+        // If this is a new device, notify other active sessions via SSE
+        if (isNewDevice && global.sseSend) {
+            global.sseSend(user.id, {
+                type: 'new_login',
+                title: 'New login detected',
+                message: `New login from ${deviceLabel} (${clientIp})`,
+                ip: clientIp,
+                device: deviceLabel,
+                at: new Date().toISOString(),
+            });
+            console.log(`🔔 Broadcast new-login event to user ${user.id}'s other sessions`);
+        }
+        // ══════════════════════════════════════════════════════
+        // Generate token (now includes sessionId)
         const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role, userTable: userTable, branch_id: user.branch_id, department_id: user.department_id, },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRY }
-);
+            {
+                id: user.id,
+                username: user.username,
+                role: user.role,
+                userTable: userTable,
+                branch_id: user.branch_id,
+                department_id: user.department_id,
+                sessionId,                                  
+            },
+            JWT_SECRET,
+            { expiresIn: JWT_EXPIRY }
+        );
         // Build user response with all fields including branch_name and company_name
         const userResponse = {
             id: user.id,
@@ -487,22 +562,44 @@ app.post('/api/auth/login', async (req, res) => {
             created_at: user.created_at,
             user_table: userTable
         };
-        
-        res.json({ 
-            success: true, 
-            token, 
+        res.json({
+            success: true,
+            token,
+            sessionId,                                       
             user: userResponse
         });
-        
     } catch (error) {
         console.error('❌ Login error:', error);
-        //  LOG: Login error
-        await logSystemEvent('ERROR', 'auth', null, null, null, 
+        await logSystemEvent('ERROR', 'auth', null, null, null,
             `Login system error: ${error.message}`, req.ip);
         res.status(500).json({ success: false, error: error.message });
     }
 });
-
+app.get('/api/auth/security-stream', authenticateToken, (req, res) => {
+    const userId = req.decodedUser.id;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    // Immediately send a hello so the client knows it's connected
+    res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
+    const key = String(userId);
+    if (!sseClients.has(key)) sseClients.set(key, new Set());
+    sseClients.get(key).add(res);
+    // Keepalive every 25s to defeat proxy timeouts
+    const keepalive = setInterval(() => {
+        try { res.write(': keepalive\n\n'); } catch { /* ignore */ }
+    }, 25000);
+    req.on('close', () => {
+        clearInterval(keepalive);
+        const set = sseClients.get(key);
+        if (set) {
+            set.delete(res);
+            if (!set.size) sseClients.delete(key);  
+        }
+    });
+});
 app.post('/api/auth/logout', (req, res) => {
     const token = req.headers.authorization?.replace('Bearer ', '');
     console.log('🚪 Logout request received');

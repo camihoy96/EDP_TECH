@@ -13,7 +13,7 @@ import { takeUntil } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import { AiAssistantComponent } from '../shared/ai-assistant/ai-assistant.component';
 import { ReportModalComponent } from './report-modal.component';
-
+import { SecurityEventsService } from '../../services/security-events.service';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -1190,6 +1190,40 @@ import { ReportModalComponent } from './report-modal.component';
     </div>
   </div>
 </div>
+<div class="security-toast" *ngIf="securityToast" (click)="$event.stopPropagation()">
+  <div class="security-toast-header">
+    <span class="security-toast-icon">🔔</span>
+    <strong>New login detected</strong>
+    <button class="security-toast-close" (click)="dismissSecurityToast()">✕</button>
+  </div>
+  <div class="security-toast-body">
+
+    <!-- Computer Name (only if provided) -->
+    <div class="security-toast-line" *ngIf="securityToast.computerName">
+      <span class="label">Computer:</span>
+      <span class="value"><strong>{{ securityToast.computerName }}</strong></span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">Device:</span>
+      <span class="value">{{ securityToast.device }}</span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">IP:</span>
+      <span class="value"><code>{{ securityToast.ip }}</code></span>
+    </div>
+
+    <div class="security-toast-line">
+      <span class="label">Time:</span>
+      <span class="value">{{ securityToast.at | date:'medium' }}</span>
+    </div>
+
+    <p class="security-toast-warning">
+      If this wasn't you, log out immediately and change your password.
+    </p>
+  </div>
+</div>
   `,
   styles: [`
     .app-container{height:100vh;display:flex;flex-direction:column;background:#ece9d8;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;font-size:12px;overflow:hidden}
@@ -1755,6 +1789,87 @@ import { ReportModalComponent } from './report-modal.component';
   background: #ffcc00;
   color: #333;
 }
+  /* Security Alert Toast */
+.security-toast {
+  position: fixed;
+  top: 70px;
+  right: 20px;
+  width: 340px;
+  background: #fff;
+  border: 2px solid #cc6600;
+  border-left: 6px solid #cc6600;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+  animation: slideInRight 0.35s ease;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+@keyframes slideInRight {
+  from { transform: translateX(120%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+.security-toast-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fff3e0;
+  border-bottom: 1px solid #ffcc80;
+}
+.security-toast-header strong {
+  flex: 1;
+  color: #cc6600;
+  font-size: 13px;
+}
+.security-toast-icon { font-size: 16px; }
+.security-toast-close {
+  background: transparent;
+  border: 1px solid #cc6600;
+  color: #cc6600;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.security-toast-close:hover {
+  background: #cc6600;
+  color: #fff;
+}
+.security-toast-body { padding: 12px; }
+.security-toast-line {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #333;
+}
+.security-toast-line .label {
+  min-width: 55px;
+  color: #888;
+  font-weight: 600;
+}
+.security-toast-line .value {
+  flex: 1;
+  word-break: break-word;
+}
+.security-toast-line code {
+  font-family: monospace;
+  background: #f5f5f5;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.security-toast-warning {
+  margin: 10px 0 0 0;
+  font-size: 11px;
+  color: #cc0000;
+  line-height: 1.4;
+  padding-top: 8px;
+  border-top: 1px dashed #ffcc80;
+}
   `]
 })
 export class DashboardComponent implements OnInit, OnDestroy {
@@ -1824,8 +1939,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { key: 'low',      label: 'Low'      },
   ];
   private inactivityTimer: any;
-  private readonly INACTIVITY_TIMEOUT = 30 * 60 * 1000;
-  private readonly WARNING_BEFORE = 60; // ADD THIS - was missing!
+  private readonly INACTIVITY_TIMEOUT = 6 * 60 * 60 * 1000;
+  private readonly WARNING_BEFORE = 60; 
   private clockInterval: any;
   popupMessage: string | null = null;
   private popupInterval: any;
@@ -1851,6 +1966,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   unreadMessagesCount = 0;
   showLogoutConfirmModal = false;
   private notifCountInterval: any;
+  securityToast: {
+  message: string;
+  ip: string;
+  device: string;
+  platform?: string;
+  deviceClass?: string;
+  computerName?: string;
+  at: string;
+} | null = null;
+  private securityToastTimer: any;
   // Dragging properties
 private isDragging = false;
 private dragOffsetX = 0;
@@ -1866,22 +1991,21 @@ private get seenReqNotificationIds(): Set<number> {
   }
   return new Set();
 }
-  // ADD THE CONSTRUCTOR - was missing!
   constructor(
     private authService: AuthService,
     public router: Router,
     private ticketService: TicketService,
     private notificationService: NotificationService,
-    private http: HttpClient
+    private http: HttpClient,
+    private securityEvents: SecurityEventsService
   ) {}
-
   @ViewChild(AiAssistantComponent) aiAssistant!: AiAssistantComponent;
-
   ngOnInit() {
   this.currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
   this.setupSubscriptions();
   //  Initial badge render from whatever's already in localStorage
   this.loadNotificationCount();
+  // verifyAuthentication() will call securityEvents.connect() on success
   this.verifyAuthentication();
   this.loadReadOrdersFromStorage();
   this.loadNotificationMapFromStorage();
@@ -1895,10 +2019,9 @@ private get seenReqNotificationIds(): Set<number> {
     } catch (e) {
       console.warn('Could not cache cleaning records (quota?):', e);
     }
-    // Re-run badge count with the fresh cleaning records available
     this.loadNotificationCount();
   });
-  // Poll the badge count every 15 seconds (was 30s, and wrongly nested before)
+  // Poll the badge count every 15 seconds
   this.notifCountInterval = setInterval(() => this.loadNotificationCount(), 15000);
   // Router events — only handle requisition read-marking here
   this.router.events
@@ -1910,7 +2033,6 @@ private get seenReqNotificationIds(): Set<number> {
       if (event.url.includes('/admin/requisitions')) {
         this.markRequisitionNotificationsAsRead();
       }
-      // Refresh badge when navigating (in case user left a page that changed data)
       this.loadNotificationCount();
     });
 }
@@ -1945,7 +2067,25 @@ showStatusPopup(message: string) {
 private set seenReqNotificationIds(ids: Set<number>) {
   localStorage.setItem('seenReqNotificationIds', JSON.stringify([...ids]));
 }
-
+private showSecurityToast(ev: any) {
+  this.securityToast = {
+    message: ev.message,
+    ip: ev.ip || 'unknown',
+    device: ev.device || 'Unknown device',
+    platform: ev.platform,
+    deviceClass: ev.deviceClass,
+    computerName: ev.computerName || undefined,
+    at: ev.at || new Date().toISOString(),
+  };
+  if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
+  this.securityToastTimer = setTimeout(() => {
+    this.securityToast = null;
+  }, 12000);
+}
+dismissSecurityToast() {
+  this.securityToast = null;
+  if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
+}
 // Add a method to add IDs to the set
 private addSeenReqIds(ids: number[]): void {
   const current = this.seenReqNotificationIds;
@@ -2287,50 +2427,50 @@ loadToolbarAiAvatar() {
  private verifyAuthentication(): void {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const currentUser = this.getStoredUser();
-  
   if (!token || !currentUser) {
     this.handleUnauthorized('No valid session found');
     return;
   }
-
-   // Check if user is from the 'users' table (EDP/IT staff)
-if (currentUser.user_table !== 'users') {
+  if (currentUser.user_table !== 'users') {
     this.handleUnauthorized('Access denied. EDP/IT staff only.');
     return;
   }
-
-    try {
-      const tokenData = this.parseJwt(token);
-      const now = Date.now() / 1000;
-      
-      if (tokenData && tokenData.exp && tokenData.exp < now) {
-        this.handleUnauthorized('Session expired');
-        return;
+  try {
+    const tokenData = this.parseJwt(token);
+    const now = Date.now() / 1000;
+    if (tokenData && tokenData.exp && tokenData.exp < now) {
+      this.handleUnauthorized('Session expired');
+      return;
+    }
+    const headers = { 'Authorization': `Bearer ${token}` };
+    this.http.get<{valid: boolean; user?: any}>(`${this.apiUrl}/api/auth/verify-admin`, { headers }).subscribe({
+      next: (response: any) => {
+        if (response && response.valid && response.user && response.user.user_table === 'users') {
+          this.isAuthenticated = true;
+          this.isTokenValid = true;
+          this.initializeComponent();
+          this.startSecurityTimers();
+          this.securityEvents.connect();
+          this.securityEvents.events
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(ev => {
+              if (ev.type === 'new_login') {
+                this.showSecurityToast(ev);
+              }
+            });
+        } else {
+          this.handleUnauthorized('Access denied. EDP/IT staff only.');
+        }
+      },
+      error: (err) => {
+        this.handleUnauthorized(err.status === 403 ? 
+          'Access denied. Insufficient privileges.' : 'Authentication failed');
       }
-
-      const headers = { 'Authorization': `Bearer ${token}` };
-      this.http.get<{valid: boolean; user?: any}>(`${this.apiUrl}/api/auth/verify-admin`, { headers }).subscribe({
-  next: (response: any) => {
-    //  Check if user is from 'users' table instead of specific roles
-    if (response && response.valid && response.user && response.user.user_table === 'users') {
-      this.isAuthenticated = true;
-      this.isTokenValid = true;
-      this.initializeComponent();
-      this.startSecurityTimers();
-    } else {
-      this.handleUnauthorized('Access denied. EDP/IT staff only.');
-    }
-  },
-  error: (err) => {
-    this.handleUnauthorized(err.status === 403 ? 
-      'Access denied. Insufficient privileges.' : 'Authentication failed');
+    });
+  } catch (error) {
+    this.handleUnauthorized('Invalid token');
   }
-});
-    } catch (error) {
-      this.handleUnauthorized('Invalid token');
-    }
-  }
-
+}
   private handleUnauthorized(reason: string): void {
     console.warn(`🔒 Unauthorized access attempt: ${reason}`);
     this.clearAllSessionData();
@@ -2472,6 +2612,8 @@ ngOnDestroy() {
     this.clearLogoutTimers();
     this.destroy$.next();
     this.destroy$.complete();
+    this.securityEvents.disconnect();
+if (this.securityToastTimer) clearTimeout(this.securityToastTimer);
     document.removeEventListener('mousemove', this.onDragMove.bind(this));
   document.removeEventListener('mouseup', this.onDragEnd.bind(this));
   }
